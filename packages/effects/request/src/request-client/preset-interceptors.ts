@@ -21,6 +21,8 @@ export const defaultResponseInterceptor = ({
   return {
     fulfilled: (response) => {
       const { config, data: responseData, status } = response;
+      console.log(config);
+      console.log(config.responseReturn);
 
       if (config.responseReturn === 'raw') {
         return response;
@@ -132,7 +134,7 @@ export const errorMessageResponseInterceptor = (
 
       let errorMessage: string;
       const status = error?.response?.status;
-
+      console.log(status);
       switch (status) {
         case 400: {
           errorMessage = $t('ui.fallback.http.badRequest');

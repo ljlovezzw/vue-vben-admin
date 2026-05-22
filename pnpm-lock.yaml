@@ -30,9 +30,6 @@ catalogs:
     '@eslint/js':
       specifier: ^10.0.1
       version: 10.0.1
-    '@faker-js/faker':
-      specifier: ^10.4.0
-      version: 10.4.0
     '@iconify/json':
       specifier: ^2.2.460
       version: 2.2.466
@@ -54,12 +51,6 @@ catalogs:
     '@manypkg/get-packages':
       specifier: ^3.1.0
       version: 3.1.0
-    '@nolebase/vitepress-plugin-git-changelog':
-      specifier: ^2.18.2
-      version: 2.18.2
-    '@playwright/test':
-      specifier: ^1.59.1
-      version: 1.59.1
     '@pnpm/workspace.read-manifest':
       specifier: ^1000.3.1
       version: 1000.3.1
@@ -72,9 +63,6 @@ catalogs:
     '@tailwindcss/vite':
       specifier: ^4.2.2
       version: 4.2.4
-    '@tanstack/vue-query':
-      specifier: ^5.97.0
-      version: 5.100.5
     '@tanstack/vue-store':
       specifier: ^0.10.0
       version: 0.10.0
@@ -126,9 +114,6 @@ catalogs:
     '@types/json-bigint':
       specifier: ^1.0.4
       version: 1.0.4
-    '@types/jsonwebtoken':
-      specifier: ^9.0.10
-      version: 9.0.10
     '@types/lodash.clonedeep':
       specifier: ^4.5.9
       version: 4.5.9
@@ -156,9 +141,6 @@ catalogs:
     '@vee-validate/zod':
       specifier: ^4.15.1
       version: 4.15.1
-    '@vite-pwa/vitepress':
-      specifier: ^1.1.0
-      version: 1.1.0
     '@vitejs/plugin-vue':
       specifier: ^6.0.6
       version: 6.0.6
@@ -183,9 +165,6 @@ catalogs:
     ant-design-vue:
       specifier: ^4.2.6
       version: 4.2.6
-    antdv-next:
-      specifier: ^1.1.9
-      version: 1.2.1
     archiver:
       specifier: ^7.0.1
       version: 7.0.1
@@ -243,9 +222,6 @@ catalogs:
     echarts:
       specifier: ^6.0.0
       version: 6.0.0
-    element-plus:
-      specifier: ^2.13.7
-      version: 2.13.7
     es-toolkit:
       specifier: ^1.45.1
       version: 1.46.0
@@ -294,9 +270,6 @@ catalogs:
     globals:
       specifier: ^17.5.0
       version: 17.5.0
-    h3:
-      specifier: ^1.15.11
-      version: 1.15.11
     happy-dom:
       specifier: ^20.9.0
       version: 20.9.0
@@ -309,9 +282,6 @@ catalogs:
     json-bigint:
       specifier: ^1.0.0
       version: 1.0.0
-    jsonwebtoken:
-      specifier: ^9.0.3
-      version: 9.0.3
     lefthook:
       specifier: ^2.1.5
       version: 2.1.6
@@ -321,12 +291,6 @@ catalogs:
     lucide-vue-next:
       specifier: ^0.577.0
       version: 0.577.0
-    medium-zoom:
-      specifier: ^1.1.0
-      version: 1.1.0
-    naive-ui:
-      specifier: ^2.44.1
-      version: 2.44.1
     nitropack:
       specifier: ^2.13.3
       version: 2.13.3
@@ -429,9 +393,6 @@ catalogs:
     tailwindcss:
       specifier: ^4.2.2
       version: 4.2.4
-    tdesign-vue-next:
-      specifier: ^1.19.0
-      version: 1.19.1
     theme-colors:
       specifier: ^0.1.0
       version: 0.1.0
@@ -453,9 +414,6 @@ catalogs:
     unplugin-dts:
       specifier: ^1.0.0-beta.6
       version: 1.0.0-beta.6
-    unplugin-element-plus:
-      specifier: ^0.11.2
-      version: 0.11.2
     unplugin-vue:
       specifier: ^7.1.1
       version: 7.1.1
@@ -477,12 +435,6 @@ catalogs:
     vite-plugin-vue-devtools:
       specifier: ^8.1.1
       version: 8.1.1
-    vitepress:
-      specifier: ^1.6.4
-      version: 1.6.4
-    vitepress-plugin-group-icons:
-      specifier: ^1.7.3
-      version: 1.7.5
     vitest:
       specifier: ^4.1.4
       version: 4.1.5
@@ -709,12 +661,18 @@ importers:
       dayjs:
         specifier: 'catalog:'
         version: 1.11.20
+      echarts:
+        specifier: 'catalog:'
+        version: 6.0.0
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@6.0.3)(vue@3.5.33(typescript@6.0.3))
       vue:
         specifier: ^3.5.32
         version: 3.5.33(typescript@6.0.3)
+      vue-echarts:
+        specifier: ^8.0.1
+        version: 8.0.1(echarts@6.0.0)(vue@3.5.33(typescript@6.0.3))
       vue-router:
         specifier: 'catalog:'
         version: 5.0.6(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.33(typescript@6.0.3)))(vue@3.5.33(typescript@6.0.3))
@@ -10976,6 +10934,12 @@ packages:
       '@vue/composition-api':
         optional: true
 
+  vue-echarts@8.0.1:
+    resolution: {integrity: sha512-23rJTFLu1OUEGRWjJGmdGt8fP+8+ja1gVgzMYPIPaHWpXegcO1viIAaeu2H4QHESlVeHzUAHIxKXGrwjsyXAaA==}
+    peerDependencies:
+      echarts: ^6.0.0
+      vue: ^3.5.32
+
   vue-eslint-parser@10.4.0:
     resolution: {integrity: sha512-Vxi9pJdbN3ZnVGLODVtZ7y4Y2kzAAE2Cm0CZ3ZDRvydVYxZ6VrnBhLikBsRS+dpwj4Jv4UCv21PTEwF5rQ9WXg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -13554,7 +13518,7 @@ snapshots:
       mlly: 1.8.2
       ohash: 2.0.11
       pathe: 2.0.3
-      pkg-types: 2.3.0
+      pkg-types: 2.3.1
       rc9: 3.0.1
       scule: 1.3.0
       semver: 7.7.4
@@ -20712,6 +20676,11 @@ snapshots:
 
   vue-demi@0.14.10(vue@3.5.33(typescript@6.0.3)):
     dependencies:
+      vue: 3.5.33(typescript@6.0.3)
+
+  vue-echarts@8.0.1(echarts@6.0.0)(vue@3.5.33(typescript@6.0.3)):
+    dependencies:
+      echarts: 6.0.0
       vue: 3.5.33(typescript@6.0.3)
 
   vue-eslint-parser@10.4.0(eslint@10.2.1(jiti@2.6.1)):
