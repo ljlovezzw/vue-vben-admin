@@ -1,4 +1,4 @@
-﻿export type AlertLevel = 'gray' | 'green' | 'orange' | 'red';
+export type AlertLevel = 'gray' | 'green' | 'orange' | 'red';
 
 export interface KanbanFilters {
   alertLevels: AlertLevel[];
@@ -64,15 +64,24 @@ export interface KanbanCategoryProgress {
 
 export interface KanbanSpuRow {
   acos7: number;
+  adCvr7: number;
   alertLevel: AlertLevel;
   avgSales7: number;
-  bsrTrend: number[];
+  bsrTrend: Array<null | number>;
   category: string;
   cvr7: number;
+  cpc7: number;
+  cpo7: number;
+  budgetUtilization: number;
   daysSinceFirstOrder: null | number;
   daysSinceLaunch: number;
   erpLifecycle: string;
+  fbaInbound: number;
+  fbaStock: number;
   inventoryDays: number;
+  lastProfit: number;
+  lastSalesAmount: number;
+  lastSalesQty: number;
   lastMetricDate: string;
   lifecycleStage: string;
   parentAsin: string;
@@ -81,29 +90,39 @@ export interface KanbanSpuRow {
   reasonText: string;
   responsibleName: string;
   reviewCount: number;
-  salesTrend: number[];
+  salesTrend: Array<null | number>;
   site: string;
   spu: string;
   starRating: number;
   status: string;
+  roas7: number;
+  tacos7: number;
 }
 
 export interface KanbanDailyMetric {
   acos: number;
+  adCvr: number;
   adSalesQty: number;
+  adSalesAmount: number;
   adSpend: number;
+  averageSellingPrice: number;
   bsrMainRank: null | number;
   bsrSubRank: null | number;
   budgetUtilization: number;
   clicks: number;
   ctr: number;
   cvr: number;
+  cpc: number;
+  cpo: number;
+  cpu: number;
   dayIndex: null | number;
   fbaInbound: number;
   fbaStock: number;
   impressions: number;
   inventoryDays: number;
   metricDate: string;
+  organicClicks: number;
+  organicCvr: number;
   organicSalesQty: number;
   profit: number;
   refundQty: number;
@@ -112,6 +131,8 @@ export interface KanbanDailyMetric {
   salesAmount: number;
   sessions: number;
   starRating: number;
+  roas: number;
+  tacos: number;
   totalSalesQty: number;
 }
 
@@ -124,6 +145,54 @@ export interface KanbanOverview {
   stageSummary: KanbanStageSummary[];
   summary: KanbanSummary;
   trend: KanbanTrendPoint[];
+}
+
+export interface SpuManagerFilters {
+  categories: string[];
+  responsibles: string[];
+  sites: string[];
+  statuses: string[];
+}
+
+export interface SpuManagerRow {
+  category: string;
+  daysSinceFirstOrder: null | number;
+  daysSinceLaunch: null | number;
+  devDate: string;
+  erpLifecycle: string;
+  fbaShipDate: string;
+  firstArrivalDate: string;
+  firstOrderDate: string;
+  lastMetricDate: string;
+  lifecycleStage: string;
+  listingCreated: string;
+  notes: string;
+  parentAsin: string;
+  responsibleName: string;
+  responsibleUid: null | number;
+  site: string;
+  spu: string;
+  status: string;
+}
+
+export interface SpuManagerOverview {
+  filters: SpuManagerFilters;
+  rows: SpuManagerRow[];
+}
+
+export interface SpuPayload {
+  category?: null | string;
+  devDate?: null | string;
+  fbaShipDate?: null | string;
+  firstArrivalDate?: null | string;
+  firstOrderDate?: null | string;
+  listingCreated?: null | string;
+  notes?: null | string;
+  parentAsin?: null | string;
+  responsibleUid?: null | number;
+  site: string;
+  spu: string;
+  status: '成品' | '新品' | '滞销';
 }
 
 export interface AdMonitorFilters {
@@ -241,4 +310,295 @@ export interface AdMonitorOverview {
   summary: AdMonitorSummary;
   trend: AdTrendPoint[];
   typeRows: AdTypeRow[];
+}
+
+export interface Asin360Query {
+  endDate: string;
+  parentAsins: string[];
+  sids: string[];
+  startDate: string;
+  summaryField: string;
+}
+
+export interface Asin360Product {
+  amazonUrl: string;
+  asin: string;
+  avgStar: number;
+  cateRank: number;
+  category: string;
+  countryCodes: string[];
+  fbaInbound: number;
+  fbaStock: number;
+  imageUrl: string;
+  itemNames: string[];
+  localSkus: string[];
+  parentAsin: string;
+  priceList: Record<string, any>[];
+  productNames: string[];
+  realnames: string[];
+  reservedQuantity: number;
+  smallCateRank: Record<string, any>[];
+  spu: string;
+  title: string;
+  unsellableQuantity: number;
+}
+
+export interface Asin360AdMetricRow {
+  acos: number;
+  campaign_id?: string;
+  clicks: number;
+  cpc: number;
+  ctr: number;
+  currency?: string;
+  cvr: number;
+  impressions: number;
+  key?: string;
+  name?: string;
+  orders: number;
+  profile_alias?: string;
+  query?: string;
+  roas: number;
+  sales: number;
+  spends: number;
+  sponsored_type?: string;
+  state?: string;
+}
+
+export interface Asin360RelationRow {
+  asin: string;
+  sellerNames: string[];
+  sids: string[];
+  type: string;
+}
+
+export interface Asin360CompareRow {
+  chainValue: number;
+  incrementRate: number;
+  indexName: string;
+  value: number;
+  variableValue: number;
+}
+
+export interface Asin360AsinAllRow {
+  acos: number;
+  adCvr: number;
+  adSalesAmount: number;
+  adSpend: number;
+  adSalesQty: number;
+  asin: string;
+  averageSellingPrice: number;
+  bsrMainRank: null | number;
+  bsrSubRank: null | number;
+  budgetUtilization: number;
+  clicks: number;
+  cpc: number;
+  cpo: number;
+  cpu: number;
+  ctr: number;
+  cvr: number;
+  fbaInbound: number;
+  fbaStock: number;
+  impressions: number;
+  inventoryDays: number;
+  metricDate: string;
+  organicSalesQty: number;
+  orderQty?: number;
+  parentAsin: string;
+  profit: number;
+  raw?: Record<string, any>;
+  roas: number;
+  salesAmount: number;
+  sessions: number;
+  starRating: number;
+  spu: string;
+  tacos: number;
+  totalSalesQty: number;
+  volumeChainRatio?: number;
+  volumeYoyRatio?: number;
+  orderChainRatio?: number;
+  orderYoyRatio?: number;
+  amountChainRatio?: number;
+  amountYoyRatio?: number;
+  reviewCount: number;
+}
+
+export interface Asin360BriefLogRow {
+  asin: string;
+  cateRank: null | number;
+  groupName: string;
+  metricDate: string;
+  msku: string;
+  operateDetail: string;
+  operateTime: string;
+  operateType: string;
+  operateUser: string;
+  smallCateRank: Record<string, any>[];
+  source: string;
+  storeId: null | number;
+  storeName: string;
+}
+
+export interface Asin360Item {
+  adGroupRows: Record<string, any>[];
+  adSummary: Record<string, number>;
+  afterSaleAnalysis?: Record<string, any>;
+  autoTagData?: any;
+  campaignRows: Record<string, any>[];
+  compareRows: Asin360CompareRow[];
+  errors: Array<{ message: string; section: string }>;
+  asinAllRows: Asin360AsinAllRow[];
+  asinAllSummary?: {
+    avgAcos: number;
+    avgCvr: number;
+    latestMetricDate: string;
+    rowCount: number;
+  };
+  briefLogRows: Asin360BriefLogRow[];
+  inventoryAnalysis?: Record<string, any>;
+  orderAnalysis?: Record<string, any>;
+  parentAsin: string;
+  product: Asin360Product;
+  profitAnalysis?: Record<string, any>;
+  raw?: Record<string, any>;
+  relationRows: Asin360RelationRow[];
+  subAsinRows?: Record<string, any>[];
+  tagData?: any;
+  taskRows: Record<string, any>[];
+  topCampaignRows: Asin360AdMetricRow[];
+  topSearchTermRows: Asin360AdMetricRow[];
+}
+
+export interface Asin360Overview {
+  items: Asin360Item[];
+  query: Asin360Query;
+  updatedAt: string;
+}
+
+export interface CategoryConfigRow {
+  acosTarget?: null | number;
+  acosWarn?: null | number;
+  category: string;
+  planNewItems2026: number;
+  qualifyDailySales: number;
+  qualifyRateTarget: number;
+  tacosTarget?: null | number;
+  tacosWarn?: null | number;
+}
+
+export interface ConfigUserRow {
+  avatarColor: string;
+  email: string;
+  id: number;
+  role: string;
+  username: string;
+}
+
+export interface ConfigRuleGroup {
+  level: string;
+  rules: string[];
+  title: string;
+}
+
+export interface ConfigOverview {
+  alertRules: ConfigRuleGroup[];
+  categoryConfigs: CategoryConfigRow[];
+  users: ConfigUserRow[];
+}
+
+export interface TargetTrackerQuery {
+  operatorName: string;
+  site: string;
+  store: string;
+  year: number;
+}
+
+export interface TargetTrackerSummary {
+  actualProfit: number;
+  actualUnits: number;
+  asOfDate: string;
+  challengeCompletionRate: number;
+  challengeProfit: number;
+  completedMonths: number;
+  currentMonthActualProfit: number;
+  currentMonthCompletionRate: number;
+  currentMonthTargetProfit: number;
+  gapProfit: number;
+  monthlyRequiredProfit: number;
+  operatorCount: number;
+  runRateCompletionRate: number;
+  runRateProfit: number;
+  targetCompletionRate: number;
+  targetProfit: number;
+  targetUnits: number;
+  timeProgress: number;
+  year: number;
+}
+
+export interface TargetTrackerKpi {
+  key: string;
+  label: string;
+  sub: string;
+  tone: 'amber' | 'blue' | 'green' | 'red';
+  value: number;
+}
+
+export interface TargetTrackerMonthRow {
+  actualProfit: number;
+  actualUnits: number;
+  challengeProfit: number;
+  completionRate: number;
+  gapProfit: number;
+  label: string;
+  month: number;
+  runRateProfit: null | number;
+  targetProfit: number;
+  targetUnits: number;
+}
+
+export interface TargetTrackerOperatorRow {
+  actualProfit: number;
+  actualUnits: number;
+  challengeProfit: number;
+  completionRate: number;
+  gapProfit: number;
+  operatorName: string;
+  spuCount: number;
+  status: 'danger' | 'normal' | 'warning';
+  statusText: string;
+  targetProfit: number;
+  targetUnits: number;
+}
+
+export interface TargetTrackerSpuRow {
+  actualProfit: number;
+  actualUnits: number;
+  challengeProfit: number;
+  completionRate: number;
+  gapProfit: number;
+  operatorName: string;
+  site: string;
+  spu: string;
+  targetProfit: number;
+  targetUnits: number;
+}
+
+export interface TargetTrackerAlert {
+  description: string;
+  level: 'danger' | 'warning';
+  time: string;
+  title: string;
+}
+
+export interface TargetTrackerOverview {
+  alerts: TargetTrackerAlert[];
+  gapRows: TargetTrackerOperatorRow[];
+  kpis: TargetTrackerKpi[];
+  lossSpuRows: TargetTrackerSpuRow[];
+  monthRows: TargetTrackerMonthRow[];
+  operatorRows: TargetTrackerOperatorRow[];
+  query: TargetTrackerQuery;
+  spuRows: TargetTrackerSpuRow[];
+  summary: TargetTrackerSummary;
+  topSpuRows: TargetTrackerSpuRow[];
+  updatedAt: string;
 }

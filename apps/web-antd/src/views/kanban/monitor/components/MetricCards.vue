@@ -37,6 +37,9 @@ function formatValue(kpi: KanbanCoreKpi) {
   if (kpi.unit === '$') {
     return `$${Number(kpi.value).toLocaleString()}`;
   }
+  if (kpi.unit === '¥') {
+    return `¥${Number(kpi.value).toLocaleString()}`;
+  }
   return `${Number(kpi.value).toLocaleString()}${kpi.unit ?? ''}`;
 }
 

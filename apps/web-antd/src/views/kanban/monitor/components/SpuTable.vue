@@ -1,10 +1,11 @@
 ﻿<script setup lang="ts">
 import type { TableColumnsType } from 'ant-design-vue';
-import { Button, Card, Table, Tag } from 'ant-design-vue';
 
 import type { AlertLevel, KanbanSpuRow } from '#/api/kanban';
 
 import { computed } from 'vue';
+
+import { Button, Card, Table, Tag } from 'ant-design-vue';
 
 const props = defineProps<{
   rows: KanbanSpuRow[];
@@ -60,7 +61,10 @@ const columns: TableColumnsType<KanbanSpuRow> = [
     sorter: (a, b) => a.avgSales7 - b.avgSales7,
   },
   { title: 'CVR', dataIndex: 'cvr7', width: 80 },
+  { title: '广告CVR', dataIndex: 'adCvr7', width: 92 },
   { title: 'ACOS', dataIndex: 'acos7', width: 86 },
+  { title: 'TACOS', dataIndex: 'tacos7', width: 86 },
+  { title: 'ROAS', dataIndex: 'roas7', width: 78 },
   {
     title: '库存天数',
     dataIndex: 'inventoryDays',
@@ -73,13 +77,17 @@ const columns: TableColumnsType<KanbanSpuRow> = [
 ];
 
 const dataSource = computed(() =>
-  [...props.rows].sort(
+  [...props.rows].toSorted(
     (a, b) =>
       a.priorityRank - b.priorityRank ||
       b.reasonCount - a.reasonCount ||
       b.daysSinceLaunch - a.daysSinceLaunch,
   ),
 );
+
+function rowKey(row: KanbanSpuRow) {
+  return `${row.spu}-${row.site}`;
+}
 </script>
 
 <template>
@@ -89,8 +97,8 @@ const dataSource = computed(() =>
       :custom-row="customRow"
       :data-source="dataSource"
       :pagination="{ pageSize: 12, showSizeChanger: true }"
-      :scroll="{ x: 1510 }"
-      row-key="spu"
+      :scroll="{ x: 1760 }"
+      :row-key="rowKey"
       size="small"
     >
       <template #bodyCell="{ column, record, text }">
@@ -107,10 +115,21 @@ const dataSource = computed(() =>
         <template v-else-if="column.dataIndex === 'cvr7'">
           {{ (record.cvr7 * 100).toFixed(2) }}%
         </template>
+        <template v-else-if="column.dataIndex === 'adCvr7'">
+          {{ (record.adCvr7 * 100).toFixed(2) }}%
+        </template>
         <template v-else-if="column.dataIndex === 'acos7'">
           <span :class="record.acos7 > 0.3 ? 'risk' : ''">
             {{ (record.acos7 * 100).toFixed(2) }}%
           </span>
+        </template>
+        <template v-else-if="column.dataIndex === 'tacos7'">
+          <span :class="record.tacos7 > 0.15 ? 'risk' : ''">
+            {{ (record.tacos7 * 100).toFixed(2) }}%
+          </span>
+        </template>
+        <template v-else-if="column.dataIndex === 'roas7'">
+          {{ record.roas7.toFixed(2) }}
         </template>
         <template v-else-if="column.dataIndex === 'inventoryDays'">
           <span

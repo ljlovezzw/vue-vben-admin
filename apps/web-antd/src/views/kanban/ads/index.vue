@@ -1,4 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
+import type { TableColumnsType } from 'ant-design-vue';
+
 import type {
   AdCampaignRow,
   AdCategoryRow,
@@ -7,11 +9,20 @@ import type {
   AdResponsibleRow,
   AdTypeRow,
 } from '#/api/kanban/types';
-import type { TableColumnsType } from 'ant-design-vue';
 
 import { computed, onMounted, reactive, ref } from 'vue';
-import { Button, Card, Select, Spin, Table, Tag } from 'ant-design-vue';
 import VChart from 'vue-echarts';
+
+import {
+  Button,
+  Card,
+  DatePicker,
+  Select,
+  Spin,
+  Table,
+  Tag,
+} from 'ant-design-vue';
+import dayjs from 'dayjs';
 import { BarChart, LineChart, PieChart } from 'echarts/charts';
 import {
   GridComponent,
@@ -40,9 +51,12 @@ interface AdCampaignViewRow extends AdCampaignRow {
   spendShare: number;
 }
 
+type RangePreset = '7d' | '30d' | 'custom' | 'month' | 'today' | 'yesterday';
+
 const loading = ref(false);
 const overview = ref<AdMonitorOverview | null>(null);
-const rangePreset = ref<'7d' | '30d' | 'month'>('7d');
+const rangePreset = ref<RangePreset>('7d');
+const customRange = ref<[string, string]>();
 
 const query = reactive({
   categories: [] as string[],
@@ -51,42 +65,62 @@ const query = reactive({
   sites: [] as string[],
 });
 
-function dateText(date: Date) {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
-}
-
-function getEndDate() {
-  const end = overview.value?.summary.endDate;
-  if (end) {
-    return new Date(`${end}T00:00:00`);
-  }
-  return addDays(new Date(), -1);
-}
-
 function rangeParams() {
-  if (rangePreset.value === '7d') {
-    return {};
+  const today = dayjs();
+
+  if (rangePreset.value === 'today') {
+    const date = today.format('YYYY-MM-DD');
+    return { endDate: date, startDate: date };
   }
-  const end = getEndDate();
-  if (rangePreset.value === 'month') {
+
+  if (rangePreset.value === 'yesterday') {
+    const date = today.subtract(1, 'day').format('YYYY-MM-DD');
+    return { endDate: date, startDate: date };
+  }
+
+  if (rangePreset.value === '7d') {
     return {
-      endDate: dateText(end),
-      startDate: dateText(new Date(end.getFullYear(), end.getMonth(), 1)),
+      endDate: today.format('YYYY-MM-DD'),
+      startDate: today.subtract(6, 'day').format('YYYY-MM-DD'),
     };
   }
+
+  if (rangePreset.value === 'month') {
+    return {
+      endDate: today.format('YYYY-MM-DD'),
+      startDate: today.startOf('month').format('YYYY-MM-DD'),
+    };
+  }
+
+  if (rangePreset.value === 'custom') {
+    const [start, end] = customRange.value ?? [];
+    if (start && end) {
+      return { endDate: end, startDate: start };
+    }
+    return {};
+  }
+
   return {
-    endDate: dateText(end),
-    startDate: dateText(addDays(end, -29)),
+    endDate: today.format('YYYY-MM-DD'),
+    startDate: today.subtract(29, 'day').format('YYYY-MM-DD'),
   };
+}
+
+function selectRangePreset(value: RangePreset) {
+  rangePreset.value = value;
+  if (value !== 'custom') {
+    loadData();
+  }
+}
+
+function handleCustomRangeChange() {
+  if (
+    rangePreset.value === 'custom' &&
+    customRange.value?.[0] &&
+    customRange.value?.[1]
+  ) {
+    loadData();
+  }
 }
 
 async function loadData() {
@@ -110,6 +144,7 @@ function resetFilters() {
   query.shops = [];
   query.sites = [];
   rangePreset.value = '7d';
+  customRange.value = undefined;
   loadData();
 }
 
@@ -159,23 +194,20 @@ const filterOptions = computed(() => overview.value?.filters);
 
 const campaignTotals = computed(() => {
   const rows = overview.value?.campaignRows ?? [];
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.impressions += row.impressions || 0;
-      acc.clicks += row.clicks || 0;
-      acc.spend += row.spend || 0;
-      acc.orders += row.adOrders || 0;
-      acc.sales += row.adSales || 0;
-      return acc;
-    },
-    {
-      clicks: 0,
-      impressions: 0,
-      orders: 0,
-      sales: 0,
-      spend: 0,
-    },
-  );
+  const totals = {
+    clicks: 0,
+    impressions: 0,
+    orders: 0,
+    sales: 0,
+    spend: 0,
+  };
+  for (const row of rows) {
+    totals.impressions += row.impressions || 0;
+    totals.clicks += row.clicks || 0;
+    totals.spend += row.spend || 0;
+    totals.orders += row.adOrders || 0;
+    totals.sales += row.adSales || 0;
+  }
 
   return {
     ...totals,
@@ -548,29 +580,49 @@ onMounted(loadData);
       </div>
       <div class="range-switch">
         <Button
-          :type="rangePreset === '7d' ? 'primary' : 'default'"
-          @click="
-            rangePreset = '7d';
-            loadData();
-          "
-          >近7天</Button
+          :type="rangePreset === 'today' ? 'primary' : 'default'"
+          @click="selectRangePreset('today')"
         >
+          今日
+        </Button>
+        <Button
+          :type="rangePreset === 'yesterday' ? 'primary' : 'default'"
+          @click="selectRangePreset('yesterday')"
+        >
+          昨日
+        </Button>
+        <Button
+          :type="rangePreset === '7d' ? 'primary' : 'default'"
+          @click="selectRangePreset('7d')"
+        >
+          最近7天
+        </Button>
         <Button
           :type="rangePreset === '30d' ? 'primary' : 'default'"
-          @click="
-            rangePreset = '30d';
-            loadData();
-          "
-          >近30天</Button
+          @click="selectRangePreset('30d')"
         >
+          最近30天
+        </Button>
         <Button
           :type="rangePreset === 'month' ? 'primary' : 'default'"
-          @click="
-            rangePreset = 'month';
-            loadData();
-          "
-          >本月</Button
+          @click="selectRangePreset('month')"
         >
+          本月
+        </Button>
+        <Button
+          :type="rangePreset === 'custom' ? 'primary' : 'default'"
+          @click="selectRangePreset('custom')"
+        >
+          自定义
+        </Button>
+        <DatePicker.RangePicker
+          v-if="rangePreset === 'custom'"
+          v-model:value="customRange"
+          class="custom-range-picker"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+          @change="handleCustomRangeChange"
+        />
       </div>
     </section>
 
@@ -621,9 +673,9 @@ onMounted(loadData);
         />
         <div class="filter-actions">
           <Button @click="resetFilters">重置</Button>
-          <Button :loading="loading" type="primary" @click="loadData"
-            >应用筛选</Button
-          >
+          <Button :loading="loading" type="primary" @click="loadData">
+            应用筛选
+          </Button>
         </div>
       </div>
     </Card>
@@ -631,10 +683,8 @@ onMounted(loadData);
     <Spin :spinning="loading">
       <template v-if="overview">
         <div class="scope-line">
-          <span
-            >{{ overview.summary.startDate }} 至
-            {{ overview.summary.endDate }}</span
-          >
+          <span>{{ overview.summary.startDate }} 至
+            {{ overview.summary.endDate }}</span>
           <span>{{ overview.summary.shopCount }} 个店铺</span>
           <span>{{ overview.summary.spuCount }} 个 SPU</span>
           <span>{{ overview.summary.campaignCount }} 个 Campaign</span>
@@ -683,14 +733,16 @@ onMounted(loadData);
               <template #bodyCell="{ column, text }">
                 <template
                   v-if="['spend', 'sales'].includes(String(column.dataIndex))"
-                  >{{ formatMoney(Number(text || 0)) }}</template
                 >
+                  {{ formatMoney(Number(text || 0)) }}
+                </template>
                 <template
                   v-else-if="
                     ['spendShare', 'acos'].includes(String(column.dataIndex))
                   "
-                  >{{ formatPercent(Number(text || 0)) }}</template
                 >
+                  {{ formatPercent(Number(text || 0)) }}
+                </template>
               </template>
             </Table>
           </Card>
@@ -711,8 +763,9 @@ onMounted(loadData);
                       String(column.dataIndex),
                     )
                   "
-                  >{{ formatMoney(Number(text || 0)) }}</template
                 >
+                  {{ formatMoney(Number(text || 0)) }}
+                </template>
                 <template
                   v-else-if="
                     ['acos', 'tacos'].includes(String(column.dataIndex))
@@ -724,16 +777,16 @@ onMounted(loadData);
                         ? 'risk'
                         : ''
                     "
-                    >{{ formatPercent(Number(text || 0)) }}</span
-                  >
+                    >{{ formatPercent(Number(text || 0)) }}</span>
                 </template>
                 <template v-else-if="column.dataIndex === 'action'">
                   <Button
                     size="small"
                     type="link"
                     @click="drillCategory(record as AdCategoryRow)"
-                    >下钻</Button
                   >
+                    下钻
+                  </Button>
                 </template>
               </template>
             </Table>
@@ -757,14 +810,16 @@ onMounted(loadData);
                       String(column.dataIndex),
                     )
                   "
-                  >{{ formatMoney(Number(text || 0)) }}</template
                 >
+                  {{ formatMoney(Number(text || 0)) }}
+                </template>
                 <template
                   v-else-if="
                     ['acos', 'tacos'].includes(String(column.dataIndex))
                   "
-                  >{{ formatPercent(Number(text || 0)) }}</template
                 >
+                  {{ formatPercent(Number(text || 0)) }}
+                </template>
               </template>
             </Table>
           </Card>
@@ -854,54 +909,66 @@ onMounted(loadData);
               <Table.Summary fixed>
                 <Table.Summary.Row class="campaign-summary-row">
                   <Table.Summary.Cell :index="0">合计</Table.Summary.Cell>
-                  <Table.Summary.Cell :col-span="6" :index="1"
-                    >当前筛选范围</Table.Summary.Cell
+                  <Table.Summary.Cell :col-span="6" :index="1">
+                    当前筛选范围
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="7" class="metric-cell">
+                    {{ formatInteger(campaignTotals.impressions) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="8" class="metric-cell">
+                    {{ formatInteger(campaignTotals.clicks) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="9" class="metric-cell">
+                    {{ formatPercent(campaignTotals.ctr) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="10" class="metric-cell">
+                    {{ formatMoney(campaignTotals.spend) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="11" class="metric-cell">
+                    {{ formatMoney(campaignTotals.cpc) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="12" class="metric-cell">
+                    {{ formatInteger(campaignTotals.orders) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="13" class="metric-cell">
+                    {{ formatMoney(campaignTotals.sales) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="14" class="metric-cell">
+                    {{ formatPercent(campaignTotals.cvr) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="15" class="metric-cell">
+                    {{ formatPercent(campaignTotals.acos) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="16" class="metric-cell">
+                    {{ formatNumber(campaignTotals.roas) }}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell
+                    :index="17"
+                    class="metric-cell share-cell"
                   >
-                  <Table.Summary.Cell :index="7" class="metric-cell">{{
-                    formatInteger(campaignTotals.impressions)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="8" class="metric-cell">{{
-                    formatInteger(campaignTotals.clicks)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="9" class="metric-cell">{{
-                    formatPercent(campaignTotals.ctr)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="10" class="metric-cell">{{
-                    formatMoney(campaignTotals.spend)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="11" class="metric-cell">{{
-                    formatMoney(campaignTotals.cpc)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="12" class="metric-cell">{{
-                    formatInteger(campaignTotals.orders)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="13" class="metric-cell">{{
-                    formatMoney(campaignTotals.sales)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="14" class="metric-cell">{{
-                    formatPercent(campaignTotals.cvr)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="15" class="metric-cell">{{
-                    formatPercent(campaignTotals.acos)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="16" class="metric-cell">{{
-                    formatNumber(campaignTotals.roas)
-                  }}</Table.Summary.Cell>
-                  <Table.Summary.Cell :index="17" class="metric-cell share-cell"
-                    >100.00%</Table.Summary.Cell
+                    100.00%
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell
+                    :index="18"
+                    class="metric-cell share-cell"
                   >
-                  <Table.Summary.Cell :index="18" class="metric-cell share-cell"
-                    >100.00%</Table.Summary.Cell
+                    100.00%
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell
+                    :index="19"
+                    class="metric-cell share-cell"
                   >
-                  <Table.Summary.Cell :index="19" class="metric-cell share-cell"
-                    >100.00%</Table.Summary.Cell
+                    100.00%
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell
+                    :index="20"
+                    class="metric-cell share-cell"
                   >
-                  <Table.Summary.Cell :index="20" class="metric-cell share-cell"
-                    >100.00%</Table.Summary.Cell
-                  >
-                  <Table.Summary.Cell :index="21" class="metric-cell"
-                    >-</Table.Summary.Cell
-                  >
+                    100.00%
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell :index="21" class="metric-cell">
+                    -
+                  </Table.Summary.Cell>
                 </Table.Summary.Row>
               </Table.Summary>
             </template>
@@ -943,6 +1010,15 @@ onMounted(loadData);
 .filter-actions {
   display: inline-flex;
   gap: 8px;
+}
+
+.range-switch {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.custom-range-picker {
+  width: 248px;
 }
 
 .filter-card {
@@ -1185,6 +1261,15 @@ onMounted(loadData);
   .page-head {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .range-switch {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .custom-range-picker {
+    width: 100%;
   }
 
   .kpi-grid {
