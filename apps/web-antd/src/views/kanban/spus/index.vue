@@ -2,7 +2,7 @@
 import type { TableColumnsType } from 'ant-design-vue';
 
 import type {
-  ConfigOverview,
+  SpuManagerOptions,
   SpuManagerOverview,
   SpuManagerRow,
   SpuPayload,
@@ -27,11 +27,13 @@ import {
 
 import {
   createSpu,
-  fetchConfigOverview,
   fetchSpuDetail,
+  fetchSpuManagerOptions,
   fetchSpuManagerOverview,
   updateSpu,
 } from '#/api/kanban';
+
+import { useTablePagination } from '../shared/pagination';
 
 type FormMode = 'create' | 'edit';
 
@@ -55,8 +57,13 @@ const saving = ref(false);
 const drawerOpen = ref(false);
 const formMode = ref<FormMode>('create');
 const overview = ref<null | SpuManagerOverview>(null);
-const configOverview = ref<ConfigOverview | null>(null);
+const spuOptions = ref<null | SpuManagerOptions>(null);
 const editingKey = ref('');
+const tablePagination = useTablePagination(
+  15,
+  ['15', '30', '50', '100'],
+  (total) => `共 ${total} 个 SPU`,
+);
 
 const query = reactive({
   categories: [] as string[],
@@ -117,8 +124,7 @@ const siteOptions = computed(() =>
 );
 
 const categoryOptions = computed(() => {
-  const fromConfig =
-    configOverview.value?.categoryConfigs.map((item) => item.category) ?? [];
+  const fromConfig = spuOptions.value?.categories ?? [];
   const fromRows = overview.value?.filters.categories ?? [];
   return [...new Set([...fromConfig, ...fromRows])]
     .filter(Boolean)
@@ -133,7 +139,7 @@ const responsibleFilterOptions = computed(() =>
 );
 
 const userOptions = computed(() =>
-  (configOverview.value?.users ?? []).map((user) => ({
+  (spuOptions.value?.users ?? []).map((user) => ({
     label: user.username,
     value: user.id,
   })),
@@ -153,7 +159,10 @@ function emptyPayload(): SpuFormState {
     listingCreated: undefined,
     notes: undefined,
     parentAsin: undefined,
-    responsibleUid: undefined,
+    responsibleUid:
+      spuOptions.value?.users.length === 1
+        ? spuOptions.value.users[0]?.id
+        : undefined,
     site: overview.value?.filters.sites?.[0] ?? 'US',
     spu: '',
     status: '新品',
@@ -191,12 +200,12 @@ async function loadData() {
         sites: query.sites,
         statuses: query.statuses,
       }),
-      configOverview.value
-        ? Promise.resolve(configOverview.value)
-        : fetchConfigOverview(),
+      spuOptions.value
+        ? Promise.resolve(spuOptions.value)
+        : fetchSpuManagerOptions(),
     ]);
     overview.value = spuOverview;
-    configOverview.value = config;
+    spuOptions.value = config;
   } finally {
     loading.value = false;
   }
@@ -343,12 +352,7 @@ onMounted(loadData);
         <Table
           :columns="columns"
           :data-source="overview?.rows ?? []"
-          :pagination="{
-            pageSize: 15,
-            pageSizeOptions: ['15', '30', '50', '100'],
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 个 SPU`,
-          }"
+          :pagination="tablePagination"
           :row-key="rowKey"
           :scroll="{ x: 1740 }"
           size="small"

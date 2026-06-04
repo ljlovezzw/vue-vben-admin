@@ -1,0 +1,1672 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片标准命名打包工具</title>
+  <style>
+    :root {
+      --bg: #eef3f8;
+      --panel: #fff;
+      --soft: #f7faff;
+      --line: #d8e0ea;
+      --text: #122033;
+      --muted: #66758a;
+      --primary: #1d4ed8;
+      --green: #0f766e;
+      --danger: #b91c1c;
+      --warn: #b45309;
+      --shadow: 0 14px 36px rgba(18, 32, 51, .08);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .shell {
+      max-width: 1460px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .top {
+      padding: 22px 24px;
+      border-radius: 18px;
+      color: #fff;
+      background: linear-gradient(135deg, #0f172a, #164e63 56%, #0f766e);
+      box-shadow: var(--shadow);
+      display: grid;
+      gap: 16px;
+    }
+
+    .top h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .top p {
+      margin: 8px 0 0;
+      color: rgba(255,255,255,.78);
+      max-width: 920px;
+      line-height: 1.55;
+    }
+
+    .top-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.12);
+      color: #fff;
+      border-radius: 999px;
+      padding: 8px 11px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 430px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .main {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff, #f8fbff);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .sub {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .panel-body {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .control {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 11px 12px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .control:focus {
+      border-color: #8fb0ff;
+      box-shadow: 0 0 0 4px rgba(29,78,216,.10);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      min-height: 42px;
+      padding: 10px 14px;
+      background: #fff;
+      color: var(--text);
+      transition: transform .15s ease, box-shadow .15s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 22px rgba(18,32,51,.12);
+    }
+
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-soft { background: #eef4ff; color: #1e40af; border-color: #c8d7ff; }
+    .btn-danger { background: #fff; color: var(--danger); border-color: #f1bcbc; }
+    .btn svg { width: 16px; height: 16px; flex: 0 0 16px; }
+
+    .actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .dropzone {
+      border: 1px dashed #9eb2cc;
+      background: var(--soft);
+      border-radius: 12px;
+      min-height: 94px;
+      padding: 16px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      transition: border-color .15s ease, background .15s ease;
+    }
+
+    .dropzone.dragover {
+      border-color: var(--primary);
+      background: #eef4ff;
+    }
+
+    .dropzone strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .rule-card {
+      border: 1px solid #e2e9f2;
+      background: #fbfdff;
+      border-radius: 12px;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .rule-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .rule-title {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .mini {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .mapping-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .map-row {
+      display: grid;
+      grid-template-columns: 130px minmax(180px, 1fr) minmax(220px, 1.1fr) auto;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .target {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      border-radius: 10px;
+      border: 1px solid #c9ead8;
+      background: #f0fff6;
+      color: #11623a;
+      padding: 10px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .source {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--danger);
+    }
+
+    .summary {
+      position: sticky;
+      top: 16px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .stat {
+      border: 1px solid #e3ebf5;
+      border-radius: 12px;
+      background: #f9fbfe;
+      padding: 12px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .stat strong {
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .manifest {
+      min-height: 300px;
+      max-height: 560px;
+      overflow: auto;
+      border-radius: 12px;
+      background: #0b1220;
+      color: #c8d6ef;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.65;
+      white-space: pre;
+    }
+
+    .notice {
+      border-radius: 12px;
+      border: 1px solid #dfe7f1;
+      background: #fafcff;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .warn {
+      border-color: #f4d8b4;
+      background: #fff9ee;
+      color: #8a5200;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      max-height: 360px;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 920px;
+      font-size: 13px;
+    }
+
+    .data-table th,
+    .data-table td {
+      border-bottom: 1px solid #e6edf5;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    .data-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f7faff;
+      color: #334155;
+      font-weight: 700;
+    }
+
+    .data-table td {
+      color: #233247;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .data-table .image-cell {
+      width: 68px;
+      min-width: 68px;
+      max-width: 68px;
+      padding: 8px;
+    }
+
+    .listing-image {
+      width: 52px;
+      height: 52px;
+      border: 1px solid #dfe7f1;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #f7faff;
+      display: block;
+    }
+
+    .image-empty {
+      width: 52px;
+      height: 52px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #94a3b8;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 1fr; }
+      .summary { position: static; }
+    }
+
+    @media (max-width: 860px) {
+      body { padding: 14px; }
+      .grid, .grid-5, .map-row, .stats { grid-template-columns: 1fr; }
+      .top { padding: 18px; }
+      .panel-body { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="top-row">
+        <div>
+          <h1>图片标准命名打包工具</h1>
+          <p>把美工交付的未规范命名图片、视频按 A+ 或品牌故事规则重命名，并直接生成对应 zip 下载；需要创建飞书任务时，会把当前生成的 zip 上传到飞书多维表格。</p>
+        </div>
+        <div class="chips">
+          <span class="chip">本地重命名</span>
+          <span class="chip">生成 ZIP</span>
+          <span class="chip">A+ / 品牌故事</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main class="main">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>基础设置</h2>
+              <div class="sub">SPU 用于生成标准文件名；压缩包名称可单独设置，适配样例里的 `573A+.zip`、`423品牌故事.zip`。</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="grid-5">
+              <div class="field">
+                <label for="shopInput">店铺</label>
+                <input class="control" id="shopInput" value="AYBUY-DE" placeholder="例如 AYBUY-DE" />
+              </div>
+              <div class="field">
+                <label for="spuInput">SPU / 命名前缀</label>
+                <input class="control" id="spuInput" value="LLW000573" placeholder="例如 LLW000573" />
+              </div>
+              <div class="field">
+                <label for="parentAsinSelect">父 ASIN</label>
+                <select class="control" id="parentAsinSelect">
+                  <option value="">先查询在线 Listing</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="aPlusZipName">A+ 压缩包名</label>
+                <input class="control" id="aPlusZipName" value="573A+" placeholder="例如 573A+" />
+              </div>
+              <div class="field">
+                <label for="brandZipName">品牌故事压缩包名</label>
+                <input class="control" id="brandZipName" value="573品牌故事" placeholder="例如 423品牌故事" />
+              </div>
+              <div class="field">
+                <label for="mediaMode">品牌卡媒体资产</label>
+                <select class="control" id="mediaMode">
+                  <option value="rename" selected>重命名为 SPU-序号</option>
+                  <option value="keep">保留原文件名</option>
+                </select>
+              </div>
+              <div class="field hidden">
+                <label for="fulfillmentInput">履约方式</label>
+                <select class="control" id="fulfillmentInput">
+                  <option value="">全部</option>
+                  <option value="FBA">FBA</option>
+                  <option value="FBM">FBM</option>
+                </select>
+              </div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-primary" id="fetchListingBtn" type="button">查询在线 Listing</button>
+            </div>
+            <div class="notice" id="listingStatus">输入店铺和 SPU 后可以查询领星在线 Listing 数据。</div>
+            <div class="notice hidden" id="asinSummary"></div>
+            <div class="table-wrap hidden" id="listingTableWrap">
+              <table class="data-table" id="listingTable"></table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>A+ 素材</h2>
+              <div class="sub">按组件添加文件。完整图和轮播共用 A+ 图片组序号；视频包含视频文件和封面，不占用图片组序号。</div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-soft" id="addAplusFull" type="button">新增完整图</button>
+              <button class="btn btn-soft" id="addAplusCarousel" type="button">新增轮播</button>
+              <button class="btn btn-soft" id="addAplusVideo" type="button">新增视频</button>
+              <button class="btn btn-danger" id="resetAplus" type="button">重置 A+</button>
+              <button class="btn btn-primary" id="downloadAplus" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                下载 A+ ZIP
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="dropzone" id="aPlusDrop">
+              <div>
+                <strong>拖入 A+ 文件后再分配到下方组件</strong>
+                <span>也可以直接在每个文件位选择图片或视频。</span>
+              </div>
+            </div>
+            <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
+            <div class="notice hidden" id="aPlusPool"></div>
+            <div class="mapping-list" id="aPlusRules"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>品牌故事素材</h2>
+              <div class="sub">固定输出 `品牌故事_手机端` 和 `品牌故事_电脑端`；品牌卡媒体资产默认重命名为 SPU-序号。</div>
+            </div>
+            <div class="actions">
+              <button class="btn btn-soft" id="addBrandMedia" type="button">新增品牌卡媒体资产</button>
+              <button class="btn btn-danger" id="resetBrand" type="button">重置品牌故事</button>
+              <button class="btn btn-green" id="downloadBrand" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                下载品牌故事 ZIP
+              </button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="mapping-list" id="brandRules"></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="summary">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>输出摘要</h2>
+              <div class="sub">下载前先核对文件名。</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="stats">
+              <div class="stat"><span>A+ 文件数</span><strong id="aPlusCount">0</strong></div>
+              <div class="stat"><span>品牌故事文件数</span><strong id="brandCount">0</strong></div>
+              <div class="stat"><span>A+ ZIP</span><strong id="aPlusZipLabel">-</strong></div>
+              <div class="stat"><span>品牌故事 ZIP</span><strong id="brandZipLabel">-</strong></div>
+            </div>
+            <div class="notice warn" id="warningBox">请选择文件后再下载 zip。</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>文件清单</h2>
+              <div class="sub">zip 内会包含同名根目录。</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="manifest" id="manifest"></div>
+            <div class="actions">
+              <button class="btn btn-green" id="uploadFeishuTask" type="button">上传到飞书任务</button>
+            </div>
+            <div class="notice hidden" id="feishuTaskStatus"></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      aPlus: [],
+      brand: [],
+      pool: [],
+      listings: [],
+      parentAsinMap: new Map(),
+      authToken: "",
+    };
+
+    const els = {
+      shop: document.getElementById("shopInput"),
+      spu: document.getElementById("spuInput"),
+      parentAsin: document.getElementById("parentAsinSelect"),
+      aPlusZip: document.getElementById("aPlusZipName"),
+      brandZip: document.getElementById("brandZipName"),
+      mediaMode: document.getElementById("mediaMode"),
+      fulfillment: document.getElementById("fulfillmentInput"),
+      fetchListingBtn: document.getElementById("fetchListingBtn"),
+      listingStatus: document.getElementById("listingStatus"),
+      asinSummary: document.getElementById("asinSummary"),
+      listingTableWrap: document.getElementById("listingTableWrap"),
+      listingTable: document.getElementById("listingTable"),
+      aPlusRules: document.getElementById("aPlusRules"),
+      brandRules: document.getElementById("brandRules"),
+      manifest: document.getElementById("manifest"),
+      aPlusCount: document.getElementById("aPlusCount"),
+      brandCount: document.getElementById("brandCount"),
+      aPlusZipLabel: document.getElementById("aPlusZipLabel"),
+      brandZipLabel: document.getElementById("brandZipLabel"),
+      warningBox: document.getElementById("warningBox"),
+      aPlusDrop: document.getElementById("aPlusDrop"),
+      aPlusBulkInput: document.getElementById("aPlusBulkInput"),
+      aPlusPool: document.getElementById("aPlusPool"),
+      uploadFeishuTask: document.getElementById("uploadFeishuTask"),
+      feishuTaskStatus: document.getElementById("feishuTaskStatus"),
+    };
+
+    function uid(prefix) {
+      return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
+    }
+
+    function cleanName(value, fallback) {
+      return (value || fallback).trim().replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, "");
+    }
+
+    function extOf(file, fallback) {
+      if (!file) return fallback;
+      const match = file.name.match(/(\.[^.]+)$/);
+      return match ? match[1].toLowerCase() : fallback;
+    }
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function fileLabel(file) {
+      return file ? file.name : "未选择文件";
+    }
+
+    function setListingStatus(text, type = "normal") {
+      els.listingStatus.textContent = text;
+      els.listingStatus.classList.toggle("warn", type === "warn");
+    }
+
+    function setFeishuTaskStatus(text, type = "normal") {
+      els.feishuTaskStatus.classList.remove("hidden");
+      els.feishuTaskStatus.textContent = text;
+      els.feishuTaskStatus.classList.toggle("warn", type === "warn");
+    }
+
+    function extractRows(payload) {
+      if (Array.isArray(payload)) return payload;
+      if (!payload || typeof payload !== "object") return [];
+      const candidates = [
+        payload.data,
+        payload.data?.list,
+        payload.data?.records,
+        payload.data?.rows,
+        payload.result,
+        payload.result?.list,
+        payload.result?.records,
+        payload.records,
+        payload.rows,
+        payload.list,
+      ];
+      for (const item of candidates) {
+        if (Array.isArray(item)) return item;
+      }
+      return [];
+    }
+
+    function flattenValue(value) {
+      if (value == null) return "";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+
+    function firstText(row, keys) {
+      for (const key of keys) {
+        const value = row?.[key];
+        if (value == null) continue;
+        const text = String(value).trim();
+        if (text) return text;
+      }
+      return "";
+    }
+
+    function textByKeys(row, keys) {
+      return firstText(row, keys);
+    }
+
+    function normalizeImageUrl(value) {
+      if (value == null) return "";
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const url = normalizeImageUrl(item);
+          if (url) return url;
+        }
+        return "";
+      }
+      if (typeof value === "object") {
+        const keys = [
+          "url",
+          "src",
+          "image",
+          "imageUrl",
+          "image_url",
+          "mainImageUrl",
+          "main_image_url",
+          "smallImageUrl",
+          "small_image_url",
+          "pictureUrl",
+          "picture_url",
+          "imgUrl",
+          "img_url",
+        ];
+        for (const key of keys) {
+          const url = normalizeImageUrl(value[key]);
+          if (url) return url;
+        }
+        return "";
+      }
+      let text = String(value).trim();
+      if (!text) return "";
+      if (
+        (text.startsWith("{") && text.endsWith("}")) ||
+        (text.startsWith("[") && text.endsWith("]"))
+      ) {
+        try {
+          return normalizeImageUrl(JSON.parse(text));
+        } catch {
+          return "";
+        }
+      }
+      if (text.startsWith("//")) return `https:${text}`;
+      if (/^(https?:\/\/|data:image\/|blob:)/i.test(text)) return text;
+      return "";
+    }
+
+    function findImageUrlInRow(row) {
+      if (!row || typeof row !== "object") return "";
+      const imageKeyPattern = /image|img|pic|picture|图片|图/i;
+      for (const [key, value] of Object.entries(row)) {
+        if (!imageKeyPattern.test(String(key))) continue;
+        const url = normalizeImageUrl(value);
+        if (url) return url;
+      }
+      return "";
+    }
+
+    function parentAsinOf(row) {
+      return firstText(row, [
+        "parent_asin",
+        "parentAsin",
+        "parentASIN",
+        "parent-asin",
+        "parent",
+        "父ASIN",
+        "父 asin",
+      ]);
+    }
+
+    function asinOf(row) {
+      return firstText(row, ["asin", "ASIN", "子ASIN", "子 asin"]);
+    }
+
+    function imageOf(row) {
+      const keys = [
+        "图片",
+        "small_image_url",
+        "smallImageUrl",
+        "image_url",
+        "imageUrl",
+        "image",
+        "main_image_url",
+        "mainImageUrl",
+        "main_image",
+        "mainImage",
+        "small_image",
+        "smallImage",
+        "picture_url",
+        "pictureUrl",
+        "picture",
+        "pic",
+        "img",
+        "img_url",
+        "imgUrl",
+        "product_image",
+        "productImage",
+      ];
+      for (const key of keys) {
+        const url = normalizeImageUrl(row?.[key]);
+        if (url) return url;
+      }
+      return findImageUrlInRow(row);
+    }
+
+    function statusText(row) {
+      const value = textByKeys(row, [
+        "状态",
+        "status",
+        "state",
+        "product_status",
+        "productStatus",
+        "listing_status",
+        "listingStatus",
+        "is_sale",
+        "isSale",
+        "is_active",
+        "isActive",
+      ]);
+      if (value === "1" || value.toLowerCase() === "true") return "在售";
+      if (value === "0" || value.toLowerCase() === "false") return "停售";
+      return value;
+    }
+
+    const LISTING_COLUMNS = [
+      { title: "父ASIN", getter: parentAsinOf },
+      { title: "ASIN", getter: asinOf },
+      { title: "图片", getter: imageOf, type: "image" },
+      {
+        title: "MSKU",
+        getter: (row) =>
+          textByKeys(row, ["msku", "MSKU", "seller_sku", "sellerSku"]),
+      },
+      {
+        title: "SKU",
+        getter: (row) =>
+          textByKeys(row, ["sku", "SKU", "local_sku", "localSku", "fnsku"]),
+      },
+      {
+        title: "品名",
+        getter: (row) =>
+          textByKeys(row, ["title", "item_name", "itemName", "name", "product_name", "productName", "品名"]),
+      },
+      {
+        title: "店铺",
+        getter: (row) =>
+          textByKeys(row, ["shop", "shop_name", "shopName", "store", "store_name", "storeName", "siteName", "店铺"]),
+      },
+      {
+        title: "国家",
+        getter: (row) =>
+          textByKeys(row, ["country", "country_code", "countryCode", "nation", "site", "marketplace", "国家"]),
+      },
+      {
+        title: "品牌",
+        getter: (row) =>
+          textByKeys(row, ["brand", "brand_name", "brandName", "seller_brand", "sellerBrand", "亚马逊品牌", "品牌"]),
+      },
+      { title: "状态", getter: statusText },
+      {
+        title: "负责人",
+        getter: (row) =>
+          textByKeys(row, ["owner", "owner_name", "ownerName", "responsible", "responsible_name", "responsibleName", "operator", "operator_name", "operatorName", "负责人"]),
+      },
+    ];
+
+    function buildParentAsinMap(rows) {
+      const map = new Map();
+      for (const row of rows) {
+        const parentAsin = parentAsinOf(row);
+        if (!parentAsin) continue;
+        if (!map.has(parentAsin)) map.set(parentAsin, []);
+        map.get(parentAsin).push(row);
+      }
+      return map;
+    }
+
+    function renderParentAsinOptions() {
+      const options = [...state.parentAsinMap.keys()].sort();
+      const previous = els.parentAsin.value;
+      els.parentAsin.innerHTML = "";
+      if (!options.length) {
+        els.parentAsin.innerHTML = '<option value="">未获取到父 ASIN</option>';
+        renderAsinSummary();
+        return;
+      }
+      els.parentAsin.innerHTML = '<option value="">全部父 ASIN</option>' + options
+        .map((value) => `<option value="${value}">${value}</option>`)
+        .join("");
+      if (previous && options.includes(previous)) {
+        els.parentAsin.value = previous;
+      } else {
+        els.parentAsin.value = options[0];
+      }
+      renderAsinSummary();
+    }
+
+    function selectedListingRows() {
+      const parentAsin = els.parentAsin.value;
+      if (!parentAsin) return state.listings;
+      return state.parentAsinMap.get(parentAsin) || [];
+    }
+
+    function renderAsinSummary() {
+      const parentAsin = els.parentAsin.value;
+      const rows = selectedListingRows();
+      const asins = [...new Set(rows.map(asinOf).filter(Boolean))].sort();
+      if (!state.listings.length) {
+        els.asinSummary.classList.add("hidden");
+        els.asinSummary.textContent = "";
+        return;
+      }
+      els.asinSummary.classList.remove("hidden");
+      if (!asins.length) {
+        els.asinSummary.textContent = parentAsin
+          ? `${parentAsin} 未返回 ASIN。`
+          : "当前 Listing 未返回 ASIN。";
+        return;
+      }
+      const label = parentAsin ? `父 ASIN ${parentAsin}` : "全部父 ASIN";
+      els.asinSummary.textContent = `${label} 下 ASIN（${asins.length}）：${asins.join("，")}`;
+    }
+
+    function renderImageCell(td, url) {
+      td.classList.add("image-cell");
+      const renderEmpty = () => {
+        const empty = document.createElement("div");
+        empty.className = "image-empty";
+        empty.textContent = "-";
+        td.appendChild(empty);
+      };
+      if (!url) {
+        renderEmpty();
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      const img = document.createElement("img");
+      img.className = "listing-image";
+      img.src = url;
+      img.alt = "Listing image";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.addEventListener("error", () => {
+        td.innerHTML = "";
+        renderEmpty();
+      });
+      link.appendChild(img);
+      td.appendChild(link);
+    }
+
+    function renderListingTable() {
+      const rows = selectedListingRows();
+      els.listingTable.innerHTML = "";
+      if (!rows.length) {
+        els.listingTableWrap.classList.add("hidden");
+        return;
+      }
+      const thead = document.createElement("thead");
+      const headRow = document.createElement("tr");
+      LISTING_COLUMNS.forEach((column) => {
+        const th = document.createElement("th");
+        th.textContent = column.title;
+        if (column.type === "image") th.classList.add("image-cell");
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      const tbody = document.createElement("tbody");
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        LISTING_COLUMNS.forEach((column) => {
+          const td = document.createElement("td");
+          const text = flattenValue(column.getter(row));
+          if (column.type === "image") {
+            renderImageCell(td, text);
+            tr.appendChild(td);
+            return;
+          }
+          td.textContent = text;
+          td.title = text;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      els.listingTable.appendChild(thead);
+      els.listingTable.appendChild(tbody);
+      els.listingTableWrap.classList.remove("hidden");
+    }
+
+    async function fetchListingData() {
+      const siteName = (els.shop.value || "").trim();
+      const sku = (els.spu.value || "").trim();
+      const fulfillment = els.fulfillment.value;
+      if (!siteName || !sku) {
+        setListingStatus("请先填写店铺和 SPU。", "warn");
+        return;
+      }
+      const body = {
+        siteName,
+        search_field: "local_sku",
+        search_value: [sku],
+      };
+      if (fulfillment) body.fulfillment = fulfillment;
+
+      els.fetchListingBtn.disabled = true;
+      setListingStatus("正在查询在线 Listing...");
+      try {
+        const listingApiUrl = location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "/api/lingxing/listing/show-online" : "https://api.junlee.top/api/lingxing/listing/show-online";
+        const response = await fetch(listingApiUrl, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const text = await response.text();
+        let payload;
+        try {
+          payload = text ? JSON.parse(text) : {};
+        } catch (error) {
+          throw new Error(`接口返回不是 JSON：${text.slice(0, 160)}`);
+        }
+        if (!response.ok) {
+          throw new Error(payload?.message || payload?.msg || `HTTP ${response.status}`);
+        }
+        const rows = extractRows(payload);
+        state.listings = rows;
+        state.parentAsinMap = buildParentAsinMap(rows);
+        renderParentAsinOptions();
+        renderListingTable();
+        setListingStatus(rows.length ? `查询完成，共 ${rows.length} 条记录。` : "查询完成，但没有返回记录。", rows.length ? "normal" : "warn");
+      } catch (error) {
+        state.listings = [];
+        state.parentAsinMap = new Map();
+        renderParentAsinOptions();
+        renderListingTable();
+        setListingStatus(`查询失败：${error.message}`, "warn");
+      } finally {
+        els.fetchListingBtn.disabled = false;
+      }
+    }
+
+    function aPlusRoot() {
+      return cleanName(els.aPlusZip.value, "A+");
+    }
+
+    function brandRoot() {
+      return cleanName(els.brandZip.value, "品牌故事");
+    }
+
+    function spuPrefix() {
+      return cleanName(els.spu.value, "SPU");
+    }
+
+    function targetForSlot(slot, componentIndex, mediaIndex = 1) {
+      const prefix = spuPrefix();
+      if (slot.kind === "full") {
+        return `${prefix}-${slot.platform}_${pad2(componentIndex)}${extOf(slot.file, ".jpg")}`;
+      }
+      if (slot.kind === "carousel") {
+        return `${prefix}-${slot.platform}_${pad2(componentIndex)}-${mediaIndex}${extOf(slot.file, ".jpg")}`;
+      }
+      if (slot.kind === "video") {
+        if (slot.role === "video") return `${prefix}${extOf(slot.file, ".mp4")}`;
+        return `视频封面${extOf(slot.file, ".jpg")}`;
+      }
+      if (slot.kind === "brandHero") {
+        return `品牌故事_${slot.platform}${extOf(slot.file, ".jpg")}`;
+      }
+      if (slot.kind === "brandMedia") {
+        if (els.mediaMode.value === "rename") return `${prefix}-${mediaIndex}${extOf(slot.file, ".jpg")}`;
+        return slot.file ? slot.file.name : `${prefix}-${mediaIndex}.jpg`;
+      }
+      return slot.file ? slot.file.name : "未命名文件";
+    }
+
+    function makeSlot({ kind, platform = "", role = "", file = null }) {
+      return { id: uid("slot"), kind, platform, role, file };
+    }
+
+    function addAplusFull() {
+      state.aPlus.push({
+        id: uid("full"),
+        type: "full",
+        title: "高级完整图片",
+        slots: [
+          makeSlot({ kind: "full", platform: "手机端" }),
+          makeSlot({ kind: "full", platform: "电脑端" }),
+        ],
+      });
+      render();
+    }
+
+    function addAplusCarousel() {
+      state.aPlus.push({
+        id: uid("carousel"),
+        type: "carousel",
+        title: "图像轮播",
+        slots: [
+          makeSlot({ kind: "carousel", platform: "手机端" }),
+          makeSlot({ kind: "carousel", platform: "手机端" }),
+          makeSlot({ kind: "carousel", platform: "手机端" }),
+          makeSlot({ kind: "carousel", platform: "手机端" }),
+          makeSlot({ kind: "carousel", platform: "电脑端" }),
+          makeSlot({ kind: "carousel", platform: "电脑端" }),
+          makeSlot({ kind: "carousel", platform: "电脑端" }),
+          makeSlot({ kind: "carousel", platform: "电脑端" }),
+        ],
+      });
+      render();
+    }
+
+    function addAplusVideo() {
+      state.aPlus.push({
+        id: uid("video"),
+        type: "video",
+        title: "高级全视频",
+        slots: [
+          makeSlot({ kind: "video", role: "video" }),
+          makeSlot({ kind: "video", role: "cover" }),
+        ],
+      });
+      render();
+    }
+
+    function resetBrand() {
+      state.brand = [
+        {
+          id: uid("brandHero"),
+          type: "brandHero",
+          title: "品牌故事完整图",
+          slots: [
+            makeSlot({ kind: "brandHero", platform: "手机端" }),
+            makeSlot({ kind: "brandHero", platform: "电脑端" }),
+          ],
+        },
+        {
+          id: uid("brandMedia"),
+          type: "brandMedia",
+          title: "品牌卡媒体资产",
+          slots: [makeSlot({ kind: "brandMedia" })],
+        },
+      ];
+      render();
+    }
+
+    function addBrandMedia() {
+      state.brand.push({
+        id: uid("brandMedia"),
+        type: "brandMedia",
+        title: "品牌卡媒体资产",
+        slots: [makeSlot({ kind: "brandMedia" })],
+      });
+      render();
+    }
+
+    function aPlusImageComponentIndex(component) {
+      return state.aPlus.filter((item) => item.type === "full" || item.type === "carousel").findIndex((item) => item.id === component.id) + 1;
+    }
+
+    function aPlusFileIndex(component, slot) {
+      if (component.type !== "carousel") return 1;
+      const samePlatform = component.slots.filter((item) => item.platform === slot.platform);
+      return samePlatform.findIndex((item) => item.id === slot.id) + 1;
+    }
+
+    function brandMediaIndex(component) {
+      return state.brand.filter((item) => item.type === "brandMedia").findIndex((item) => item.id === component.id) + 1;
+    }
+
+    function createFileSelect(slot, accept) {
+      const input = document.createElement("input");
+      input.className = "control";
+      input.type = "file";
+      input.accept = accept;
+      input.addEventListener("change", () => {
+        slot.file = input.files[0] || null;
+        render();
+      });
+      return input;
+    }
+
+    function createPoolSelect(slot) {
+      const select = document.createElement("select");
+      select.className = "control";
+      select.innerHTML = `<option value="">从拖入文件中选择</option>` + state.pool.map((item, index) => `<option value="${index}">${item.name}</option>`).join("");
+      select.addEventListener("change", () => {
+        const index = Number(select.value);
+        if (!Number.isNaN(index) && state.pool[index]) {
+          slot.file = state.pool[index];
+          render();
+        }
+      });
+      return select;
+    }
+
+    function renderAPlus() {
+      els.aPlusRules.innerHTML = "";
+      state.aPlus.forEach((component) => {
+        const card = document.createElement("section");
+        card.className = "rule-card";
+        const version = component.type === "video" ? 1 : aPlusImageComponentIndex(component);
+        card.innerHTML = `
+          <div class="rule-head">
+            <div>
+              <h3 class="rule-title">${component.title}</h3>
+              <div class="mini">${component.type === "carousel" ? "手机端、电脑端各 4 张，序号沿用前面图片组计数，输出为 _序号-轮播序号" : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"}</div>
+            </div>
+            <button class="icon-btn" type="button" title="删除">×</button>
+          </div>
+        `;
+        card.querySelector("button").addEventListener("click", () => {
+          state.aPlus = state.aPlus.filter((item) => item.id !== component.id);
+          render();
+        });
+
+        component.slots.forEach((slot) => {
+          const row = document.createElement("div");
+          row.className = "map-row";
+          const label = slot.kind === "video" ? (slot.role === "video" ? "视频" : "视频封面") : slot.platform;
+          const fileIndex = aPlusFileIndex(component, slot);
+          const target = targetForSlot(slot, version, fileIndex);
+          row.innerHTML = `
+            <div class="field"><label>文件位</label><div class="source">${label}</div></div>
+            <div class="field select-here"><label>选择文件</label></div>
+            <div class="field pool-here"><label>拖入文件池</label></div>
+            <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
+          `;
+          const accept = slot.role === "video" ? "video/*" : "image/*";
+          row.querySelector(".select-here").appendChild(createFileSelect(slot, accept));
+          row.querySelector(".pool-here").appendChild(createPoolSelect(slot));
+          row.querySelector(".source").textContent = `${label} · ${fileLabel(slot.file)}`;
+          card.appendChild(row);
+        });
+
+        els.aPlusRules.appendChild(card);
+      });
+    }
+
+    function renderBrand() {
+      els.brandRules.innerHTML = "";
+      state.brand.forEach((component) => {
+        const card = document.createElement("section");
+        card.className = "rule-card";
+        card.innerHTML = `
+          <div class="rule-head">
+            <div>
+              <h3 class="rule-title">${component.title}</h3>
+              <div class="mini">${component.type === "brandHero" ? "固定输出品牌故事_手机端 / 品牌故事_电脑端" : "默认重命名为 SPU-序号，也可在基础设置里切换为保留原文件名"}</div>
+            </div>
+            <button class="icon-btn" type="button" title="删除">×</button>
+          </div>
+        `;
+        card.querySelector("button").addEventListener("click", () => {
+          if (component.type === "brandHero") {
+            component.slots.forEach((slot) => { slot.file = null; });
+          } else {
+            state.brand = state.brand.filter((item) => item.id !== component.id);
+          }
+          render();
+        });
+
+        component.slots.forEach((slot) => {
+          const mediaIndex = component.type === "brandMedia" ? brandMediaIndex(component) : 1;
+          const target = targetForSlot(slot, 1, mediaIndex);
+          const label = slot.platform || `媒体资产 ${mediaIndex}`;
+          const row = document.createElement("div");
+          row.className = "map-row";
+          row.innerHTML = `
+            <div class="field"><label>文件位</label><div class="source">${label} · ${fileLabel(slot.file)}</div></div>
+            <div class="field select-here"><label>选择文件</label></div>
+            <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
+            <div></div>
+          `;
+          row.querySelector(".select-here").appendChild(createFileSelect(slot, "image/*"));
+          card.appendChild(row);
+        });
+        els.brandRules.appendChild(card);
+      });
+    }
+
+    function collectAPlusFiles() {
+      const root = aPlusRoot();
+      const files = [];
+      state.aPlus.forEach((component) => {
+        const version = component.type === "video" ? 1 : aPlusImageComponentIndex(component);
+        component.slots.forEach((slot) => {
+          if (!slot.file) return;
+          const index = aPlusFileIndex(component, slot);
+          files.push({ file: slot.file, path: `${root}/${targetForSlot(slot, version, index)}` });
+        });
+      });
+      return files;
+    }
+
+    function collectBrandFiles() {
+      const root = brandRoot();
+      const files = [];
+      state.brand.forEach((component) => {
+        component.slots.forEach((slot) => {
+          if (!slot.file) return;
+          const index = component.type === "brandMedia" ? brandMediaIndex(component) : 1;
+          files.push({ file: slot.file, path: `${root}/${targetForSlot(slot, 1, index)}` });
+        });
+      });
+      return files;
+    }
+
+    function renderPool() {
+      if (!state.pool.length) {
+        els.aPlusPool.classList.add("hidden");
+        els.aPlusPool.textContent = "";
+        return;
+      }
+      els.aPlusPool.classList.remove("hidden");
+      els.aPlusPool.textContent = `拖入文件池：${state.pool.map((file) => file.name).join("，")}`;
+    }
+
+    function renderManifest() {
+      const aPlusFiles = collectAPlusFiles();
+      const brandFiles = collectBrandFiles();
+      const lines = [];
+      lines.push(`${aPlusRoot()}.zip`);
+      lines.push(`${aPlusRoot()}/`);
+      if (aPlusFiles.length) {
+        aPlusFiles.forEach((item) => lines.push(`  ${item.path.split("/").slice(1).join("/")}`));
+      } else {
+        lines.push("  (未选择文件)");
+      }
+      lines.push("");
+      lines.push(`${brandRoot()}.zip`);
+      lines.push(`${brandRoot()}/`);
+      if (brandFiles.length) {
+        brandFiles.forEach((item) => lines.push(`  ${item.path.split("/").slice(1).join("/")}`));
+      } else {
+        lines.push("  (未选择文件)");
+      }
+      els.manifest.textContent = lines.join("\n");
+      els.aPlusCount.textContent = String(aPlusFiles.length);
+      els.brandCount.textContent = String(brandFiles.length);
+      els.aPlusZipLabel.textContent = `${aPlusRoot()}.zip`;
+      els.brandZipLabel.textContent = `${brandRoot()}.zip`;
+      els.warningBox.textContent = aPlusFiles.length || brandFiles.length ? "文件名已生成，下载前请核对右侧清单。" : "请选择文件后再下载 zip。";
+    }
+
+    function render() {
+      renderPool();
+      renderAPlus();
+      renderBrand();
+      renderManifest();
+    }
+
+    function crc32Table() {
+      const table = new Uint32Array(256);
+      for (let i = 0; i < 256; i += 1) {
+        let c = i;
+        for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        table[i] = c >>> 0;
+      }
+      return table;
+    }
+
+    const CRC_TABLE = crc32Table();
+
+    function crc32(bytes) {
+      let crc = 0xffffffff;
+      for (let i = 0; i < bytes.length; i += 1) {
+        crc = CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+      }
+      return (crc ^ 0xffffffff) >>> 0;
+    }
+
+    function dosDateTime(date = new Date()) {
+      const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+      const day = Math.max(1, date.getDate());
+      const month = date.getMonth() + 1;
+      const year = Math.max(1980, date.getFullYear()) - 1980;
+      return { time, date: (year << 9) | (month << 5) | day };
+    }
+
+    function u16(value) {
+      return new Uint8Array([value & 0xff, (value >>> 8) & 0xff]);
+    }
+
+    function u32(value) {
+      return new Uint8Array([value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff]);
+    }
+
+    function concat(parts) {
+      const length = parts.reduce((sum, part) => sum + part.length, 0);
+      const out = new Uint8Array(length);
+      let offset = 0;
+      parts.forEach((part) => {
+        out.set(part, offset);
+        offset += part.length;
+      });
+      return out;
+    }
+
+    async function buildZip(entries) {
+      const encoder = new TextEncoder();
+      const localParts = [];
+      const centralParts = [];
+      let offset = 0;
+      const now = dosDateTime();
+
+      for (const entry of entries) {
+        const nameBytes = encoder.encode(entry.path.replace(/\\/g, "/"));
+        const data = new Uint8Array(await entry.file.arrayBuffer());
+        const crc = crc32(data);
+        const local = concat([
+          u32(0x04034b50), u16(20), u16(0x0800), u16(0), u16(now.time), u16(now.date),
+          u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), nameBytes, data,
+        ]);
+        localParts.push(local);
+        centralParts.push(concat([
+          u32(0x02014b50), u16(20), u16(20), u16(0x0800), u16(0), u16(now.time), u16(now.date),
+          u32(crc), u32(data.length), u32(data.length), u16(nameBytes.length), u16(0), u16(0),
+          u16(0), u16(0), u32(0), u32(offset), nameBytes,
+        ]));
+        offset += local.length;
+      }
+
+      const central = concat(centralParts);
+      const end = concat([
+        u32(0x06054b50), u16(0), u16(0), u16(entries.length), u16(entries.length),
+        u32(central.length), u32(offset), u16(0),
+      ]);
+      return new Blob([concat([...localParts, central, end])], { type: "application/zip" });
+    }
+
+    async function downloadZip(type) {
+      const entries = type === "aplus" ? collectAPlusFiles() : collectBrandFiles();
+      const root = type === "aplus" ? aPlusRoot() : brandRoot();
+      if (!entries.length) {
+        alert("请先选择要打包的文件。");
+        return;
+      }
+      const zip = await buildZip(entries);
+      const url = URL.createObjectURL(zip);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${root}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function tokenFromPersistedAccessStore(store) {
+      const raw = store.getItem("vben-web-antd-core-access");
+      if (!raw) return "";
+      try {
+        const data = JSON.parse(raw);
+        return String(data?.accessToken || "").replace(/^Bearer\s+/i, "");
+      } catch {
+        return "";
+      }
+    }
+
+    function authToken() {
+      if (state.authToken) return state.authToken;
+      const keys = ["accessToken", "token", "kanbanToken", "Authorization", "authorization"];
+      for (const store of [localStorage, sessionStorage]) {
+        const persistedToken = tokenFromPersistedAccessStore(store);
+        if (persistedToken) return persistedToken;
+        for (const key of keys) {
+          const value = (store.getItem(key) || "").trim();
+          if (!value) continue;
+          return value.replace(/^Bearer\s+/i, "");
+        }
+      }
+      return "";
+    }
+
+    function initAuthBridge() {
+      window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin) return;
+        if (event.data?.type !== "kanban-auth-token") return;
+        state.authToken = String(event.data.token || "").replace(/^Bearer\s+/i, "");
+      });
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          { source: "kanban-upload-tool", type: "kanban-auth-token-request" },
+          window.location.origin,
+        );
+      }
+    }
+
+    function selectedAsins() {
+      return [...new Set(selectedListingRows().map(asinOf).filter(Boolean))].sort();
+    }
+
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || "").split(",", 2)[1] || "");
+        reader.onerror = () => reject(reader.error || new Error("读取 ZIP 失败"));
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    async function buildUploadZip(entries, root) {
+      if (!entries.length) return null;
+      const zip = await buildZip(entries);
+      return {
+        filename: `${root}.zip`,
+        contentType: "application/zip",
+        contentBase64: await blobToBase64(zip),
+      };
+    }
+
+    async function uploadFeishuTask() {
+      const aPlusFiles = collectAPlusFiles();
+      const brandFiles = collectBrandFiles();
+      const token = authToken();
+      const metadata = {
+        shop: (els.shop.value || "").trim(),
+        spu: (els.spu.value || "").trim(),
+        parentAsin: (els.parentAsin.value || "").trim(),
+        asins: selectedAsins(),
+      };
+
+      if (!token) {
+        setFeishuTaskStatus("请先登录后再上传到飞书任务。", "warn");
+        return;
+      }
+      if (!metadata.shop || !metadata.spu || !metadata.parentAsin || !metadata.asins.length) {
+        setFeishuTaskStatus("请先查询 Listing，并选择包含 ASIN 的父 ASIN。", "warn");
+        return;
+      }
+      if (!aPlusFiles.length && !brandFiles.length) {
+        setFeishuTaskStatus("请先选择 A+ 或品牌故事素材文件。", "warn");
+        return;
+      }
+
+      els.uploadFeishuTask.disabled = true;
+      setFeishuTaskStatus("正在生成 ZIP 并上传到飞书任务...");
+      try {
+        const body = {
+          metadata,
+          aplusZip: await buildUploadZip(aPlusFiles, aPlusRoot()),
+          brandZip: await buildUploadZip(brandFiles, brandRoot()),
+        };
+        const feishuTaskApiUrl = location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "/api/feishu/image-upload-tasks" : "https://api.junlee.top/api/feishu/image-upload-tasks";
+        const response = await fetch(feishuTaskApiUrl, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+        const text = await response.text();
+        let payload;
+        try {
+          payload = text ? JSON.parse(text) : {};
+        } catch {
+          throw new Error(`接口返回不是 JSON：${text.slice(0, 160)}`);
+        }
+        if (!response.ok) {
+          throw new Error(payload?.detail || payload?.message || payload?.msg || `HTTP ${response.status}`);
+        }
+        const recordId = payload?.data?.recordId || "";
+        setFeishuTaskStatus(recordId ? `已上传到飞书任务：${recordId}` : "已上传到飞书任务。");
+      } catch (error) {
+        setFeishuTaskStatus(`上传失败：${error.message}`, "warn");
+      } finally {
+        els.uploadFeishuTask.disabled = false;
+      }
+    }
+
+    function wireDropzone() {
+      els.aPlusDrop.addEventListener("click", () => els.aPlusBulkInput.click());
+      els.aPlusBulkInput.addEventListener("change", () => {
+        state.pool = [...state.pool, ...Array.from(els.aPlusBulkInput.files || [])];
+        els.aPlusBulkInput.value = "";
+        render();
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        els.aPlusDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.aPlusDrop.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        els.aPlusDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.aPlusDrop.classList.remove("dragover");
+        });
+      });
+      els.aPlusDrop.addEventListener("drop", (event) => {
+        state.pool = [...state.pool, ...Array.from(event.dataTransfer.files || [])];
+        render();
+      });
+    }
+
+    function init() {
+      initAuthBridge();
+      document.getElementById("addAplusFull").addEventListener("click", addAplusFull);
+      document.getElementById("addAplusCarousel").addEventListener("click", addAplusCarousel);
+      document.getElementById("addAplusVideo").addEventListener("click", addAplusVideo);
+      document.getElementById("addBrandMedia").addEventListener("click", addBrandMedia);
+      document.getElementById("resetAplus").addEventListener("click", () => {
+        state.aPlus = [];
+        state.pool = [];
+        render();
+      });
+      document.getElementById("resetBrand").addEventListener("click", () => {
+        resetBrand();
+      });
+      document.getElementById("downloadAplus").addEventListener("click", () => downloadZip("aplus"));
+      document.getElementById("downloadBrand").addEventListener("click", () => downloadZip("brand"));
+      els.uploadFeishuTask.addEventListener("click", uploadFeishuTask);
+      els.fetchListingBtn.addEventListener("click", fetchListingData);
+      [els.shop, els.spu, els.aPlusZip, els.brandZip, els.mediaMode].forEach((input) => input.addEventListener("input", render));
+      els.mediaMode.addEventListener("change", render);
+      els.parentAsin.addEventListener("change", () => {
+        renderAsinSummary();
+        renderListingTable();
+      });
+      wireDropzone();
+
+      addAplusFull();
+      addAplusFull();
+      addAplusFull();
+      addAplusFull();
+      addAplusCarousel();
+      addAplusFull();
+      resetBrand();
+    }
+
+    init();
+  </script>
+</body>
+</html>
+

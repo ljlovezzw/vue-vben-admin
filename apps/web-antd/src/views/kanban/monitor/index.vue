@@ -5,10 +5,12 @@ import type {
   AlertLevel,
   KanbanDailyMetric,
   KanbanOverview,
+  KanbanProductDetailColumn,
+  KanbanProductDetailOverview,
   KanbanSpuRow,
 } from '#/api/kanban';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 
 import {
   Button,
@@ -25,7 +27,13 @@ import {
   Tag,
 } from 'ant-design-vue';
 
-import { fetchKanbanOverview, fetchSpuDailyMetrics } from '#/api/kanban';
+import {
+  fetchKanbanOverview,
+  fetchKanbanProductDetail,
+  fetchSpuDailyMetrics,
+} from '#/api/kanban';
+
+import { resetTablePagination, useTablePagination } from '../shared/pagination';
 
 type Tone = 'amber' | 'blue' | 'cyan' | 'green' | 'purple' | 'red' | 'slate';
 
@@ -53,6 +61,21 @@ const activeTab = ref('overview');
 const spuSearch = ref('');
 const quickStatus = ref<'all' | 'fail' | 'success'>('all');
 const dailyMetrics = ref<KanbanDailyMetric[]>([]);
+const productDetail = ref<KanbanProductDetailOverview | null>(null);
+const productDetailLoading = ref(false);
+const selectedProductCountries = ref<string[]>([]);
+const selectedProductColumns = ref<string[]>([]);
+const productColumnsInitialized = ref(false);
+const spuPagination = useTablePagination(
+  15,
+  ['15', '30', '50', '100'],
+  (total) => `共 ${total} 个 SPU`,
+);
+const productDetailPagination = useTablePagination(
+  15,
+  ['15', '30', '50', '100'],
+  (total) => `共 ${total} 条新品详情`,
+);
 
 const dailyPagination = reactive<TablePaginationConfig>({
   current: 1,
@@ -84,6 +107,8 @@ const alertOptions = [
   { label: '正常', value: 'green' },
   { label: '待观察', value: 'gray' },
 ];
+
+const defaultMonitorSites = ['US'];
 
 const stageTagColor: Record<string, string> = {
   冷启动期: 'blue',
@@ -170,6 +195,92 @@ const spuColumns: TableColumnsType<KanbanSpuRow> = [
 const rows = computed(() => overview.value?.actionRows ?? []);
 const allRows = computed(() => overview.value?.actionRows ?? []);
 const filterOptions = computed(() => overview.value?.filters);
+const productDetailRows = computed(() => productDetail.value?.rows ?? []);
+const productDetailColumnDefs = computed(
+  () => productDetail.value?.columns ?? [],
+);
+const productCountryOptions = computed(() => {
+  const values = new Set<string>(selectedProductCountries.value);
+  for (const country of productDetail.value?.countries ?? [])
+    values.add(country);
+  return [...values].filter(Boolean).map((value) => ({ label: value, value }));
+});
+const productColumnOptions = computed(() =>
+  productDetailColumnDefs.value.map((column) => ({
+    label: column.label,
+    value: column.key,
+  })),
+);
+const productColumnMap = computed(() => {
+  const map = new Map<string, KanbanProductDetailColumn>();
+  for (const column of productDetailColumnDefs.value)
+    map.set(column.key, column);
+  return map;
+});
+const productVisibleColumns = computed(() => {
+  const selected = new Set(selectedProductColumns.value);
+  return productDetailColumnDefs.value.filter((column) =>
+    selected.has(column.key),
+  );
+});
+const productFixedKeys = computed(
+  () =>
+    new Set(productDetailColumnDefs.value.slice(0, 8).map((item) => item.key)),
+);
+const productMetricScale = computed(() => {
+  const scale = new Map<string, number>();
+  for (const column of productVisibleColumns.value) {
+    if (!isProductMetricKind(column.kind)) continue;
+    let maxValue = 0;
+    for (const row of productDetailRows.value) {
+      const value = Math.abs(Number(row[column.key] || 0));
+      if (Number.isFinite(value)) maxValue = Math.max(maxValue, value);
+    }
+    scale.set(column.key, maxValue || (column.kind === 'percent' ? 1 : 0));
+  }
+  return scale;
+});
+const productHiddenColumnCount = computed(() =>
+  Math.max(
+    productDetailColumnDefs.value.length - selectedProductColumns.value.length,
+    0,
+  ),
+);
+const productDetailColumns = computed<TableColumnsType<Record<string, any>>>(
+  () => {
+    const fixedKeys = productFixedKeys.value;
+    const selected = productVisibleColumns.value;
+    const fixedColumns = selected
+      .filter((column) => fixedKeys.has(column.key))
+      .map((column) => buildProductDetailColumn(column, true));
+    const metricColumns = selected
+      .filter((column) => !fixedKeys.has(column.key))
+      .map((column) => buildProductDetailColumn(column, false));
+    const columns: TableColumnsType<Record<string, any>> = [
+      {
+        align: 'center',
+        className: 'product-no-column',
+        dataIndex: '__no__',
+        fixed: 'left',
+        title: 'No.',
+        width: 52,
+      },
+      ...fixedColumns,
+    ];
+    if (metricColumns.length > 0) {
+      columns.push({
+        align: 'center',
+        className: 'product-basic-group',
+        children: metricColumns,
+        title: 'Basic',
+      });
+    }
+    return columns;
+  },
+);
+const productDetailScrollX = computed(() =>
+  Math.max(1320, (productVisibleColumns.value.length + 1) * 122),
+);
 
 const failedRows = computed(() =>
   allRows.value.filter(
@@ -422,16 +533,55 @@ const dailySummary = computed(() => {
 async function loadData() {
   loading.value = true;
   try {
-    overview.value = await fetchKanbanOverview({
-      alertLevels: query.alertLevels,
-      categories: query.categories,
-      responsibles: query.responsibles,
-      sites: query.sites,
-      statuses: query.statuses,
-    });
+    overview.value = await fetchKanbanOverview(buildMonitorParams());
   } finally {
     loading.value = false;
   }
+}
+
+async function loadProductDetailData() {
+  productDetailLoading.value = true;
+  try {
+    const detailResult = await fetchKanbanProductDetail({
+      ...buildMonitorParams(),
+      countries: selectedProductCountries.value,
+    });
+    productDetail.value = detailResult;
+    ensureProductColumnsInitialized(detailResult);
+  } finally {
+    productDetailLoading.value = false;
+  }
+}
+
+async function applyFilters() {
+  resetTablePagination(spuPagination);
+  resetTablePagination(productDetailPagination);
+  await Promise.all([loadData(), loadProductDetailData()]);
+}
+
+async function applyProductDetailFilters() {
+  resetTablePagination(productDetailPagination);
+  await loadProductDetailData();
+}
+
+function buildMonitorParams() {
+  const selectedSites =
+    query.sites.length > 0 ? query.sites : defaultMonitorSites;
+  return {
+    alertLevels: query.alertLevels,
+    categories: query.categories,
+    responsibles: query.responsibles,
+    sites: selectedSites,
+    statuses: query.statuses,
+  };
+}
+
+function ensureProductColumnsInitialized(detail: KanbanProductDetailOverview) {
+  if (productColumnsInitialized.value) return;
+  selectedProductColumns.value = detail.columns
+    .filter((column) => column.defaultVisible)
+    .map((column) => column.key);
+  productColumnsInitialized.value = true;
 }
 
 function resetFilters() {
@@ -442,7 +592,8 @@ function resetFilters() {
   query.statuses = [];
   spuSearch.value = '';
   quickStatus.value = 'all';
-  loadData();
+  selectedProductCountries.value = [];
+  applyFilters();
 }
 
 async function openDetail(row: KanbanSpuRow) {
@@ -463,6 +614,112 @@ async function openDetail(row: KanbanSpuRow) {
 
 function rowKey(row: KanbanSpuRow) {
   return `${row.spu}-${row.site}`;
+}
+
+function buildProductDetailColumn(
+  column: KanbanProductDetailColumn,
+  fixed: boolean,
+) {
+  return {
+    align: column.kind === 'text' ? ('left' as const) : ('right' as const),
+    className: `product-detail-column product-detail-column-${column.kind}`,
+    dataIndex: column.key,
+    ellipsis: column.kind !== 'image',
+    fixed: fixed ? ('left' as const) : undefined,
+    title: column.label,
+    width: productColumnWidth(column),
+  };
+}
+
+function productColumnWidth(column: KanbanProductDetailColumn) {
+  if (column.kind === 'image') return 72;
+  if (column.label === 'SPU') return 136;
+  if (column.label === '运营负责人') return 104;
+  if (column.label.includes('ASIN')) return 126;
+  if (column.label.includes('类目') || column.label.includes('分类'))
+    return 112;
+  if (column.label.includes('库存')) return 96;
+  if (column.label.includes('占比') || column.label.includes('完成率'))
+    return 126;
+  if (column.label.length <= 3) return 88;
+  return Math.max(98, Math.min(column.label.length * 15 + 36, 156));
+}
+
+function productDetailRowKey(row: Record<string, any>) {
+  return `${row.key}-${row.site}-${row.country}`;
+}
+
+function productColumnKind(key: string) {
+  return productColumnMap.value.get(key)?.kind ?? 'text';
+}
+
+function productColumnLabel(key: string) {
+  return productColumnMap.value.get(key)?.label ?? '';
+}
+
+function isProductMetricKind(kind: string) {
+  return kind === 'number' || kind === 'percent' || kind === 'decimal';
+}
+
+function isProductMetricColumn(key: string) {
+  return isProductMetricKind(productColumnKind(key));
+}
+
+function productMetricBarWidth(key: string, value: any) {
+  const maxValue = productMetricScale.value.get(key) || 0;
+  const numeric = Math.abs(Number(value || 0));
+  if (!maxValue || !Number.isFinite(numeric)) return '0%';
+  return `${Math.min(100, Math.max(3, (numeric / maxValue) * 100))}%`;
+}
+
+function productMetricTone(key: string, value: any) {
+  const label = productColumnLabel(key);
+  const numeric = Number(value || 0);
+  if (label.includes('完成率')) {
+    if (numeric >= 1) return 'metric-good';
+    if (numeric >= 0.8) return 'metric-warn';
+    return 'metric-risk';
+  }
+  if (
+    label.includes('ACOS') ||
+    label.includes('ACOAS') ||
+    label.includes('占比') ||
+    label.includes('花费') ||
+    label.includes('CPC') ||
+    label.includes('CPO') ||
+    label.includes('CPU')
+  ) {
+    return 'metric-risk';
+  }
+  return numeric < 0 ? 'metric-risk' : 'metric-good';
+}
+
+function productTextClass(key: string) {
+  const label = productColumnLabel(key);
+  return label.includes('ASIN') || label === 'SPU' ? 'product-code-text' : '';
+}
+
+function formatProductDetailValue(value: any, kind: string) {
+  if (value === null || value === undefined || value === '') return '-';
+  if (kind === 'percent') return formatPercent(Number(value || 0));
+  if (kind === 'decimal') {
+    return Number(value || 0).toLocaleString(undefined, {
+      maximumFractionDigits: 4,
+    });
+  }
+  if (kind === 'number') {
+    return Number(value || 0).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+  }
+  return String(value);
+}
+
+function resetProductColumns() {
+  selectedProductColumns.value = productDetailColumnDefs.value
+    .filter((column) => column.defaultVisible)
+    .map((column) => column.key);
+  resetTablePagination(productDetailPagination);
 }
 
 function percent(numerator: number, denominator: number) {
@@ -516,7 +773,15 @@ function cardValueClass(tone: Tone) {
   return `value-${tone}`;
 }
 
-onMounted(loadData);
+watch([spuSearch, quickStatus], () => {
+  resetTablePagination(spuPagination);
+});
+
+watch(selectedProductColumns, () => {
+  resetTablePagination(productDetailPagination);
+});
+
+onMounted(applyFilters);
 </script>
 
 <template>
@@ -590,7 +855,7 @@ onMounted(loadData);
         />
         <div class="filter-actions">
           <Button @click="resetFilters">重置</Button>
-          <Button type="primary" :loading="loading" @click="loadData">
+          <Button type="primary" :loading="loading" @click="applyFilters">
             应用筛选
           </Button>
         </div>
@@ -615,6 +880,122 @@ onMounted(loadData);
                 <p>{{ card.sub }}</p>
               </div>
             </div>
+
+            <Card class="product-detail-card" :body-style="{ padding: 0 }">
+              <template #title>
+                <div class="product-detail-toolbar">
+                  <div class="product-detail-heading">
+                    <span class="product-title-dot"></span>
+                    <strong>新品详情表</strong>
+                  </div>
+                  <Space class="product-detail-controls" wrap>
+                    <span class="product-detail-meta">过滤(0)</span>
+                    <span class="product-detail-meta">
+                      已选字段({{ selectedProductColumns.length }})
+                    </span>
+                    <span class="product-detail-meta">
+                      隐藏({{ productHiddenColumnCount }})
+                    </span>
+                    <Select
+                      v-model:value="selectedProductCountries"
+                      :options="productCountryOptions"
+                      allow-clear
+                      max-tag-count="responsive"
+                      mode="multiple"
+                      option-filter-prop="label"
+                      placeholder="国家"
+                      show-search
+                      style="min-width: 150px"
+                    />
+                    <Select
+                      v-model:value="selectedProductColumns"
+                      :options="productColumnOptions"
+                      max-tag-count="responsive"
+                      mode="multiple"
+                      option-filter-prop="label"
+                      placeholder="展示列"
+                      show-search
+                      style="min-width: 300px"
+                    />
+                    <Button @click="resetProductColumns">默认列</Button>
+                    <Button
+                      type="primary"
+                      :loading="productDetailLoading"
+                      @click="applyProductDetailFilters"
+                    >
+                      应用
+                    </Button>
+                  </Space>
+                </div>
+              </template>
+
+              <Table
+                :columns="productDetailColumns"
+                :data-source="productDetailRows"
+                :bordered="true"
+                :loading="productDetailLoading"
+                :pagination="productDetailPagination"
+                :row-key="productDetailRowKey"
+                :scroll="{ x: productDetailScrollX, y: 560 }"
+                size="small"
+                sticky
+              >
+                <template #bodyCell="{ column, index, text }">
+                  <template v-if="String(column.dataIndex) === '__no__'">
+                    <span class="product-row-no">{{ index + 1 }}</span>
+                  </template>
+                  <template
+                    v-else-if="
+                      productColumnKind(String(column.dataIndex)) === 'image'
+                    "
+                  >
+                    <img
+                      v-if="text"
+                      :src="String(text)"
+                      alt="主图"
+                      class="product-thumb"
+                    />
+                    <span v-else>-</span>
+                  </template>
+                  <template
+                    v-else-if="isProductMetricColumn(String(column.dataIndex))"
+                  >
+                    <div
+                      class="product-metric-cell"
+                      :class="productMetricTone(String(column.dataIndex), text)"
+                    >
+                      <span
+                        class="product-metric-bar"
+                        :style="{
+                          width: productMetricBarWidth(
+                            String(column.dataIndex),
+                            text,
+                          ),
+                        }"
+                      ></span>
+                      <span class="product-metric-value">
+                        {{
+                          formatProductDetailValue(
+                            text,
+                            productColumnKind(String(column.dataIndex)),
+                          )
+                        }}
+                      </span>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <span :class="productTextClass(String(column.dataIndex))">
+                      {{
+                        formatProductDetailValue(
+                          text,
+                          productColumnKind(String(column.dataIndex)),
+                        )
+                      }}
+                    </span>
+                  </template>
+                </template>
+              </Table>
+            </Card>
 
             <div class="overview-grid">
               <Card title="各类目成品率" :body-style="{ padding: '16px' }">
@@ -751,12 +1132,7 @@ onMounted(loadData);
               <Table
                 :columns="spuColumns"
                 :data-source="filteredSpuRows"
-                :pagination="{
-                  pageSize: 15,
-                  pageSizeOptions: ['15', '30', '50', '100'],
-                  showSizeChanger: true,
-                  showTotal: (total) => `共 ${total} 个 SPU`,
-                }"
+                :pagination="spuPagination"
                 :row-key="rowKey"
                 :scroll="{ x: 1780 }"
                 size="small"
@@ -1243,8 +1619,523 @@ onMounted(loadData);
   background: #f0fdf4;
 }
 
+.screen-board {
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #eef2f7;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+}
+
+.screen-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.screen-tabs span {
+  height: 34px;
+  padding-left: 18px;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 34px;
+  color: #475569;
+  background: linear-gradient(135deg, #f8fafc 0%, #fff 78%);
+  border-left: 4px solid #cbd5e1;
+}
+
+.screen-tabs span::first-letter {
+  color: #94a3b8;
+}
+
+.screen-grid {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr) 500px;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.screen-left {
+  display: grid;
+  gap: 10px;
+}
+
+.gauge-card,
+.operator-board,
+.screen-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: 0 8px 18px rgb(15 23 42 / 5%);
+}
+
+.gauge-card {
+  min-height: 212px;
+  padding: 14px 12px;
+}
+
+.gauge-card h3,
+.operator-board h3,
+.screen-panel h3,
+.blue-panel h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 850;
+  color: #1e293b;
+}
+
+.gauge-ring {
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+  margin: 16px auto 0;
+  border-radius: 50%;
+}
+
+.gauge-ring > div {
+  display: grid;
+  place-items: center;
+  width: 122px;
+  height: 122px;
+  text-align: center;
+  background: #fff;
+  border-radius: 50%;
+}
+
+.gauge-ring strong {
+  font-size: 26px;
+  color: #0f172a;
+}
+
+.gauge-ring span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.gauge-ring.risk strong {
+  color: #dc2626;
+}
+
+.screen-center {
+  display: grid;
+  gap: 10px;
+}
+
+.gold-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.gold-kpi {
+  min-height: 120px;
+  padding: 20px 28px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 80% 10%, rgb(255 255 255 / 38%), transparent 28%),
+    linear-gradient(135deg, #ff9f0a 0%, #ffe035 100%);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 35%);
+}
+
+.gold-kpi span,
+.gold-kpi em {
+  display: block;
+  font-style: normal;
+  font-weight: 750;
+  color: rgb(255 255 255 / 82%);
+}
+
+.gold-kpi strong {
+  display: block;
+  margin: 12px 0 8px;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: 2px;
+}
+
+.operator-board {
+  min-height: 304px;
+  padding: 16px;
+}
+
+.operator-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.operator-score {
+  padding: 14px 16px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.operator-score span,
+.operator-line span,
+.risk-rank span {
+  display: block;
+  font-size: 12px;
+  font-weight: 850;
+  color: #475569;
+}
+
+.operator-score strong {
+  display: block;
+  margin: 8px 0;
+  font-size: 28px;
+  color: #1d4ed8;
+}
+
+.operator-score em,
+.operator-line em,
+.risk-rank em {
+  font-size: 12px;
+  font-style: normal;
+  color: #64748b;
+}
+
+.category-mini-bars {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.category-mini-bars > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+}
+
+.category-mini-bars span,
+.category-mini-bars strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.screen-right {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.blue-panel {
+  min-height: 212px;
+  padding: 18px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 90% 20%, rgb(255 255 255 / 18%), transparent 30%),
+    linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 7px;
+  box-shadow: 0 12px 24px rgb(37 99 235 / 18%);
+}
+
+.blue-panel h3 {
+  color: #eff6ff;
+}
+
+.blue-panel strong {
+  display: block;
+  margin-top: 18px;
+  font-size: 42px;
+  line-height: 1;
+  color: #ffe100;
+}
+
+.blue-panel span {
+  display: block;
+  margin-top: 8px;
+  color: rgb(255 255 255 / 76%);
+}
+
+.blue-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid rgb(255 255 255 / 20%);
+}
+
+.blue-split p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #dbeafe;
+}
+
+.screen-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr 1fr;
+  gap: 10px;
+}
+
+.screen-panel {
+  min-height: 210px;
+  padding: 14px 16px;
+}
+
+.operator-table,
+.risk-rank,
+.screen-insights {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cause-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.cause-tags span {
+  max-width: 180px;
+  padding: 3px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 750;
+  color: #b4233a;
+  white-space: nowrap;
+  background: #fff1f2;
+  border-radius: 4px;
+}
+
+.operator-line,
+.risk-rank > div {
+  display: grid;
+  grid-template-columns: 86px 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.operator-line strong {
+  font-size: 16px;
+  color: #1d4ed8;
+}
+
+.risk-rank strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 750;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+.screen-insights p {
+  margin: 0;
+}
+
+.screen-insights strong {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.screen-insights span {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
 .spu-card {
   margin-bottom: 12px;
+}
+
+.product-detail-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.product-detail-heading {
+  display: inline-flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  min-width: 128px;
+  font-size: 18px;
+  color: #1f2937;
+}
+
+.product-title-dot {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #94a3b8;
+  border-radius: 50%;
+}
+
+.product-detail-controls {
+  justify-content: flex-end;
+}
+
+.product-detail-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.product-detail-card {
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.product-detail-card :deep(.ant-card-head) {
+  min-height: 48px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.product-detail-card :deep(.ant-table-cell) {
+  white-space: nowrap;
+}
+
+.product-detail-card :deep(.ant-table) {
+  font-size: 12px;
+  color: #374151;
+}
+
+.product-detail-card :deep(.ant-table-thead > tr > th) {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #111827;
+  text-align: center;
+  background: #ffd200 !important;
+  border-color: #efc400 !important;
+}
+
+.product-detail-card :deep(.product-basic-group) {
+  text-align: center;
+}
+
+.product-detail-card :deep(.ant-table-tbody > tr > td) {
+  height: 56px;
+  padding: 6px 10px;
+  vertical-align: middle;
+  border-color: #edf0f3;
+}
+
+.product-detail-card :deep(.ant-table-tbody > tr:nth-child(2n) > td) {
+  background: #fafafa;
+}
+
+.product-detail-card :deep(.ant-table-tbody > tr:hover > td) {
+  background: #fff9db !important;
+}
+
+.product-detail-card :deep(.ant-table-thead .ant-table-cell-fix-left) {
+  z-index: 4;
+  background: #ffd200 !important;
+}
+
+.product-detail-card :deep(.ant-table-tbody > tr > .ant-table-cell-fix-left) {
+  z-index: 3;
+  background: #fff !important;
+}
+
+.product-detail-card
+  :deep(.ant-table-tbody > tr:nth-child(2n) > .ant-table-cell-fix-left) {
+  background: #fafafa !important;
+}
+
+.product-detail-card
+  :deep(.ant-table-tbody > tr:hover > .ant-table-cell-fix-left) {
+  background: #fff9db !important;
+}
+
+.product-detail-card :deep(.ant-table-cell-fix-left-last::after) {
+  box-shadow: inset 10px 0 8px -8px rgb(0 0 0 / 18%) !important;
+}
+
+.product-row-no {
+  font-weight: 700;
+  color: #475569;
+}
+
+.product-code-text {
+  font-weight: 750;
+  color: #2684ff;
+}
+
+.product-metric-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 64px;
+  min-height: 18px;
+  overflow: hidden;
+}
+
+.product-metric-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  min-width: 4px;
+  border-radius: 3px;
+  opacity: 0.9;
+}
+
+.product-metric-value {
+  position: relative;
+  z-index: 1;
+  padding-left: 6px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.metric-good .product-metric-bar {
+  background: #2fca7a;
+}
+
+.metric-good .product-metric-value {
+  color: #087443;
+}
+
+.metric-risk .product-metric-bar {
+  background: #ff4d64;
+}
+
+.metric-risk .product-metric-value {
+  color: #b4233a;
+}
+
+.metric-warn .product-metric-bar {
+  background: #f7b500;
+}
+
+.metric-warn .product-metric-value {
+  color: #9a6700;
+}
+
+.product-thumb {
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
 }
 
 .spu-toolbar {

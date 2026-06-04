@@ -26,7 +26,10 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -F @vben/web-antd run dev",
-    "build": "pnpm run build --filter=@vben/web-antd",
+    "dev:web": "pnpm --filter @vben/web-antd run dev",
+    "build": "pnpm --filter @vben/web-antd run build",
+    "build:web": "pnpm --filter @vben/web-antd run build",
+    "preview:web": "pnpm --filter @vben/web-antd run preview",
     "lint": "eslint .",
     "format": "oxfmt ."
   },

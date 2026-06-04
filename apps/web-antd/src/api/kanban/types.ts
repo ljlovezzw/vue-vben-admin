@@ -147,6 +147,27 @@ export interface KanbanOverview {
   trend: KanbanTrendPoint[];
 }
 
+export interface KanbanProductDetailColumn {
+  defaultVisible: boolean;
+  key: string;
+  kind: 'decimal' | 'image' | 'number' | 'percent' | 'text';
+  label: string;
+  source: string;
+}
+
+export interface KanbanProductDetailRow {
+  [key: string]: any;
+  country: string;
+  key: string;
+  site: string;
+}
+
+export interface KanbanProductDetailOverview {
+  columns: KanbanProductDetailColumn[];
+  countries: string[];
+  rows: KanbanProductDetailRow[];
+}
+
 export interface SpuManagerFilters {
   categories: string[];
   responsibles: string[];
@@ -178,6 +199,14 @@ export interface SpuManagerRow {
 export interface SpuManagerOverview {
   filters: SpuManagerFilters;
   rows: SpuManagerRow[];
+}
+
+export interface SpuManagerOptions {
+  categories: string[];
+  users: Array<{
+    id: number;
+    username: string;
+  }>;
 }
 
 export interface SpuPayload {
@@ -312,12 +341,97 @@ export interface AdMonitorOverview {
   typeRows: AdTypeRow[];
 }
 
+export interface AnalyticsFilters {
+  operationGroups: AnalyticsOperationGroup[];
+  responsibles: string[];
+  sites: string[];
+}
+
+export interface AnalyticsOperationGroup {
+  id: number;
+  memberNames: string[];
+  name: string;
+}
+
+export interface AnalyticsOperationMetric {
+  adSales: number;
+  adSpend: number;
+  date: string;
+  dailyTargetProfit?: number;
+  dailyTargetSales?: number;
+  dailyTargetUnits?: number;
+  grossProfit: number;
+  inventoryQty: number;
+  inventoryRiskCount: number;
+  salesAmount: number;
+  salesQty: number;
+  turnoverMonths: number;
+}
+
+export interface AnalyticsResponsibleOperationRow extends AnalyticsOperationMetric {
+  responsible: string;
+}
+
+export interface AnalyticsOverview {
+  advertising: {
+    days: number;
+    endDate: string;
+    startDate: string;
+    summary: Pick<AdMonitorSummary, 'adSales' | 'totalSales' | 'totalSpend'>;
+  };
+  filters: AnalyticsFilters;
+  operations: {
+    inventorySnapshotDate: string;
+    latest: AnalyticsOperationMetric;
+    latestDate: string;
+    previous: AnalyticsOperationMetric;
+    responsibleRows: AnalyticsResponsibleOperationRow[];
+    weekBefore: AnalyticsOperationMetric;
+  };
+  query: {
+    operationGroupIds: number[];
+    responsibles: string[];
+    siteDate: string;
+    sites: string[];
+  };
+  targets: {
+    dailyTargetProfit: number;
+    dailyTargetSales: number;
+    dailyTargetUnits: number;
+  };
+  source: {
+    message: string;
+    mode: 'database' | 'live_api';
+    status: 'ok' | 'unavailable';
+  };
+  updatedAt: string;
+}
+
 export interface Asin360Query {
   endDate: string;
   parentAsins: string[];
   sids: string[];
   startDate: string;
   summaryField: string;
+}
+
+export interface Asin360StoreOption {
+  country: string;
+  countryId: number;
+  currencyCode: string;
+  currencyIcon: string;
+  currencyName: string;
+  exchangeRate: number;
+  region: string;
+  sid: string;
+  storeName: string;
+}
+
+export interface Asin360StoreOptions {
+  defaultSids: string[];
+  source: 'live_api' | 'local_cache';
+  stores: Asin360StoreOption[];
+  updatedAt: string;
 }
 
 export interface Asin360Product {
@@ -487,9 +601,38 @@ export interface CategoryConfigRow {
 
 export interface ConfigUserRow {
   avatarColor: string;
+  authProvider: string;
+  department: string;
+  email: string;
+  feishuOpenId: string;
+  feishuUserId: string;
+  id: number;
+  lastLoginAt: string;
+  loginCount: number;
+  managedUserIds: number[];
+  permissions: string[];
+  role: string;
+  status: 'active' | 'disabled';
+  username: string;
+}
+
+export interface ConfigUserAuthPayload {
+  managedUserIds: number[];
+  permissions: string[];
+  role: string;
+  status: 'active' | 'disabled';
+}
+
+export interface LoginLogRow {
+  createdAt: string;
   email: string;
   id: number;
-  role: string;
+  ip: string;
+  message: string;
+  provider: string;
+  success: boolean;
+  userAgent: string;
+  userId?: null | number;
   username: string;
 }
 
@@ -502,7 +645,26 @@ export interface ConfigRuleGroup {
 export interface ConfigOverview {
   alertRules: ConfigRuleGroup[];
   categoryConfigs: CategoryConfigRow[];
+  operationGroups: OperationGroupRow[];
   users: ConfigUserRow[];
+}
+
+export interface OperationGroupMember {
+  id: number;
+  username: string;
+}
+
+export interface OperationGroupRow {
+  id: number;
+  memberUserIds: number[];
+  members: OperationGroupMember[];
+  name: string;
+}
+
+export interface OperationGroupPayload {
+  id?: number;
+  memberUserIds: number[];
+  name: string;
 }
 
 export interface TargetTrackerQuery {
@@ -553,6 +715,21 @@ export interface TargetTrackerMonthRow {
   runRateProfit: null | number;
   targetProfit: number;
   targetUnits: number;
+  timeProgress?: number;
+}
+
+export interface TargetTrackerQuarterRow {
+  actualProfit: number;
+  actualUnits: number;
+  challengeProfit: number;
+  completionRate: number;
+  gapProfit: number;
+  label: string;
+  quarter: number;
+  runRateProfit: null | number;
+  targetProfit: number;
+  targetUnits: number;
+  timeProgress: number;
 }
 
 export interface TargetTrackerOperatorRow {
@@ -567,6 +744,12 @@ export interface TargetTrackerOperatorRow {
   statusText: string;
   targetProfit: number;
   targetUnits: number;
+}
+
+export interface TargetTrackerOperatorPeriodRow extends TargetTrackerOperatorRow {
+  label: string;
+  month?: number;
+  quarter?: number;
 }
 
 export interface TargetTrackerSpuRow {
@@ -595,7 +778,10 @@ export interface TargetTrackerOverview {
   kpis: TargetTrackerKpi[];
   lossSpuRows: TargetTrackerSpuRow[];
   monthRows: TargetTrackerMonthRow[];
+  operatorMonthRows: TargetTrackerOperatorPeriodRow[];
+  operatorQuarterRows: TargetTrackerOperatorPeriodRow[];
   operatorRows: TargetTrackerOperatorRow[];
+  quarterRows: TargetTrackerQuarterRow[];
   query: TargetTrackerQuery;
   spuRows: TargetTrackerSpuRow[];
   summary: TargetTrackerSummary;

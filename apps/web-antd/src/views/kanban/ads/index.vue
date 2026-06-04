@@ -34,6 +34,8 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchAdMonitorOverview } from '#/api/kanban';
 
+import { useTablePagination } from '../shared/pagination';
+
 use([
   CanvasRenderer,
   LineChart,
@@ -57,6 +59,11 @@ const loading = ref(false);
 const overview = ref<AdMonitorOverview | null>(null);
 const rangePreset = ref<RangePreset>('7d');
 const customRange = ref<[string, string]>();
+const campaignPagination = useTablePagination(
+  15,
+  ['15', '30', '50', '100'],
+  (total) => `共 ${total} 条 Campaign`,
+);
 
 const query = reactive({
   categories: [] as string[],
@@ -843,12 +850,7 @@ onMounted(loadData);
           <Table
             :columns="campaignColumns"
             :data-source="campaignRows"
-            :pagination="{
-              pageSize: 15,
-              pageSizeOptions: ['15', '30', '50', '100'],
-              showSizeChanger: true,
-              showTotal: (total) => `共 ${total} 条 Campaign`,
-            }"
+            :pagination="campaignPagination"
             :scroll="{ x: 2360 }"
             row-key="campaignName"
             size="small"

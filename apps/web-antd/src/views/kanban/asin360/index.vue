@@ -22,6 +22,7 @@ import {
   Popover,
   Radio,
   Segmented,
+  Select,
   Spin,
   Table,
   Tag,
@@ -36,7 +37,11 @@ import {
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 
-import { fetchAsin360Overview, fetchAsin360Section } from '#/api/kanban';
+import {
+  fetchAsin360Overview,
+  fetchAsin360Section,
+  fetchAsin360StoreOptions,
+} from '#/api/kanban';
 
 use([
   CanvasRenderer,
@@ -98,7 +103,9 @@ const afterSaleLoading = ref(false);
 const overview = ref<Asin360Overview | null>(null);
 const afterSaleRemoteAnalysis = ref<null | Record<string, any>>(null);
 const parentAsinInput = ref('B0GS9P9NJ1');
-const sidInput = ref('1039');
+const selectedSids = ref<string[]>(['1039']);
+const storeLoading = ref(false);
+const storeOptions = ref<Array<{ label: string; value: string }>>([]);
 const rangePreset = ref<RangePreset>('30d');
 const customRange = ref<[string, string]>();
 const detailTab = ref<DetailTab>('daily');
@@ -256,7 +263,7 @@ function overviewParams() {
   return {
     ...rangeParams(),
     parent_ASIN: parseList(parentAsinInput.value).join(','),
-    sids: parseList(sidInput.value),
+    sids: selectedSids.value,
   };
 }
 
@@ -286,7 +293,7 @@ function afterSaleParams() {
     kind: afterSaleKind.value,
     parent_ASIN: parseList(parentAsinInput.value).join(','),
     section: 'after-sale',
-    sids: parseList(sidInput.value),
+    sids: selectedSids.value,
   };
 }
 
@@ -396,6 +403,24 @@ async function loadData(options?: { force?: boolean }) {
       activeRequestController = null;
       activeRequestKey = '';
     }
+  }
+}
+
+async function loadStoreOptions() {
+  storeLoading.value = true;
+  try {
+    const data = await fetchAsin360StoreOptions();
+    storeOptions.value = data.stores.map((store) => ({
+      label: store.storeName,
+      value: store.sid,
+    }));
+    if (selectedSids.value.length === 0) {
+      selectedSids.value = data.defaultSids;
+    }
+  } catch (error) {
+    console.error(error);
+  } finally {
+    storeLoading.value = false;
   }
 }
 
@@ -2255,7 +2280,10 @@ function detailRowKey(record: Record<string, any>, index?: number) {
   );
 }
 
-onMounted(loadData);
+onMounted(async () => {
+  await loadStoreOptions();
+  await loadData();
+});
 </script>
 
 <template>
@@ -2280,8 +2308,17 @@ onMounted(loadData);
             />
           </div>
           <div class="field sid">
-            <span>店铺 SID</span>
-            <Input v-model:value="sidInput" @press-enter="refreshData" />
+            <span>店铺</span>
+            <Select
+              v-model:value="selectedSids"
+              :loading="storeLoading"
+              :options="storeOptions"
+              allow-clear
+              mode="multiple"
+              option-filter-prop="label"
+              placeholder="请选择店铺"
+              show-search
+            />
           </div>
           <Radio.Group
             v-model:value="rangePreset"
@@ -3316,7 +3353,7 @@ onMounted(loadData);
 }
 
 .field.sid {
-  width: 100px;
+  width: 260px;
 }
 
 .range-pills {

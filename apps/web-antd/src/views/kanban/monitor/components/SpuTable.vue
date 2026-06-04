@@ -3,9 +3,14 @@ import type { TableColumnsType } from 'ant-design-vue';
 
 import type { AlertLevel, KanbanSpuRow } from '#/api/kanban';
 
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 import { Button, Card, Table, Tag } from 'ant-design-vue';
+
+import {
+  resetTablePagination,
+  useTablePagination,
+} from '../../shared/pagination';
 
 const props = defineProps<{
   rows: KanbanSpuRow[];
@@ -14,6 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [row: KanbanSpuRow];
 }>();
+const pagination = useTablePagination(12, ['12', '20', '50', '100']);
 
 const alertMeta: Record<AlertLevel, { color: string; label: string }> = {
   red: { color: 'red', label: '红色' },
@@ -85,6 +91,13 @@ const dataSource = computed(() =>
   ),
 );
 
+watch(
+  () => props.rows,
+  () => {
+    resetTablePagination(pagination);
+  },
+);
+
 function rowKey(row: KanbanSpuRow) {
   return `${row.spu}-${row.site}`;
 }
@@ -96,7 +109,7 @@ function rowKey(row: KanbanSpuRow) {
       :columns="columns"
       :custom-row="customRow"
       :data-source="dataSource"
-      :pagination="{ pageSize: 12, showSizeChanger: true }"
+      :pagination="pagination"
       :scroll="{ x: 1760 }"
       :row-key="rowKey"
       size="small"

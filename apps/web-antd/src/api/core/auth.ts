@@ -12,6 +12,10 @@ export namespace AuthApi {
     accessToken: string;
   }
 
+  export interface FeishuLoginParams {
+    token: string;
+  }
+
   export interface RefreshTokenResult {
     data: string;
     status: number;
@@ -23,6 +27,10 @@ export namespace AuthApi {
  */
 export async function loginApi(data: AuthApi.LoginParams) {
   return requestClient.post<AuthApi.LoginResult>('/auth/login', data);
+}
+
+export async function feishuLoginApi(data: AuthApi.FeishuLoginParams) {
+  return requestClient.post<AuthApi.LoginResult>('/auth/feishu-login', data);
 }
 
 /**
