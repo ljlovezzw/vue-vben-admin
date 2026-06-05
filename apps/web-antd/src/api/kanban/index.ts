@@ -46,6 +46,7 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
 
 export interface AnalyticsOverviewParams {
   operationGroupIds?: number[];
+  productExpressionRealtime?: boolean;
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];

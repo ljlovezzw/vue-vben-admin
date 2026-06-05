@@ -175,6 +175,8 @@ src\router\guard.ts
 Authorization: Bearer <accessToken>
 ```
 
+个人中心 `/profile` 只保留“基本设置”。页面展示 `/user/info` 返回的姓名、账号、邮箱、角色、部门、直属上级和登录方式，所有字段只读，不提供密码、安全设置或通知设置入口。直属上级来自后端登录时同步的飞书通讯录字段 `directLeaderName`；如果飞书开放平台未开通组织架构权限，则显示为空。
+
 ### 4.2 页面权限
 
 | 页面           | 路由              | 权限码             |
@@ -218,7 +220,7 @@ apps\web-antd\src\api\kanban\types.ts
 
 | 前端函数                     | 后端路由                                      |
 | ---------------------------- | --------------------------------------------- |
-| `fetchAnalyticsOverview`     | `GET /kanban/analytics/overview`              |
+| `fetchAnalyticsOverview`     | `GET /kanban/analytics/overview`，支持 `productExpressionRealtime` 今日实时产品表现开关 |
 | `fetchKanbanOverview`        | `GET /kanban/monitor/overview`                |
 | `fetchKanbanProductDetail`   | `GET /kanban/monitor/product-detail`          |
 | `fetchSpuDailyMetrics`       | `GET /kanban/monitor/spu-daily`               |
@@ -255,11 +257,14 @@ src\views\dashboard\analytics\index.vue
 
 - 历史日期来自数据库 `profitstatement`。
 - 当天数据由后端优先调用领星利润表 API。
+- 点击筛选栏“产品表现实时”按钮后，仅在站点日期为今天时请求 `productExpressionRealtime=true`，后端读取 `productexpressionnew_live_cache` 作为今日备选源；切换到历史日期时前端自动关闭该按钮。
+- 产品表现实时缓存由后端定时任务每 5 分钟刷新，前端不直接触发领星全量 API；接口 `source.message` 会显示缓存大约多久前刷新。
 - 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_cny` 折算出的 `dailyTargetSales`。
+- 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片展示前一天、上周同日、绝对差值和百分比差异，方便同时判断差了多少和差异比例。
 - 运营组完成率使用全量负责人行汇总，负责人明细区域只截取 Top 12 展示，不能反向影响运营组汇总口径。
-- 负责人列表仅展示有 US 站点有效销量目标的运营人员。
+- 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径。
 
 已完成：
 

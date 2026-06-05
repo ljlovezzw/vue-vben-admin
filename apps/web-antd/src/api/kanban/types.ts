@@ -390,6 +390,7 @@ export interface AnalyticsOverview {
   };
   query: {
     operationGroupIds: number[];
+    productExpressionRealtime: boolean;
     responsibles: string[];
     siteDate: string;
     sites: string[];
