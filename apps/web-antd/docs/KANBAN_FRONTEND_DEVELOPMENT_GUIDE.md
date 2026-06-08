@@ -181,7 +181,7 @@ Authorization: Bearer <accessToken>
 
 | 页面           | 路由              | 权限码             |
 | -------------- | ----------------- | ------------------ |
-| 公司经营驾驶舱 | `/analytics`      | `kanban:analytics` |
+| 公司经营驾驶舱 | `/analytics`      | `kanban:analytics`，仅用于菜单展示 |
 | 新品监控       | `/kanban/monitor` | `kanban:monitor`   |
 | 广告监控       | `/kanban/ads`     | `kanban:ads`       |
 | 目标跟踪       | `/kanban/targets` | `kanban:targets`   |
@@ -197,7 +197,8 @@ Authorization: Bearer <accessToken>
 - 所有角色默认拥有 `kanban:analytics`、`kanban:monitor`、`kanban:ads`、`kanban:targets`、`kanban:asin360`，因此默认可见公司经营驾驶舱、新品监控、广告监控、目标跟踪和 ASIN360。
 - `operator`、`leader` 的 `permissions_json` 只用于追加默认模块之外的权限，例如 SPU 管理和配置中心。
 - `manager`、`admin`、`super` 默认拥有全部模块权限。
-- 模块可见性不代表数据全量可见；数据范围仍由后端按登录人负责人范围过滤。
+- 模块可见性不代表数据全量可见；除公司经营驾驶舱外，数据范围仍由后端按登录人负责人范围过滤。
+- 公司经营驾驶舱 `/analytics` 是全员可见、全量数据口径页面，后端 `/kanban/analytics/overview` 不做模块权限校验，也不按登录人负责人范围裁剪；页面上的负责人和运营组筛选只代表用户主动选择的筛选条件。
 
 ## 5. API 开发流程
 
@@ -218,23 +219,23 @@ apps\web-antd\src\api\kanban\types.ts
 
 当前主要封装：
 
-| 前端函数                     | 后端路由                                      |
-| ---------------------------- | --------------------------------------------- |
-| `fetchAnalyticsOverview`     | `GET /kanban/analytics/overview`，支持 `productExpressionRealtime` 今日实时产品表现开关 |
-| `fetchKanbanOverview`        | `GET /kanban/monitor/overview`                |
-| `fetchKanbanProductDetail`   | `GET /kanban/monitor/product-detail`          |
-| `fetchSpuDailyMetrics`       | `GET /kanban/monitor/spu-daily`               |
-| `fetchAdMonitorOverview`     | `GET /kanban/ads/overview`                    |
-| `fetchTargetTrackerOverview` | `GET /kanban/targets/overview`                |
-| `fetchAsin360Overview`       | `GET /kanban/asin360/overview`                |
-| `fetchAsin360StoreOptions`   | `GET /kanban/asin360/stores`                  |
-| `fetchAsin360Section`        | `GET /kanban/asin360/{section}`               |
-| `fetchSpuManagerOverview`    | `GET /kanban/spus`                            |
-| `fetchSpuManagerOptions`     | `GET /kanban/spus/options`                    |
-| `fetchConfigOverview`        | `GET /kanban/config/overview`                 |
-| 运营组单独读取               | `GET /kanban/config/operation-groups`         |
-| `saveOperationGroup`         | `POST /kanban/config/operation-groups`        |
-| `deleteOperationGroup`       | `DELETE /kanban/config/operation-groups/{id}` |
+| 前端函数 | 后端路由 |
+| --- | --- |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `productExpressionRealtime` 今日实时产品表现开关 |
+| `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
+| `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
+| `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
+| `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
+| `fetchTargetTrackerOverview` | `GET /kanban/targets/overview` |
+| `fetchAsin360Overview` | `GET /kanban/asin360/overview` |
+| `fetchAsin360StoreOptions` | `GET /kanban/asin360/stores` |
+| `fetchAsin360Section` | `GET /kanban/asin360/{section}` |
+| `fetchSpuManagerOverview` | `GET /kanban/spus` |
+| `fetchSpuManagerOptions` | `GET /kanban/spus/options` |
+| `fetchConfigOverview` | `GET /kanban/config/overview` |
+| 运营组单独读取 | `GET /kanban/config/operation-groups` |
+| `saveOperationGroup` | `POST /kanban/config/operation-groups` |
+| `deleteOperationGroup` | `DELETE /kanban/config/operation-groups/{id}` |
 
 ## 6. 页面说明
 
@@ -252,13 +253,15 @@ src\views\dashboard\analytics\index.vue
 - 展示销量完成率、销售额完成率、销售额、库存、推广费用和广告效率。
 - 展示所选日、前一天、上周同日。
 - 展示运营组和运营负责人完成情况。
+- 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
 
 当前口径：
 
 - 历史日期来自数据库 `profitstatement`。
-- 当天数据由后端优先调用领星利润表 API。
-- 点击筛选栏“产品表现实时”按钮后，仅在站点日期为今天时请求 `productExpressionRealtime=true`，后端读取 `productexpressionnew_live_cache` 作为今日备选源；切换到历史日期时前端自动关闭该按钮。
-- 产品表现实时缓存由后端定时任务每 5 分钟刷新，前端不直接触发领星全量 API；接口 `source.message` 会显示缓存大约多久前刷新。
+- 页面首次进入和重置时默认选择北京时间当前日期减 1。
+- 当站点日期为今天或昨天时，后端自动读取 `productexpressionnew_live_cache`；其余历史日期读取 `profitstatement`。
+- 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
+- 产品表现实时缓存由后端定时任务每 5 分钟刷新今天和昨天两天，前端不直接触发领星全量 API；接口 `source.message` 会显示缓存大约多久前刷新。
 - 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_cny` 折算出的 `dailyTargetSales`。
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。

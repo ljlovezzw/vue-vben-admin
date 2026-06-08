@@ -4,7 +4,7 @@ import type {
   AnalyticsOverview,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import VChart from 'vue-echarts';
 
 import { Button, DatePicker, Empty, Select, Spin, Tag } from 'ant-design-vue';
@@ -35,9 +35,8 @@ const loading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
 const query = reactive({
   operationGroupIds: [] as number[],
-  productExpressionRealtime: false,
   responsibles: [] as string[],
-  siteDate: dayjs().format('YYYY-MM-DD'),
+  siteDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   sites: [] as string[],
 });
 
@@ -60,8 +59,6 @@ const metricPrefix = computed(() =>
     ? '实时'
     : '站点日',
 );
-const isTodayQuery = computed(() => query.siteDate === dayjs().format('YYYY-MM-DD'));
-
 const siteOptions = computed(() =>
   (overview.value?.filters.sites ?? []).map((value) => ({
     label: value,
@@ -182,12 +179,11 @@ async function loadData() {
   try {
     overview.value = await fetchAnalyticsOverview({
       operationGroupIds: query.operationGroupIds,
-      productExpressionRealtime:
-        query.productExpressionRealtime && isTodayQuery.value,
       responsibles: query.responsibles,
       siteDate: query.siteDate,
       sites: query.sites,
     });
+    query.siteDate = overview.value.query.siteDate;
   } finally {
     loading.value = false;
   }
@@ -195,16 +191,9 @@ async function loadData() {
 
 function resetFilters() {
   query.operationGroupIds = [];
-  query.productExpressionRealtime = false;
   query.responsibles = [];
-  query.siteDate = dayjs().format('YYYY-MM-DD');
+  query.siteDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   query.sites = [];
-  void loadData();
-}
-
-function toggleProductExpressionRealtime() {
-  if (!isTodayQuery.value) return;
-  query.productExpressionRealtime = !query.productExpressionRealtime;
   void loadData();
 }
 
@@ -354,15 +343,6 @@ function completionColor(value: number) {
   return 'error';
 }
 
-watch(
-  () => query.siteDate,
-  () => {
-    if (!isTodayQuery.value) {
-      query.productExpressionRealtime = false;
-    }
-  },
-);
-
 onMounted(loadData);
 </script>
 
@@ -421,14 +401,6 @@ onMounted(loadData);
           size="small"
           style="min-width: 140px"
         />
-        <Button
-          :disabled="!isTodayQuery"
-          :type="query.productExpressionRealtime ? 'primary' : 'default'"
-          size="small"
-          @click="toggleProductExpressionRealtime"
-        >
-          产品表现实时
-        </Button>
         <Button size="small" @click="resetFilters">重置</Button>
         <Button size="small" type="primary" @click="loadData">查询</Button>
         <Tag :color="source?.status === 'ok' ? 'green' : 'orange'">

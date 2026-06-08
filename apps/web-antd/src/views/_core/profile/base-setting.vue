@@ -50,7 +50,9 @@ onMounted(async () => {
     <div class="profile-basic__header">
       <div>
         <div class="profile-basic__title">基本设置</div>
-        <div class="profile-basic__desc">当前账号信息由飞书登录与权限配置同步</div>
+        <div class="profile-basic__desc">
+          当前账号信息由飞书登录与权限配置同步
+        </div>
       </div>
     </div>
 
@@ -110,9 +112,9 @@ onMounted(async () => {
 .profile-basic__item {
   min-height: 72px;
   padding: 14px 16px;
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 6px;
-  background: hsl(var(--card));
 }
 
 .profile-basic__label {
@@ -122,10 +124,10 @@ onMounted(async () => {
 
 .profile-basic__value {
   margin-top: 8px;
-  overflow-wrap: anywhere;
   font-size: 15px;
   font-weight: 500;
   color: hsl(var(--foreground));
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 720px) {
