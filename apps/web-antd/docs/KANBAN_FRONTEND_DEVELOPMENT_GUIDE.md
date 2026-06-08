@@ -179,16 +179,16 @@ Authorization: Bearer <accessToken>
 
 ### 4.2 页面权限
 
-| 页面           | 路由              | 权限码             |
-| -------------- | ----------------- | ------------------ |
+| 页面           | 路由              | 权限码                             |
+| -------------- | ----------------- | ---------------------------------- |
 | 公司经营驾驶舱 | `/analytics`      | `kanban:analytics`，仅用于菜单展示 |
-| 新品监控       | `/kanban/monitor` | `kanban:monitor`   |
-| 广告监控       | `/kanban/ads`     | `kanban:ads`       |
-| 目标跟踪       | `/kanban/targets` | `kanban:targets`   |
-| ASIN360        | `/kanban/asin360` | `kanban:asin360`   |
-| SPU 管理       | `/kanban/spus`    | `kanban:spus`      |
-| 工具           | `/tools/upload`   | 复用看板权限       |
-| 配置中心       | `/kanban/config`  | `kanban:config`    |
+| 新品监控       | `/kanban/monitor` | `kanban:monitor`                   |
+| 广告监控       | `/kanban/ads`     | `kanban:ads`                       |
+| 目标跟踪       | `/kanban/targets` | `kanban:targets`                   |
+| ASIN360        | `/kanban/asin360` | `kanban:asin360`                   |
+| SPU 管理       | `/kanban/spus`    | `kanban:spus`                      |
+| 工具           | `/tools/upload`   | 复用看板权限                       |
+| 配置中心       | `/kanban/config`  | `kanban:config`                    |
 
 页面路由的 `meta.authority` 负责菜单和页面可见性；后端仍会再次校验权限，不能只依赖前端。
 
@@ -221,7 +221,7 @@ apps\web-antd\src\api\kanban\types.ts
 
 | 前端函数 | 后端路由 |
 | --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `productExpressionRealtime` 今日实时产品表现开关 |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day|month`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
@@ -249,9 +249,9 @@ src\views\dashboard\analytics\index.vue
 
 用途：
 
-- 按站点日期查看公司单日经营情况。
+- 按站点日期或月份查看公司经营情况。
 - 展示销量完成率、销售额完成率、销售额、库存、推广费用和广告效率。
-- 展示所选日、前一天、上周同日。
+- 日维度展示所选日、前一天、上周同日；月维度展示所选月份、上月、去年同期。
 - 展示运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
 
@@ -259,13 +259,19 @@ src\views\dashboard\analytics\index.vue
 
 - 历史日期来自数据库 `profitstatement`。
 - 页面首次进入和重置时默认选择北京时间当前日期减 1。
+- 顶部“维度”可切换日/月。日维度使用 `DatePicker` 日期选择，月维度使用月份选择，提交给接口时仍使用 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
+- 顶部“交易状态”默认选择“已发放”，可切换“已发放含预算”。清空后后端仍按默认“已发放”处理，不做利润表全状态查询。
+- “已发放含预算”由后端映射为已发放加预结算/当月结算相关状态，用于查看带预算口径的月度数据。
 - 当站点日期为今天或昨天时，后端自动读取 `productexpressionnew_live_cache`；其余历史日期读取 `profitstatement`。
+- 月维度固定使用 `profitstatement` 聚合，不触发实时产品表现缓存；当前月默认截止北京时间当前日期减 1。
 - 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
 - 产品表现实时缓存由后端定时任务每 5 分钟刷新今天和昨天两天，前端不直接触发领星全量 API；接口 `source.message` 会显示缓存大约多久前刷新。
 - 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_cny` 折算出的 `dailyTargetSales`。
+- 日维度目标为当月目标折算日目标；月维度目标为当月目标总额。由于接口兼容原因，月维度仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案显示为“月目标”。
+- 月维度的销售额、销售额目标、销售额差值和推广占比中的总销售额展示 2 位小数；日维度仍保持整数金额，毛利润等非销售额金额不受影响。
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
-- 销量和销售额对比卡片展示前一天、上周同日、绝对差值和百分比差异，方便同时判断差了多少和差异比例。
+- 销量和销售额对比卡片按维度切换文案：日维度为前一天/上周同日，月维度为上月/去年同期，并展示绝对差值和百分比差异。
 - 运营组完成率使用全量负责人行汇总，负责人明细区域只截取 Top 12 展示，不能反向影响运营组汇总口径。
 - 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径。
 
@@ -382,6 +388,7 @@ src\views\kanban\spus\index.vue
 
 - 受限用户只能查看和分配本人或受管理成员范围内的 SPU。
 - 选项列表使用独立接口 `/kanban/spus/options`，不要改回完整配置中心接口。
+- SPU 管理列表筛选已下推到后端 SQL 层，前端应继续把站点、负责人、类目和状态作为查询参数传给 `/kanban/spus`，不要改回先拉全量再本地过滤。
 
 ### 6.7 工具 `/tools`
 

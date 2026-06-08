@@ -345,6 +345,7 @@ export interface AnalyticsFilters {
   operationGroups: AnalyticsOperationGroup[];
   responsibles: string[];
   sites: string[];
+  transactionStatuses: string[];
 }
 
 export interface AnalyticsOperationGroup {
@@ -388,12 +389,22 @@ export interface AnalyticsOverview {
     responsibleRows: AnalyticsResponsibleOperationRow[];
     weekBefore: AnalyticsOperationMetric;
   };
+  period: {
+    endDate: string;
+    granularity: 'day' | 'month';
+    previousLabel: string;
+    secondaryLabel: string;
+    startDate: string;
+    targetLabel: string;
+  };
   query: {
+    granularity: 'day' | 'month';
     operationGroupIds: number[];
     productExpressionRealtime: boolean;
     responsibles: string[];
     siteDate: string;
     sites: string[];
+    transactionStatuses: string[];
   };
   targets: {
     dailyTargetProfit: number;

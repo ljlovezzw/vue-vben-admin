@@ -45,11 +45,13 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
 }
 
 export interface AnalyticsOverviewParams {
+  granularity?: 'day' | 'month';
   operationGroupIds?: number[];
   productExpressionRealtime?: boolean;
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];
+  transactionStatuses?: string[];
 }
 
 export type SpuManagerParams = Partial<SpuManagerFilters>;

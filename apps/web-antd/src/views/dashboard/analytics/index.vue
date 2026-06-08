@@ -31,13 +31,17 @@ interface ResponsibleCard {
   turnoverMonths: number;
 }
 
+type AnalyticsGranularity = 'day' | 'month';
+
 const loading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
 const query = reactive({
+  granularity: 'day' as AnalyticsGranularity,
   operationGroupIds: [] as number[],
   responsibles: [] as string[],
   siteDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   sites: [] as string[],
+  transactionStatuses: ['已发放'] as string[],
 });
 
 const screenTabs = [
@@ -53,12 +57,40 @@ const previous = computed(() => operations.value?.previous);
 const weekBefore = computed(() => operations.value?.weekBefore);
 const advertising = computed(() => overview.value?.advertising);
 const targets = computed(() => overview.value?.targets);
+const period = computed(() => overview.value?.period);
 const source = computed(() => overview.value?.source);
-const metricPrefix = computed(() =>
-  source.value?.mode === 'live_api' && source.value.status === 'ok'
-    ? '实时'
-    : '站点日',
+const granularityOptions = [
+  { label: '日', value: 'day' },
+  { label: '月', value: 'month' },
+];
+const isMonthMode = computed(() => query.granularity === 'month');
+const calendarValue = computed({
+  get() {
+    return isMonthMode.value
+      ? dayjs(query.siteDate).format('YYYY-MM')
+      : query.siteDate;
+  },
+  set(value: string) {
+    query.siteDate = isMonthMode.value ? `${value}-01` : value;
+  },
+});
+const targetLabel = computed(() => period.value?.targetLabel ?? '日目标');
+const previousLabel = computed(() => period.value?.previousLabel ?? '前一天');
+const secondaryLabel = computed(() => period.value?.secondaryLabel ?? '上周同日');
+const targetHint = computed(() =>
+  isMonthMode.value ? '按所选月份汇总月目标' : '当月目标折算日目标',
 );
+const metricPrefix = computed(() =>
+  isMonthMode.value
+    ? '月度'
+    : source.value?.mode === 'live_api' && source.value.status === 'ok'
+      ? '实时'
+      : '站点日',
+);
+const advertisingPrefix = computed(() =>
+  isMonthMode.value ? '所选月份' : '近 30 天',
+);
+const dateLabel = computed(() => (isMonthMode.value ? '统计月份' : '站点日期(day)'));
 const siteOptions = computed(() =>
   (overview.value?.filters.sites ?? []).map((value) => ({
     label: value,
@@ -75,6 +107,15 @@ const operationGroupOptions = computed(() =>
   (overview.value?.filters.operationGroups ?? []).map((item) => ({
     label: item.name,
     value: item.id,
+  })),
+);
+const transactionStatusOptions = computed(() =>
+  (overview.value?.filters.transactionStatuses ?? [
+    '已发放',
+    '已发放含预算',
+  ]).map((value) => ({
+    label: value,
+    value,
   })),
 );
 
@@ -178,27 +219,33 @@ async function loadData() {
   loading.value = true;
   try {
     overview.value = await fetchAnalyticsOverview({
+      granularity: query.granularity,
       operationGroupIds: query.operationGroupIds,
       responsibles: query.responsibles,
       siteDate: query.siteDate,
       sites: query.sites,
+      transactionStatuses: query.transactionStatuses,
     });
+    query.granularity = overview.value.query.granularity;
     query.siteDate = overview.value.query.siteDate;
+    query.transactionStatuses = overview.value.query.transactionStatuses;
   } finally {
     loading.value = false;
   }
 }
 
 function resetFilters() {
+  query.granularity = 'day';
   query.operationGroupIds = [];
   query.responsibles = [];
   query.siteDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   query.sites = [];
+  query.transactionStatuses = ['已发放'];
   void loadData();
 }
 
 function disabledFutureDate(value: ReturnType<typeof dayjs>) {
-  return value.isAfter(dayjs(), 'day');
+  return value.isAfter(dayjs(), isMonthMode.value ? 'month' : 'day');
 }
 
 function ratio(numerator?: null | number, denominator?: null | number) {
@@ -242,20 +289,30 @@ function formatSignedInteger(value?: null | number) {
   return `${value >= 0 ? '+' : ''}${formatInteger(value)}`;
 }
 
-function formatMoney(value?: null | number) {
+function formatMoney(value?: null | number, fractionDigits = 0) {
   return `¥${Number(value || 0).toLocaleString('zh-CN', {
-    maximumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
   })}`;
 }
 
-function formatSignedMoney(value?: null | number) {
+function formatSignedMoney(value?: null | number, fractionDigits = 0) {
   if (value === null || value === undefined) {
     return '-';
   }
   const absolute = `¥${Math.abs(Number(value || 0)).toLocaleString('zh-CN', {
-    maximumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
   })}`;
   return `${value >= 0 ? '+' : '-'}${absolute}`;
+}
+
+function formatSalesMoney(value?: null | number) {
+  return formatMoney(value, isMonthMode.value ? 2 : 0);
+}
+
+function formatSignedSalesMoney(value?: null | number) {
+  return formatSignedMoney(value, isMonthMode.value ? 2 : 0);
 }
 
 function formatUsd(value?: null | number) {
@@ -364,12 +421,20 @@ onMounted(loadData);
 
       <section class="screen-toolbar">
         <span class="toolbar-flag">▼</span>
-        <label>站点日期(day)</label>
-        <DatePicker
-          v-model:value="query.siteDate"
-          :disabled-date="disabledFutureDate"
+        <label>维度</label>
+        <Select
+          v-model:value="query.granularity"
+          :options="granularityOptions"
           size="small"
-          value-format="YYYY-MM-DD"
+          style="width: 74px"
+        />
+        <label>{{ dateLabel }}</label>
+        <DatePicker
+          v-model:value="calendarValue"
+          :disabled-date="disabledFutureDate"
+          :picker="isMonthMode ? 'month' : 'date'"
+          size="small"
+          :value-format="isMonthMode ? 'YYYY-MM' : 'YYYY-MM-DD'"
         />
         <label>站点</label>
         <Select
@@ -380,6 +445,16 @@ onMounted(loadData);
           placeholder="全部"
           size="small"
           style="min-width: 110px"
+        />
+        <label>交易状态</label>
+        <Select
+          v-model:value="query.transactionStatuses"
+          :options="transactionStatusOptions"
+          allow-clear
+          mode="multiple"
+          placeholder="已发放"
+          size="small"
+          style="min-width: 150px"
         />
         <label>运营组</label>
         <Select
@@ -413,7 +488,7 @@ onMounted(loadData);
           <div class="white-panel gauge-panel">
             <div class="panel-heading">
               <h2>销量完成率</h2>
-              <span>当月目标折算日目标</span>
+              <span>{{ targetHint }}</span>
             </div>
             <div class="gauge-visual">
               <VChart
@@ -435,7 +510,7 @@ onMounted(loadData);
           <div class="white-panel gauge-panel">
             <div class="panel-heading">
               <h2>销售额完成率</h2>
-              <span>当月目标折算日目标</span>
+              <span>{{ targetHint }}</span>
             </div>
             <div class="gauge-visual">
               <VChart
@@ -444,13 +519,13 @@ onMounted(loadData);
                 :option="gaugeOption(salesCompletion, '#facc15')"
               />
               <div class="gauge-center">
-                <strong>{{ formatMoney(latest?.salesAmount) }}</strong>
+                <strong>{{ formatSalesMoney(latest?.salesAmount) }}</strong>
                 <span>{{ completionText(salesCompletion) }}</span>
               </div>
             </div>
             <p>
-              实际 {{ formatMoney(latest?.salesAmount) }} / 目标
-              {{ formatMoney(targets?.dailyTargetSales) }}
+              实际 {{ formatSalesMoney(latest?.salesAmount) }} / 目标
+              {{ formatSalesMoney(targets?.dailyTargetSales) }}
             </p>
           </div>
         </aside>
@@ -465,11 +540,11 @@ onMounted(loadData);
               </div>
               <div class="comparison-card metric-comparison-card yellow-detail">
                 <div>
-                  <span>前一天销量</span>
+                  <span>{{ previousLabel }}销量</span>
                   <strong>{{ formatInteger(previous?.salesQty) }}</strong>
                 </div>
                 <div>
-                  <span>环比差值</span>
+                  <span>{{ previousLabel }}差值</span>
                   <strong
                     :class="
                       comparisonClass(latest?.salesQty, previous?.salesQty)
@@ -485,7 +560,7 @@ onMounted(loadData);
                   </strong>
                 </div>
                 <div>
-                  <span>环比差异</span>
+                  <span>{{ previousLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(latest?.salesQty, previous?.salesQty)
@@ -495,11 +570,11 @@ onMounted(loadData);
                   </strong>
                 </div>
                 <div>
-                  <span>上周同日</span>
+                  <span>{{ secondaryLabel }}</span>
                   <strong>{{ formatInteger(weekBefore?.salesQty) }}</strong>
                 </div>
                 <div>
-                  <span>同比差值</span>
+                  <span>{{ secondaryLabel }}差值</span>
                   <strong
                     :class="
                       comparisonClass(latest?.salesQty, weekBefore?.salesQty)
@@ -515,7 +590,7 @@ onMounted(loadData);
                   </strong>
                 </div>
                 <div>
-                  <span>同比差异</span>
+                  <span>{{ secondaryLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(latest?.salesQty, weekBefore?.salesQty)
@@ -530,16 +605,16 @@ onMounted(loadData);
             <div class="metric-stack yellow-stack">
               <div class="hero-card yellow-card">
                 <span>{{ metricPrefix }}销售额</span>
-                <strong>{{ formatMoney(latest?.salesAmount) }}</strong>
+                <strong>{{ formatSalesMoney(latest?.salesAmount) }}</strong>
                 <em>SALES REVENUE · 最新快照</em>
               </div>
               <div class="comparison-card metric-comparison-card yellow-detail">
                 <div>
-                  <span>前一天销售额</span>
-                  <strong>{{ formatMoney(previous?.salesAmount) }}</strong>
+                  <span>{{ previousLabel }}销售额</span>
+                  <strong>{{ formatSalesMoney(previous?.salesAmount) }}</strong>
                 </div>
                 <div>
-                  <span>环比差值</span>
+                  <span>{{ previousLabel }}差值</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -552,13 +627,13 @@ onMounted(loadData);
                       comparisonDeltaText(
                         latest?.salesAmount,
                         previous?.salesAmount,
-                        formatSignedMoney,
+                        formatSignedSalesMoney,
                       )
                     }}
                   </strong>
                 </div>
                 <div>
-                  <span>环比差异</span>
+                  <span>{{ previousLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -573,11 +648,11 @@ onMounted(loadData);
                   </strong>
                 </div>
                 <div>
-                  <span>上周同日</span>
-                  <strong>{{ formatMoney(weekBefore?.salesAmount) }}</strong>
+                  <span>{{ secondaryLabel }}</span>
+                  <strong>{{ formatSalesMoney(weekBefore?.salesAmount) }}</strong>
                 </div>
                 <div>
-                  <span>同比差值</span>
+                  <span>{{ secondaryLabel }}差值</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -590,13 +665,13 @@ onMounted(loadData);
                       comparisonDeltaText(
                         latest?.salesAmount,
                         weekBefore?.salesAmount,
-                        formatSignedMoney,
+                        formatSignedSalesMoney,
                       )
                     }}
                   </strong>
                 </div>
                 <div>
-                  <span>同比差异</span>
+                  <span>{{ secondaryLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -619,15 +694,15 @@ onMounted(loadData);
 
           <div class="white-panel group-panel">
             <div class="panel-heading">
-              <h2>实时销量完成率 - 运营组维度</h2>
-              <span>当月目标折算日目标</span>
+              <h2>{{ metricPrefix }}销量完成率 - 运营组维度</h2>
+              <span>{{ targetHint }}</span>
             </div>
             <div v-if="groupCards.length > 0" class="group-placeholder">
               <div v-for="item in groupCards" :key="item.name">
                 <b>{{ item.name }}</b>
                 <strong>{{ formatPercent(item.completionRate) }}</strong>
                 <span>
-                  销量 {{ formatInteger(item.salesQty) }} / 日目标
+                  销量 {{ formatInteger(item.salesQty) }} / {{ targetLabel }}
                   {{ formatInteger(item.dailyTargetUnits) }}
                 </span>
               </div>
@@ -637,16 +712,17 @@ onMounted(loadData);
 
           <div class="white-panel group-panel">
             <div class="panel-heading">
-              <h2>实时销售额完成率 - 运营组维度</h2>
-              <span>当月目标折算日目标</span>
+              <h2>{{ metricPrefix }}销售额完成率 - 运营组维度</h2>
+              <span>{{ targetHint }}</span>
             </div>
             <div v-if="groupCards.length > 0" class="group-placeholder">
               <div v-for="item in groupCards" :key="item.name">
                 <b>{{ item.name }}</b>
                 <strong>{{ formatPercent(item.salesCompletionRate) }}</strong>
                 <span>
-                  销售额 {{ formatMoney(item.salesAmount) }} / 日目标
-                  {{ formatMoney(item.dailyTargetSales) }}
+                  销售额 {{ formatSalesMoney(item.salesAmount) }} /
+                  {{ targetLabel }}
+                  {{ formatSalesMoney(item.dailyTargetSales) }}
                 </span>
               </div>
             </div>
@@ -660,7 +736,7 @@ onMounted(loadData);
               <div class="hero-card blue-card">
                 <span>推广占比</span>
                 <strong>{{ formatPercent(promotionRate) }}</strong>
-                <em>近 30 天广告花费绝对值 / 总销售额</em>
+                <em>{{ advertisingPrefix }}广告花费绝对值 / 总销售额</em>
               </div>
               <div class="comparison-card blue-detail">
                 <div>
@@ -681,7 +757,7 @@ onMounted(loadData);
                 <div>
                   <span>总销售额</span>
                   <strong>{{
-                    formatMoney(advertising?.summary.totalSales)
+                    formatSalesMoney(advertising?.summary.totalSales)
                   }}</strong>
                 </div>
               </div>
@@ -695,11 +771,11 @@ onMounted(loadData);
               </div>
               <div class="comparison-card blue-detail">
                 <div>
-                  <span>前一天周转</span>
+                  <span>{{ previousLabel }}周转</span>
                   <strong>{{ turnover(previous?.turnoverMonths) }}</strong>
                 </div>
                 <div>
-                  <span>环比</span>
+                  <span>{{ previousLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -718,11 +794,11 @@ onMounted(loadData);
                   </strong>
                 </div>
                 <div>
-                  <span>上周同日</span>
+                  <span>{{ secondaryLabel }}</span>
                   <strong>{{ turnover(weekBefore?.turnoverMonths) }}</strong>
                 </div>
                 <div>
-                  <span>周同比</span>
+                  <span>{{ secondaryLabel }}差异</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -746,7 +822,7 @@ onMounted(loadData);
 
           <div class="white-panel responsible-panel">
             <div class="panel-heading">
-              <h2>实时销量完成率 - 运营负责人维度</h2>
+              <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度</h2>
               <span>{{ responsibleCards.length }} 人</span>
             </div>
             <div v-if="responsibleCards.length > 0" class="responsible-grid">
@@ -758,22 +834,26 @@ onMounted(loadData);
                   </Tag>
                 </div>
                 <p>
-                  站点日销量 <b>{{ formatInteger(item.salesQty) }}</b>
+                  {{ metricPrefix }}销量 <b>{{ formatInteger(item.salesQty) }}</b>
                 </p>
                 <p>
-                  日目标销量 <b>{{ formatInteger(item.dailyTargetUnits) }}</b>
+                  {{ targetLabel }}销量
+                  <b>{{ formatInteger(item.dailyTargetUnits) }}</b>
                 </p>
                 <p>
-                  日目标毛利 <b>{{ formatMoney(item.dailyTargetProfit) }}</b>
+                  {{ targetLabel }}毛利
+                  <b>{{ formatMoney(item.dailyTargetProfit) }}</b>
                 </p>
                 <p>
-                  日目标销售额 <b>{{ formatMoney(item.dailyTargetSales) }}</b>
+                  {{ targetLabel }}销售额
+                  <b>{{ formatSalesMoney(item.dailyTargetSales) }}</b>
                 </p>
                 <p>
-                  站点日毛利 <b>{{ formatMoney(item.grossProfit) }}</b>
+                  {{ metricPrefix }}毛利 <b>{{ formatMoney(item.grossProfit) }}</b>
                 </p>
                 <p>
-                  站点日销售额 <b>{{ formatMoney(item.salesAmount) }}</b>
+                  {{ metricPrefix }}销售额
+                  <b>{{ formatSalesMoney(item.salesAmount) }}</b>
                 </p>
                 <p>
                   库存周转(月) <b>{{ turnover(item.turnoverMonths) }}</b>
@@ -789,8 +869,7 @@ onMounted(loadData);
       </section>
 
       <footer class="screen-note">
-        当前已接入：站点日期、利润表单日销售、月目标折算日目标、近 30
-        天推广占比、库存快照、运营组配置和销售额完成率。
+        当前已接入：日/月维度、利润表经营数据、目标完成率、推广占比、库存快照、运营组配置和负责人完成率。
       </footer>
     </div>
   </Spin>
