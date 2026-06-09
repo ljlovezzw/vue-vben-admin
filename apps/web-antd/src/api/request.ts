@@ -23,6 +23,7 @@ const { apiURL } = useAppConfig(import.meta.env, import.meta.env.PROD);
 
 function createRequestClient(baseURL: string, options?: RequestClientOptions) {
   const client = new RequestClient({
+    timeout: 60_000,
     ...options,
     baseURL,
   });

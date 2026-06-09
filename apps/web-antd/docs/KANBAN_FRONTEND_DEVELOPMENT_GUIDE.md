@@ -228,8 +228,8 @@ apps\web-antd\src\api\kanban\types.ts
 当前主要封装：
 
 | 前端函数 | 后端路由 |
-| --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
+| --- | --- | --- |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses`和`productExpressionRealtime` 今日实时产品表现开关 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |

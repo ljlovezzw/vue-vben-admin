@@ -900,7 +900,6 @@ onMounted(loadData);
   gap: 8px;
 }
 
-
 .screen-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1259,6 +1258,5 @@ h2 {
   .responsible-grid {
     grid-template-columns: 1fr;
   }
-
 }
 </style>

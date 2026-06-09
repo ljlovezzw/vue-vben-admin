@@ -2246,4 +2246,3 @@ onMounted(applyFilters);
   }
 }
 </style>
-

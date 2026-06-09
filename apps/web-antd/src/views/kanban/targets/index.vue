@@ -1925,5 +1925,3 @@ onMounted(loadData);
   }
 }
 </style>
-
-
