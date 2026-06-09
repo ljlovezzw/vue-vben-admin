@@ -108,7 +108,7 @@ const alertOptions = [
   { label: '待观察', value: 'gray' },
 ];
 
-const defaultMonitorSites = ['US'];
+const defaultMonitorSites: string[] = [];
 
 const stageTagColor: Record<string, string> = {
   冷启动期: 'blue',
@@ -225,7 +225,7 @@ const productVisibleColumns = computed(() => {
 });
 const productFixedKeys = computed(
   () =>
-    new Set(productDetailColumnDefs.value.slice(0, 8).map((item) => item.key)),
+    new Set(productDetailColumnDefs.value.slice(0, 9).map((item) => item.key)),
 );
 const productMetricScale = computed(() => {
   const scale = new Map<string, number>();
@@ -2246,3 +2246,4 @@ onMounted(applyFilters);
   }
 }
 </style>
+

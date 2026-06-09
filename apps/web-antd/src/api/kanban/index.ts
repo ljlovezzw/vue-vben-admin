@@ -45,6 +45,7 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
 }
 
 export interface AnalyticsOverviewParams {
+  departments?: string[];
   granularity?: 'day' | 'month';
   operationGroupIds?: number[];
   productExpressionRealtime?: boolean;

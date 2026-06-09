@@ -36,6 +36,7 @@ type AnalyticsGranularity = 'day' | 'month';
 const loading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
 const query = reactive({
+  departments: [] as string[],
   granularity: 'day' as AnalyticsGranularity,
   operationGroupIds: [] as number[],
   responsibles: [] as string[],
@@ -44,13 +45,6 @@ const query = reactive({
   transactionStatuses: ['已发放'] as string[],
 });
 
-const screenTabs = [
-  { index: '01', label: '完成率', state: 'active' },
-  { index: '02', label: '评分监控', state: 'pending' },
-  { index: '03', label: '排行榜', state: 'pending' },
-  { index: '04', label: '新品', state: 'pending' },
-  { index: '05', label: '关键指标', state: 'pending' },
-];
 const operations = computed(() => overview.value?.operations);
 const latest = computed(() => operations.value?.latest);
 const previous = computed(() => operations.value?.previous);
@@ -76,21 +70,31 @@ const calendarValue = computed({
 });
 const targetLabel = computed(() => period.value?.targetLabel ?? '日目标');
 const previousLabel = computed(() => period.value?.previousLabel ?? '前一天');
-const secondaryLabel = computed(() => period.value?.secondaryLabel ?? '上周同日');
+const secondaryLabel = computed(
+  () => period.value?.secondaryLabel ?? '上周同日',
+);
 const targetHint = computed(() =>
   isMonthMode.value ? '按所选月份汇总月目标' : '当月目标折算日目标',
 );
 const metricPrefix = computed(() =>
   isMonthMode.value
     ? '月度'
-    : source.value?.mode === 'live_api' && source.value.status === 'ok'
+    : (source.value?.mode === 'live_api' && source.value.status === 'ok'
       ? '实时'
-      : '站点日',
+      : '站点日'),
 );
 const advertisingPrefix = computed(() =>
   isMonthMode.value ? '所选月份' : '近 30 天',
 );
-const dateLabel = computed(() => (isMonthMode.value ? '统计月份' : '站点日期(day)'));
+const dateLabel = computed(() =>
+  isMonthMode.value ? '统计月份' : '站点日期(day)',
+);
+const departmentOptions = computed(() =>
+  (overview.value?.filters.departments ?? []).map((value) => ({
+    label: value,
+    value,
+  })),
+);
 const siteOptions = computed(() =>
   (overview.value?.filters.sites ?? []).map((value) => ({
     label: value,
@@ -110,10 +114,9 @@ const operationGroupOptions = computed(() =>
   })),
 );
 const transactionStatusOptions = computed(() =>
-  (overview.value?.filters.transactionStatuses ?? [
-    '已发放',
-    '已发放含预算',
-  ]).map((value) => ({
+  (
+    overview.value?.filters.transactionStatuses ?? ['已发放', '已发放含预算']
+  ).map((value) => ({
     label: value,
     value,
   })),
@@ -219,6 +222,7 @@ async function loadData() {
   loading.value = true;
   try {
     overview.value = await fetchAnalyticsOverview({
+      departments: query.departments,
       granularity: query.granularity,
       operationGroupIds: query.operationGroupIds,
       responsibles: query.responsibles,
@@ -226,6 +230,7 @@ async function loadData() {
       sites: query.sites,
       transactionStatuses: query.transactionStatuses,
     });
+    query.departments = overview.value.query.departments;
     query.granularity = overview.value.query.granularity;
     query.siteDate = overview.value.query.siteDate;
     query.transactionStatuses = overview.value.query.transactionStatuses;
@@ -235,6 +240,7 @@ async function loadData() {
 }
 
 function resetFilters() {
+  query.departments = [];
   query.granularity = 'day';
   query.operationGroupIds = [];
   query.responsibles = [];
@@ -406,19 +412,6 @@ onMounted(loadData);
 <template>
   <Spin :spinning="loading">
     <div class="completion-screen">
-      <header class="screen-tabs">
-        <div
-          v-for="tab in screenTabs"
-          :key="tab.index"
-          class="screen-tab"
-          :class="{ active: tab.state === 'active' }"
-        >
-          <b>{{ tab.index }}</b>
-          <strong>{{ tab.label }}</strong>
-          <em v-if="tab.state === 'pending'">待完善</em>
-        </div>
-      </header>
-
       <section class="screen-toolbar">
         <span class="toolbar-flag">▼</span>
         <label>维度</label>
@@ -455,6 +448,16 @@ onMounted(loadData);
           placeholder="已发放"
           size="small"
           style="min-width: 150px"
+        />
+        <label>部门</label>
+        <Select
+          v-model:value="query.departments"
+          :options="departmentOptions"
+          allow-clear
+          mode="multiple"
+          placeholder="全部"
+          size="small"
+          style="min-width: 130px"
         />
         <label>运营组</label>
         <Select
@@ -649,7 +652,9 @@ onMounted(loadData);
                 </div>
                 <div>
                   <span>{{ secondaryLabel }}</span>
-                  <strong>{{ formatSalesMoney(weekBefore?.salesAmount) }}</strong>
+                  <strong>{{
+                    formatSalesMoney(weekBefore?.salesAmount)
+                  }}</strong>
                 </div>
                 <div>
                   <span>{{ secondaryLabel }}差值</span>
@@ -834,7 +839,8 @@ onMounted(loadData);
                   </Tag>
                 </div>
                 <p>
-                  {{ metricPrefix }}销量 <b>{{ formatInteger(item.salesQty) }}</b>
+                  {{ metricPrefix }}销量
+                  <b>{{ formatInteger(item.salesQty) }}</b>
                 </p>
                 <p>
                   {{ targetLabel }}销量
@@ -849,7 +855,8 @@ onMounted(loadData);
                   <b>{{ formatSalesMoney(item.dailyTargetSales) }}</b>
                 </p>
                 <p>
-                  {{ metricPrefix }}毛利 <b>{{ formatMoney(item.grossProfit) }}</b>
+                  {{ metricPrefix }}毛利
+                  <b>{{ formatMoney(item.grossProfit) }}</b>
                 </p>
                 <p>
                   {{ metricPrefix }}销售额
@@ -883,7 +890,6 @@ onMounted(loadData);
   background: #eef2f7;
 }
 
-.screen-tabs,
 .screen-toolbar,
 .top-board,
 .yellow-grid,
@@ -894,46 +900,6 @@ onMounted(loadData);
   gap: 8px;
 }
 
-.screen-tabs {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 5px 8px;
-  margin-bottom: 8px;
-  background: #f8fafc;
-  border-top: 3px solid #374151;
-}
-
-.screen-tab {
-  position: relative;
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  color: #94a3b8;
-  background: #fff;
-}
-
-.screen-tab.active {
-  color: #1e293b;
-  box-shadow: inset 0 -2px #2563eb;
-}
-
-.screen-tab b {
-  font-size: 18px;
-  font-weight: 500;
-  color: #cbd5e1;
-}
-
-.screen-tab strong {
-  font-size: 13px;
-}
-
-.screen-tab em {
-  margin-left: auto;
-  font-size: 10px;
-  font-style: normal;
-  color: #cbd5e1;
-}
 
 .screen-toolbar {
   display: flex;
@@ -1294,8 +1260,5 @@ h2 {
     grid-template-columns: 1fr;
   }
 
-  .screen-tabs {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

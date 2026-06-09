@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { TableColumnsType } from 'ant-design-vue';
 
 import type {
@@ -430,6 +430,7 @@ async function saveUserAuth(row: ConfigUserRow) {
   savingUserId.value = row.id;
   try {
     const saved = await updateConfigUserAuth(row.id, {
+      department: canEditAdminFields.value ? row.department.trim() : undefined,
       managedUserIds: canEditMembers(row) ? row.managedUserIds : [],
       permissions: row.permissions,
       role: row.role,
@@ -796,6 +797,14 @@ onMounted(loadData);
                       <Tag :color="text === 'feishu' ? 'blue' : 'purple'">
                         {{ text === 'feishu' ? '飞书' : '本地' }}
                       </Tag>
+                    </template>
+                    <template v-else-if="column.dataIndex === 'department'">
+                      <Input
+                        v-model:value="(record as ConfigUserRow).department"
+                        :disabled="!canEditAdminFields"
+                        placeholder="部门"
+                        size="small"
+                      />
                     </template>
                     <template v-else-if="column.dataIndex === 'role'">
                       <Select

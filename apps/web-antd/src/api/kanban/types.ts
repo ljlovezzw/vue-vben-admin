@@ -342,6 +342,7 @@ export interface AdMonitorOverview {
 }
 
 export interface AnalyticsFilters {
+  departments: string[];
   operationGroups: AnalyticsOperationGroup[];
   responsibles: string[];
   sites: string[];
@@ -398,6 +399,7 @@ export interface AnalyticsOverview {
     targetLabel: string;
   };
   query: {
+    departments: string[];
     granularity: 'day' | 'month';
     operationGroupIds: number[];
     productExpressionRealtime: boolean;
@@ -629,6 +631,7 @@ export interface ConfigUserRow {
 }
 
 export interface ConfigUserAuthPayload {
+  department?: null | string;
   managedUserIds: number[];
   permissions: string[];
   role: string;

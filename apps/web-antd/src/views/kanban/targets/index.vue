@@ -70,14 +70,14 @@ const operatorPagination = useTablePagination(8, ['8', '20', '50', '100']);
 
 const query = reactive({
   operatorName: '',
-  site: 'US',
-  store: 'RSLOVE-US',
+  site: 'ALL',
+  store: '',
   year: 2026,
 });
 
 const siteOptions = [
-  { label: 'US', value: 'US' },
   { label: '全部站点', value: 'ALL' },
+  { label: 'US', value: 'US' },
   { label: 'DE', value: 'DE' },
   { label: 'UK', value: 'UK' },
   { label: 'CA', value: 'CA' },
@@ -107,7 +107,7 @@ async function loadData() {
   try {
     const data = await fetchTargetTrackerOverview({
       operatorName: query.operatorName || undefined,
-      site: query.site,
+      site: query.site === 'ALL' ? undefined : query.site,
       store: query.store || undefined,
       year: query.year,
     });
@@ -896,7 +896,7 @@ onMounted(loadData);
           <div class="panel chart-panel">
             <div class="panel-head">
               <strong>{{ periodPanelTitle }}</strong>
-              <span>{{ overview?.query.site || 'US' }} ·
+              <span>{{ overview?.query.site || '全部站点' }} ·
                 {{ overview?.updatedAt || '-' }}</span>
             </div>
             <VChart class="main-chart" :option="monthOption" autoresize />
@@ -1925,3 +1925,5 @@ onMounted(loadData);
   }
 }
 </style>
+
+

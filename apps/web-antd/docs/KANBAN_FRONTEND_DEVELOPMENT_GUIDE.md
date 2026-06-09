@@ -1,4 +1,4 @@
-﻿# Kanban 前端开发与进度说明
+# Kanban 前端开发与进度说明
 
 更新时间：2026-06-02
 
@@ -83,11 +83,19 @@ http://localhost:8001
 后端路由：/kanban/monitor/overview
 ```
 
+看板页面默认站点范围为全部站点。站点筛选为空或 `ALL` 时不向后端施加 US 限制；只有用户选择具体站点时才传 `sites/site` 参数。新品监控的 `query.sites` 默认保持空数组，不能再用 `['US']` 作为初始化默认值；否则首屏会主动请求 US 数据。
+
+后端可通过 .env 的 KANBAN_ALLOWED_SHOPS 做全局店铺白名单；前端站点/负责人筛选只是在白名单结果上继续筛选，不需要把店铺列表硬编码到页面。
+
+新品监控的新品详情表列由后端 columns 驱动；当前固定列包含 SPU / 父ASIN / 主图 / 店铺 / ASIN / 运营负责人 / 一级类目 / 二级分类 等基础字段。前端只负责列宽、固定列和图片渲染，不在页面硬编码业务字段顺序。
+
 生产环境 API：
 
 ```text
 https://api.junlee.top
 ```
+
+后端会对部分父 ASIN 做运行时 SPU 口径修正，前端展示和下钻应以后端接口返回的 `spu` 为准。当前特例：`B0D53PVTZD -> LLW000526`。
 
 常用验证：
 
@@ -221,7 +229,7 @@ apps\web-antd\src\api\kanban\types.ts
 
 | 前端函数 | 后端路由 |
 | --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day|month`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
@@ -252,7 +260,7 @@ src\views\dashboard\analytics\index.vue
 - 按站点日期或月份查看公司经营情况。
 - 展示销量完成率、销售额完成率、销售额、库存、推广费用和广告效率。
 - 日维度展示所选日、前一天、上周同日；月维度展示所选月份、上月、去年同期。
-- 展示运营组和运营负责人完成情况。
+- 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
 
 当前口径：
@@ -272,6 +280,7 @@ src\views\dashboard\analytics\index.vue
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片按维度切换文案：日维度为前一天/上周同日，月维度为上月/去年同期，并展示绝对差值和百分比差异。
+- 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；部门、运营组、负责人多选由后端按交集过滤，前端不要本地扩展成员范围。
 - 运营组完成率使用全量负责人行汇总，负责人明细区域只截取 Top 12 展示，不能反向影响运营组汇总口径。
 - 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径。
 
@@ -279,6 +288,7 @@ src\views\dashboard\analytics\index.vue
 
 - 按设计图恢复主要布局。
 - 统计周期改为可编辑的站点日期。
+- 移除顶部 `01 完成率 / 02 评分监控 / ...` 状态页签行，筛选区增加“部门”多选并放在“运营组”前。
 - 接入运营组筛选。
 - 接入毛利润目标与实际值。
 - 修复广告费用负数展示口径。
@@ -307,10 +317,10 @@ src\views\kanban\monitor\components\
 重要原则：
 
 - 生命周期、状态和预警等级由后端 ETL 与快照计算。
-- 前端只展示 `lifecycleStage`、`status`、`alertLevel`、`reasonText` 等字段。
+- 前端只展示 `lifecycleStage`、`status`、`alertLevel`、`reasonText` 等字段。新品成功/失败判定建议先看后端文档 `docs/新品成功失败判定建议.md`，确认前不要在前端自行改判定口径。
 - 不要在 Vue 中重新实现阶段规则。
 - 大表分页使用 `src\views\kanban\shared\pagination.ts`；主筛选、SPU 搜索、快捷状态、商品明细国家筛选和列配置变化后都回到第一页。
-- 顶部主筛选同时刷新概览和商品明细；商品明细页签内的国家筛选只刷新 `GET /kanban/monitor/product-detail`，避免重复请求概览接口。
+- 顶部主筛选同时刷新概览和商品明细；商品明细页签内的国家筛选只刷新 `GET /kanban/monitor/product-detail`，避免重复请求概览接口。国家下拉候选项必须使用后端返回的 `countries`，不要从当前表格 rows 本地反推；后端保证该候选项不受当前国家筛选影响。
 
 后端规则说明：
 
@@ -425,7 +435,7 @@ src\views\kanban\config\index.vue
 
 - 类目阈值配置。
 - 运营人员维护。
-- 用户角色、权限码和管理成员维护。
+- 用户角色、权限码、部门和管理成员维护。
 - 运营组维护。
 - 登录日志。
 
@@ -440,7 +450,7 @@ src\views\kanban\config\index.vue
 - `leader` 及以上角色可以进入配置中心。
 - `leader` 只能修改自己的组员范围。
 - `manager` 可以修改组员范围，不能修改角色、状态和可访问模块。
-- `admin` 和 `super` 可以修改角色、状态、可访问模块和组员范围。
+- `admin` 和 `super` 可以修改角色、状态、部门、可访问模块和组员范围。
 - “可访问模块”是否可编辑只取决于当前登录人是否为 `admin/super`，不取决于被编辑用户当前是什么角色。
 - 角色变化或飞书登录后如果页面仍显示旧权限，需要重新登录刷新 `/user/info` 和 `/auth/codes`。
 
@@ -448,7 +458,7 @@ src\views\kanban\config\index.vue
 
 - 顶部为类目数、上新计划、成品率目标和运营人员汇总。
 - `admin/super` 可看到新增类目、新增运营人员、类目阈值和运营组组织架构。
-- 飞书用户权限卡片拆成“成员范围维护”和“管理员权限维护”两个页签。
+- 飞书用户权限卡片拆成“成员范围维护”和“管理员权限维护”两个页签；管理员权限维护页可编辑用户部门，用于分析页部门筛选兜底。保存用户权限时必须把 `department` 放入 `updateConfigUserAuth` payload，且仅 `admin/super` 可传该字段。
 - 成员范围维护支持姓名、邮箱、部门、飞书 ID 搜索，并支持按角色、状态和登录方式过滤。
 - `leader` 在成员范围维护页签只看到并保存自己的组员范围；`manager` 可以维护成员范围；`admin/super` 还能进入管理员权限维护页签修改角色、状态和可访问模块。
 
