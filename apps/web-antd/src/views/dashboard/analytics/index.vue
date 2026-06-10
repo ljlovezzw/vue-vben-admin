@@ -155,12 +155,21 @@ const allResponsibleCards = computed<ResponsibleCard[]>(() => {
       salesQty: row.salesQty,
       turnoverMonths: row.turnoverMonths,
     }))
-    .toSorted(
-      (a, b) => a.completionRate - b.completionRate || b.salesQty - a.salesQty,
-    );
+    .toSorted((a, b) => {
+      const aHasSales = a.salesQty > 0 ? 1 : 0;
+      const bHasSales = b.salesQty > 0 ? 1 : 0;
+      return (
+        bHasSales - aHasSales ||
+        a.completionRate - b.completionRate ||
+        b.salesQty - a.salesQty
+      );
+    });
 });
 
-const responsibleCards = computed(() => allResponsibleCards.value.slice(0, 12));
+const responsibleCards = computed(() => allResponsibleCards.value);
+const activeResponsibleCount = computed(
+  () => allResponsibleCards.value.filter((item) => item.salesQty > 0).length,
+);
 
 const groupCards = computed(() =>
   (overview.value?.filters.operationGroups ?? []).map((group) =>
@@ -828,7 +837,10 @@ onMounted(loadData);
           <div class="white-panel responsible-panel">
             <div class="panel-heading">
               <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度</h2>
-              <span>{{ responsibleCards.length }} 人</span>
+              <span>
+                展示 {{ responsibleCards.length }} 人，
+                有销量 {{ activeResponsibleCount }} 人
+              </span>
             </div>
             <div v-if="responsibleCards.length > 0" class="responsible-grid">
               <article v-for="item in responsibleCards" :key="item.name">
