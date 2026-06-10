@@ -2,6 +2,7 @@ import type {
   AdMonitorFilters,
   AdMonitorOverview,
   AnalyticsOverview,
+  AnalyticsReportOverview,
   Asin360Overview,
   Asin360StoreOptions,
   CategoryConfigRow,
@@ -44,7 +45,24 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
   startDate?: string;
 }
 
+export interface AnalyticsReportParams {
+  dateRangeType?: string;
+  departments?: string[];
+  endDate?: string;
+  operationGroupIds?: number[];
+  page?: number;
+  pageSize?: number;
+  productTypes?: string[];
+  responsibles?: string[];
+  siteDate?: string;
+  sites?: string[];
+  sortField?: string;
+  sortOrder?: string;
+  startDate?: string;
+}
+
 export interface AnalyticsOverviewParams {
+  endDate?: string;
   departments?: string[];
   granularity?: 'day' | 'month';
   operationGroupIds?: number[];
@@ -52,6 +70,7 @@ export interface AnalyticsOverviewParams {
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];
+  startDate?: string;
   transactionStatuses?: string[];
 }
 
@@ -102,6 +121,12 @@ export async function fetchAnalyticsOverview(
   params: AnalyticsOverviewParams = {},
 ): Promise<AnalyticsOverview> {
   return requestClient.get('/kanban/analytics/overview', { params });
+}
+
+export async function fetchAnalyticsReport(
+  params: AnalyticsReportParams = {},
+): Promise<AnalyticsReportOverview> {
+  return requestClient.get('/kanban/analytics/report', { params });
 }
 
 export async function fetchKanbanProductDetail(

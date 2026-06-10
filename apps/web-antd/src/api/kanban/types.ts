@@ -391,6 +391,7 @@ export interface AnalyticsOverview {
     weekBefore: AnalyticsOperationMetric;
   };
   period: {
+    days: number;
     endDate: string;
     granularity: 'day' | 'month';
     previousLabel: string;
@@ -400,12 +401,14 @@ export interface AnalyticsOverview {
   };
   query: {
     departments: string[];
+    endDate: string;
     granularity: 'day' | 'month';
     operationGroupIds: number[];
     productExpressionRealtime: boolean;
     responsibles: string[];
     siteDate: string;
     sites: string[];
+    startDate: string;
     transactionStatuses: string[];
   };
   targets: {
@@ -418,6 +421,95 @@ export interface AnalyticsOverview {
     mode: 'database' | 'live_api';
     status: 'ok' | 'unavailable';
   };
+  updatedAt: string;
+}
+
+export interface AnalyticsReportColumn {
+  defaultVisible: boolean;
+  key: string;
+  kind: 'decimal' | 'image' | 'money' | 'number' | 'percent' | 'tag' | 'text' | 'trend';
+  label: string;
+}
+
+export interface AnalyticsReportTrendPoint {
+  adSpend: number;
+  date: string;
+  orders: number;
+  sales: number;
+  salesAmount: number;
+}
+
+export interface AnalyticsReportRow {
+  [key: string]: any;
+  acos: null | number;
+  adCvr: null | number;
+  adOrders: number;
+  adSales: number;
+  adSpend: number;
+  asinList: string;
+  avgSales7: number;
+  category1: string;
+  category2: string;
+  clicks: number;
+  country: string;
+  cpc: null | number;
+  cpo: null | number;
+  ctr: null | number;
+  cvr: null | number;
+  fbaAvailable: number;
+  imageUrl: string;
+  impressions: number;
+  key: string;
+  netSalesAmount: number;
+  orderProfit: number;
+  orderQty: number;
+  parentAsin: string;
+  productType: 'new' | 'old';
+  pv: number;
+  rating: number;
+  refundQty: number;
+  refundRate: null | number;
+  responsible: string;
+  reviewCount: number;
+  roas: null | number;
+  salesAmount: number;
+  salesQty: number;
+  salesTrend: AnalyticsReportTrendPoint[];
+  sessions: number;
+  settlementProfit: number;
+  shopName: string;
+  site: string;
+  spu: string;
+  tacos: null | number;
+  targetUnits: number;
+}
+
+export interface AnalyticsReportOverview {
+  columns: AnalyticsReportColumn[];
+  defaultColumns: string[];
+  filters: {
+    productTypes: Array<'new' | 'old'>;
+    responsibles: string[];
+  };
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+  };
+  query: {
+    dateRangeType: string;
+    departments: string[];
+    endDate: string;
+    operationGroupIds: number[];
+    productTypes: string[];
+    responsibles: string[];
+    sites: string[];
+    sortField: string;
+    sortOrder: string;
+    startDate: string;
+  };
+  rows: AnalyticsReportRow[];
+  summary: Record<string, null | number>;
   updatedAt: string;
 }
 

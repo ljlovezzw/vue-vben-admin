@@ -1,6 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-06-02
+更新时间：2026-06-10
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。后端说明文档位于：
 
@@ -228,8 +228,9 @@ apps\web-antd\src\api\kanban\types.ts
 当前主要封装：
 
 | 前端函数 | 后端路由 |
-| --- | --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses`和`productExpressionRealtime` 今日实时产品表现开关 |
+| --- | --- |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
+| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、新品/老品、负责人、分页、排序和列配置所需元数据 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
@@ -259,30 +260,37 @@ src\views\dashboard\analytics\index.vue
 
 - 按站点日期或月份查看公司经营情况。
 - 展示销量完成率、销售额完成率、销售额、库存、推广费用和广告效率。
-- 日维度展示所选日、前一天、上周同日；月维度展示所选月份、上月、去年同期。
+- 日维度展示所选日期范围、前一同长度周期、上周同期；月维度展示所选月份、上月、去年同期。
 - 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
+- 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、负责人、新品/老品、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。
 
 当前口径：
 
 - 历史日期来自数据库 `profitstatement`。
-- 页面首次进入和重置时默认选择北京时间当前日期减 1。
-- 顶部“维度”可切换日/月。日维度使用 `DatePicker` 日期选择，月维度使用月份选择，提交给接口时仍使用 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
+- 页面首次进入和重置时，日维度默认选择北京时间当前日期减 1 到当前日期减 1 的单日范围。
+- 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
+- 分析页顶部主筛选不保留“查询”按钮；修改维度、时间、站点、交易状态、部门、运营组或负责人后，前端会防抖自动刷新总览和底部明细报表。
+- 顶部主筛选的站点、部门、运营组、负责人会作为底部报表的全局范围；报表自身负责人筛选与主负责人筛选取交集，避免扩大数据范围。
+- 底部报表的时间范围独立于主卡片日期，快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。
+- 报表列由后端 `columns/defaultColumns` 驱动，前端仅维护用户当前勾选列；二级分类已纳入后端默认展示列。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。
+- 报表目标销量由后端统一计算：优先使用 `站点 + 负责人 + SPU` 精确目标；新品精确目标为空时，按 `负责人 + 二级分类%` 的类目占位目标兜底，前端只展示返回的 `targetUnits`。
 - 顶部“交易状态”默认选择“已发放”，可切换“已发放含预算”。清空后后端仍按默认“已发放”处理，不做利润表全状态查询。
 - “已发放含预算”由后端映射为已发放加预结算/当月结算相关状态，用于查看带预算口径的月度数据。
-- 当站点日期为今天或昨天时，后端自动读取 `productexpressionnew_live_cache`；其余历史日期读取 `profitstatement`。
+- 日维度日期范围如果是单日且日期为今天或昨天，后端可读取 `productexpressionnew_live_cache`；多日区间和其余历史日期读取 `profitstatement`。
 - 月维度固定使用 `profitstatement` 聚合，不触发实时产品表现缓存；当前月默认截止北京时间当前日期减 1。
 - 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
 - 产品表现实时缓存由后端定时任务每 5 分钟刷新今天和昨天两天，前端不直接触发领星全量 API；接口 `source.message` 会显示缓存大约多久前刷新。
 - 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_cny` 折算出的 `dailyTargetSales`。
-- 日维度目标为当月目标折算日目标；月维度目标为当月目标总额。由于接口兼容原因，月维度仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案显示为“月目标”。
+- 日维度目标为所选日期范围内逐日目标累加后的区间目标；月维度目标为当月目标总额。由于接口兼容原因，仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案按维度显示为“区间目标”或“月目标”。
 - 月维度的销售额、销售额目标、销售额差值和推广占比中的总销售额展示 2 位小数；日维度仍保持整数金额，毛利润等非销售额金额不受影响。
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
-- 销量和销售额对比卡片按维度切换文案：日维度为前一天/上周同日，月维度为上月/去年同期，并展示绝对差值和百分比差异。
+- 销量和销售额对比卡片按维度切换文案：日维度为前一周期/上周同期，月维度为上月/去年同期，并展示绝对差值和百分比差异。
 - 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；部门、运营组、负责人多选由后端按交集过滤，前端不要本地扩展成员范围。
 - 运营组完成率使用全量负责人行汇总；负责人明细区域全量展示负责人卡片，并优先排列实时销量大于 0 的运营，不能反向影响运营组汇总口径。
 - 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径，标题显示总展示人数和其中有销量人数。
+- 负责人维度卡片区保留三行卡片高度，桌面端默认每行 3 个卡片，超出后在卡片区内部纵向滚动，避免挤压底部商品维度明细报表。
 
 已完成：
 
@@ -468,7 +476,7 @@ src\views\kanban\config\index.vue
 - 接入 FastAPI 登录、本地账号和飞书登录。
 - 增加用户默认首页、403 页面和动态权限菜单。
 - 完成新品监控、广告监控、目标跟踪、SPU 管理和配置中心页面。
-- 新增公司经营驾驶舱 `/analytics`。
+- 新增公司经营驾驶舱 `/analytics`，并接入底部商品维度明细报表。
 - 为多个大表增加共用分页辅助 `src/views/kanban/shared/pagination.ts`。
 - ASIN360 增加店铺名称下拉，接口继续发送 SID。
 - 配置中心增加用户筛选，并将成员范围维护与管理员权限维护拆成独立页签。

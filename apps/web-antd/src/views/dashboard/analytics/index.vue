@@ -1,20 +1,33 @@
 <script lang="ts" setup>
+import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
+
 import type {
   AnalyticsOperationGroup,
   AnalyticsOverview,
+  AnalyticsReportColumn,
+  AnalyticsReportOverview,
+  AnalyticsReportRow,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 
-import { Button, DatePicker, Empty, Select, Spin, Tag } from 'ant-design-vue';
+import {
+  Button,
+  DatePicker,
+  Empty,
+  Select,
+  Spin,
+  Table,
+  Tag,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
 import { GaugeChart } from 'echarts/charts';
 import { TooltipComponent } from 'echarts/components';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 
-import { fetchAnalyticsOverview } from '#/api/kanban';
+import { fetchAnalyticsOverview, fetchAnalyticsReport } from '#/api/kanban';
 
 use([CanvasRenderer, GaugeChart, TooltipComponent]);
 
@@ -32,17 +45,76 @@ interface ResponsibleCard {
 }
 
 type AnalyticsGranularity = 'day' | 'month';
+type ReportDateRangeType =
+  | 'currentMonth'
+  | 'custom'
+  | 'last7'
+  | 'last30'
+  | 'lastMonth'
+  | 'today'
+  | 'year'
+  | 'yesterday';
+type ReportSortOrder = 'ascend' | 'descend';
+
+const fixedReportColumnKeys = new Set([
+  'imageUrl',
+  'parentAsin',
+  'productType',
+  'responsible',
+  'spu',
+]);
+const sortableReportFields = new Set([
+  'acos',
+  'adOrders',
+  'adSales',
+  'adSpend',
+  'avgSales7',
+  'cpc',
+  'cpo',
+  'ctr',
+  'cvr',
+  'orderQty',
+  'refundQty',
+  'salesAmount',
+  'salesQty',
+  'settlementProfit',
+  'tacos',
+]);
 
 const loading = ref(false);
+const reportLoading = ref(false);
+const reportDownloading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
+const report = ref<AnalyticsReportOverview | null>(null);
+const reportSummaryScroll = ref<HTMLElement | null>(null);
+const selectedReportColumns = ref<string[]>([]);
+const reportColumnsInitialized = ref(false);
+let reportBodyScrollElement: HTMLElement | null = null;
+let reportScrollSyncing = false;
+let dashboardAutoReloadReady = false;
+let dashboardAutoReloadTimer: null | ReturnType<typeof setTimeout> = null;
+let syncingDashboardQuery = false;
 const query = reactive({
   departments: [] as string[],
   granularity: 'day' as AnalyticsGranularity,
   operationGroupIds: [] as number[],
   responsibles: [] as string[],
+  startDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+  endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   siteDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   sites: [] as string[],
   transactionStatuses: ['已发放'] as string[],
+});
+const reportQuery = reactive({
+  dateRangeType: 'last30' as ReportDateRangeType,
+  endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+  page: 1,
+  pageSize: 50,
+  productTypes: [] as string[],
+  responsibles: [] as string[],
+  sortField: 'salesQty',
+  sortOrder: 'descend' as ReportSortOrder,
+  startDate: dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
 });
 
 const operations = computed(() => overview.value?.operations);
@@ -58,36 +130,46 @@ const granularityOptions = [
   { label: '月', value: 'month' },
 ];
 const isMonthMode = computed(() => query.granularity === 'month');
-const calendarValue = computed({
+const periodDays = computed(() => period.value?.days ?? 1);
+const monthValue = computed({
   get() {
-    return isMonthMode.value
-      ? dayjs(query.siteDate).format('YYYY-MM')
-      : query.siteDate;
+    return dayjs(query.siteDate).format('YYYY-MM');
   },
   set(value: string) {
-    query.siteDate = isMonthMode.value ? `${value}-01` : value;
+    query.siteDate = `${value}-01`;
   },
 });
-const targetLabel = computed(() => period.value?.targetLabel ?? '日目标');
-const previousLabel = computed(() => period.value?.previousLabel ?? '前一天');
+const dateRangeValue = computed({
+  get(): [string, string] {
+    return [query.startDate, query.endDate];
+  },
+  set(value: [string, string] | null) {
+    if (!value?.[0] || !value?.[1]) return;
+    query.startDate = value[0];
+    query.endDate = value[1];
+    query.siteDate = value[1];
+  },
+});
+const targetLabel = computed(() => period.value?.targetLabel ?? '区间目标');
+const previousLabel = computed(() => period.value?.previousLabel ?? '前一周期');
 const secondaryLabel = computed(
-  () => period.value?.secondaryLabel ?? '上周同日',
+  () => period.value?.secondaryLabel ?? '上周同期',
 );
 const targetHint = computed(() =>
-  isMonthMode.value ? '按所选月份汇总月目标' : '当月目标折算日目标',
+  isMonthMode.value ? '按所选月份汇总月目标' : '按所选日期范围累加日目标',
 );
-const metricPrefix = computed(() =>
-  isMonthMode.value
-    ? '月度'
-    : (source.value?.mode === 'live_api' && source.value.status === 'ok'
-      ? '实时'
-      : '站点日'),
-);
+const metricPrefix = computed(() => {
+  if (isMonthMode.value) return '月度';
+  if (source.value?.mode === 'live_api' && source.value.status === 'ok') {
+    return '实时';
+  }
+  return periodDays.value > 1 ? '区间' : '站点日';
+});
 const advertisingPrefix = computed(() =>
-  isMonthMode.value ? '所选月份' : '近 30 天',
+  isMonthMode.value ? '所选月份' : '所选区间',
 );
 const dateLabel = computed(() =>
-  isMonthMode.value ? '统计月份' : '站点日期(day)',
+  isMonthMode.value ? '统计月份' : '统计日期范围',
 );
 const departmentOptions = computed(() =>
   (overview.value?.filters.departments ?? []).map((value) => ({
@@ -121,6 +203,92 @@ const transactionStatusOptions = computed(() =>
     value,
   })),
 );
+const reportDateRangeOptions = [
+  { label: '今日', value: 'today' },
+  { label: '昨日', value: 'yesterday' },
+  { label: '最近7天', value: 'last7' },
+  { label: '最近30天', value: 'last30' },
+  { label: '本月', value: 'currentMonth' },
+  { label: '上月', value: 'lastMonth' },
+  { label: '今年', value: 'year' },
+  { label: '自定义', value: 'custom' },
+];
+const reportDateRangeValue = computed({
+  get(): [string, string] {
+    return [reportQuery.startDate, reportQuery.endDate];
+  },
+  set(value: [string, string] | null) {
+    if (!value?.[0] || !value?.[1]) return;
+    reportQuery.startDate = value[0];
+    reportQuery.endDate = value[1];
+    reportQuery.dateRangeType = 'custom';
+  },
+});
+const reportRows = computed(() => report.value?.rows ?? []);
+const reportProductTypeOptions = computed(() => [
+  { label: '新品', value: 'new' },
+  { label: '老品', value: 'old' },
+]);
+const reportResponsibleOptions = computed(() => {
+  const values =
+    report.value?.filters.responsibles ??
+    responsibleOptions.value.map((item) => item.value);
+  return values.map((value) => ({ label: value, value }));
+});
+const reportColumnMap = computed(() => {
+  const map = new Map<string, AnalyticsReportColumn>();
+  for (const column of report.value?.columns ?? []) {
+    map.set(column.key, column);
+  }
+  return map;
+});
+const reportColumnOptions = computed(() =>
+  (report.value?.columns ?? []).map((column) => ({
+    label: column.label,
+    value: column.key,
+  })),
+);
+const selectedReportColumnMetas = computed(() => {
+  const selected = new Set(selectedReportColumns.value);
+  const columns: AnalyticsReportColumn[] = [];
+  for (const column of report.value?.columns ?? []) {
+    if (selected.has(column.key)) {
+      columns.push(column);
+    }
+  }
+  return columns;
+});
+const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(() => {
+  const columns: TableColumnsType<AnalyticsReportRow> = [];
+  for (const column of selectedReportColumnMetas.value) {
+    columns.push({
+      align: reportColumnAlign(column.kind),
+      dataIndex: column.key,
+      fixed: fixedReportColumnKeys.has(column.key) ? 'left' : undefined,
+      key: column.key,
+      sorter: sortableReportFields.has(column.key),
+      title: column.label,
+      width: reportColumnWidth(column.key),
+    });
+  }
+  return columns;
+});
+const reportPaginationConfig = computed<TablePaginationConfig>(() => ({
+  current: report.value?.pagination.page ?? reportQuery.page,
+  pageSize: report.value?.pagination.pageSize ?? reportQuery.pageSize,
+  pageSizeOptions: ['20', '50', '100', '200'],
+  showQuickJumper: true,
+  showSizeChanger: true,
+  showTotal: (total) => `共 ${total} 条`,
+  total: report.value?.pagination.total ?? 0,
+}));
+const reportScrollX = computed(() => {
+  let width = 0;
+  for (const column of reportTableColumns.value) {
+    width += Number(column.width || 110);
+  }
+  return Math.max(width, 1500);
+});
 
 const qtyCompletion = computed(() =>
   nullableRatio(latest.value?.salesQty, targets.value?.dailyTargetUnits),
@@ -233,19 +401,70 @@ async function loadData() {
     overview.value = await fetchAnalyticsOverview({
       departments: query.departments,
       granularity: query.granularity,
+      endDate: isMonthMode.value ? undefined : query.endDate,
       operationGroupIds: query.operationGroupIds,
       responsibles: query.responsibles,
       siteDate: query.siteDate,
       sites: query.sites,
+      startDate: isMonthMode.value ? undefined : query.startDate,
       transactionStatuses: query.transactionStatuses,
     });
+    syncingDashboardQuery = true;
     query.departments = overview.value.query.departments;
     query.granularity = overview.value.query.granularity;
     query.siteDate = overview.value.query.siteDate;
+    query.startDate = overview.value.query.startDate;
+    query.endDate = overview.value.query.endDate;
     query.transactionStatuses = overview.value.query.transactionStatuses;
+    void nextTick(() => {
+      syncingDashboardQuery = false;
+    });
   } finally {
     loading.value = false;
   }
+}
+
+async function loadReportData() {
+  reportLoading.value = true;
+  try {
+    const data = await fetchAnalyticsReport(buildReportParams());
+    report.value = data;
+    reportQuery.dateRangeType = data.query.dateRangeType as ReportDateRangeType;
+    reportQuery.startDate = data.query.startDate;
+    reportQuery.endDate = data.query.endDate;
+    reportQuery.page = data.pagination.page;
+    reportQuery.pageSize = data.pagination.pageSize;
+    reportQuery.productTypes = data.query.productTypes;
+    reportQuery.responsibles = data.query.responsibles;
+    reportQuery.sortField = data.query.sortField || 'salesQty';
+    reportQuery.sortOrder = (data.query.sortOrder ||
+      'descend') as ReportSortOrder;
+    if (!reportColumnsInitialized.value) {
+      selectedReportColumns.value = [...data.defaultColumns];
+      reportColumnsInitialized.value = true;
+    }
+  } finally {
+    reportLoading.value = false;
+  }
+}
+
+async function reloadAll(resetReportPage = true) {
+  if (resetReportPage) {
+    reportQuery.page = 1;
+  }
+  await loadData();
+  await loadReportData();
+}
+
+function scheduleDashboardReload() {
+  if (!dashboardAutoReloadReady || syncingDashboardQuery) return;
+  if (dashboardAutoReloadTimer) {
+    clearTimeout(dashboardAutoReloadTimer);
+  }
+  dashboardAutoReloadTimer = setTimeout(() => {
+    dashboardAutoReloadTimer = null;
+    void reloadAll(true);
+  }, 250);
 }
 
 function resetFilters() {
@@ -253,10 +472,21 @@ function resetFilters() {
   query.granularity = 'day';
   query.operationGroupIds = [];
   query.responsibles = [];
-  query.siteDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+  query.startDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+  query.endDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+  query.siteDate = query.endDate;
   query.sites = [];
   query.transactionStatuses = ['已发放'];
-  void loadData();
+  reportQuery.dateRangeType = 'last30';
+  reportQuery.startDate = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
+  reportQuery.endDate = query.endDate;
+  reportQuery.page = 1;
+  reportQuery.pageSize = 50;
+  reportQuery.productTypes = [];
+  reportQuery.responsibles = [];
+  reportQuery.sortField = 'salesQty';
+  reportQuery.sortOrder = 'descend';
+  void reloadAll(false);
 }
 
 function disabledFutureDate(value: ReturnType<typeof dayjs>) {
@@ -379,21 +609,20 @@ function buildGroupCard(
 ) {
   const names = new Set(group.memberNames);
   const members = rows.filter((row) => names.has(row.name));
-  const salesQty = members.reduce((sum, row) => sum + row.salesQty, 0);
-  const dailyTargetUnits = members.reduce(
-    (sum, row) => sum + row.dailyTargetUnits,
-    0,
-  );
-  const grossProfit = members.reduce((sum, row) => sum + row.grossProfit, 0);
-  const dailyTargetProfit = members.reduce(
-    (sum, row) => sum + row.dailyTargetProfit,
-    0,
-  );
-  const salesAmount = members.reduce((sum, row) => sum + row.salesAmount, 0);
-  const dailyTargetSales = members.reduce(
-    (sum, row) => sum + row.dailyTargetSales,
-    0,
-  );
+  let salesQty = 0;
+  let dailyTargetUnits = 0;
+  let grossProfit = 0;
+  let dailyTargetProfit = 0;
+  let salesAmount = 0;
+  let dailyTargetSales = 0;
+  for (const row of members) {
+    salesQty += row.salesQty;
+    dailyTargetUnits += row.dailyTargetUnits;
+    grossProfit += row.grossProfit;
+    dailyTargetProfit += row.dailyTargetProfit;
+    salesAmount += row.salesAmount;
+    dailyTargetSales += row.dailyTargetSales;
+  }
   return {
     completionRate: ratio(salesQty, dailyTargetUnits),
     dailyTargetProfit,
@@ -415,7 +644,284 @@ function completionColor(value: number) {
   return 'error';
 }
 
-onMounted(loadData);
+function reportColumnAlign(kind: AnalyticsReportColumn['kind']): 'left' | 'right' {
+  return ['decimal', 'money', 'number', 'percent'].includes(kind)
+    ? 'right'
+    : 'left';
+}
+
+function reportColumnKey(column: unknown) {
+  if (!column || typeof column !== 'object') return '';
+  const value = (column as { dataIndex?: unknown }).dataIndex;
+  return String(value ?? '');
+}
+
+function isReportNumberColumn(column: unknown) {
+  const kind = reportColumnMap.value.get(reportColumnKey(column))?.kind ?? 'text';
+  return reportColumnAlign(kind) === 'right';
+}
+
+function reportColumnWidth(key: string) {
+  const widthMap: Record<string, number> = {
+    asinList: 170,
+    category1: 116,
+    category2: 116,
+    country: 84,
+    imageUrl: 70,
+    parentAsin: 122,
+    productType: 88,
+    responsible: 96,
+    salesTrend: 148,
+    shopName: 132,
+    spu: 108,
+  };
+  return widthMap[key] ?? 104;
+}
+
+function reportResponsiblesForRequest() {
+  if (query.responsibles.length > 0 && reportQuery.responsibles.length > 0) {
+    const base = new Set(query.responsibles);
+    return reportQuery.responsibles.filter((item) => base.has(item));
+  }
+  return reportQuery.responsibles.length > 0
+    ? reportQuery.responsibles
+    : query.responsibles;
+}
+
+function buildReportParams(overrides: Record<string, any> = {}) {
+  return {
+    dateRangeType: reportQuery.dateRangeType,
+    departments: query.departments,
+    endDate: reportQuery.endDate,
+    operationGroupIds: query.operationGroupIds,
+    page: reportQuery.page,
+    pageSize: reportQuery.pageSize,
+    productTypes: reportQuery.productTypes,
+    responsibles: reportResponsiblesForRequest(),
+    siteDate: query.siteDate,
+    sites: query.sites,
+    sortField: reportQuery.sortField,
+    sortOrder: reportQuery.sortOrder,
+    startDate: reportQuery.startDate,
+    ...overrides,
+  };
+}
+
+function formatReportValue(key: string, value: any) {
+  const column = reportColumnMap.value.get(key);
+  if (!column) return value ?? '-';
+  if (value === null || value === undefined || value === '') return '-';
+  if (column.kind === 'percent') return formatPercent(Number(value));
+  if (column.kind === 'money') return formatMoney(Number(value), 2);
+  if (column.kind === 'decimal') {
+    return Number(value).toLocaleString('zh-CN', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    });
+  }
+  if (column.kind === 'number') {
+    const numberValue = Number(value);
+    return numberValue.toLocaleString('zh-CN', {
+      maximumFractionDigits: Number.isInteger(numberValue) ? 0 : 2,
+    });
+  }
+  if (key === 'productType') return value === 'new' ? '新品' : '老品';
+  return String(value);
+}
+
+function reportSummaryValue(key: string, index: number) {
+  if (index === 0) return '合计';
+  return formatReportValue(key, report.value?.summary?.[key]);
+}
+
+function reportSummaryCellClass(column: AnalyticsReportColumn, index: number) {
+  return {
+    'report-number': reportColumnAlign(column.kind) === 'right',
+    'report-summary-label': index === 0,
+  };
+}
+
+function sparklinePoints(points: AnalyticsReportRow['salesTrend']) {
+  if (!points || points.length === 0) return '';
+  let max = 0;
+  for (const point of points) {
+    max = Math.max(max, Number(point.sales || 0));
+  }
+  const width = 118;
+  const height = 34;
+  const step = points.length > 1 ? width / (points.length - 1) : width;
+  const coords: string[] = [];
+  points.forEach((point, index) => {
+    const y =
+      max > 0 ? height - (Number(point.sales || 0) / max) * height : height;
+    coords.push(`${Math.round(index * step)},${Math.max(2, Math.round(y))}`);
+  });
+  return coords.join(' ');
+}
+
+function reportTrendTitle(points: AnalyticsReportRow['salesTrend']) {
+  if (!points || points.length === 0) return '无趋势数据';
+  let total = 0;
+  for (const point of points) {
+    total += Number(point.sales || 0);
+  }
+  return `${points[0]?.date} ~ ${points.at(-1)?.date}，销量 ${formatInteger(
+    total,
+  )}`;
+}
+
+function syncReportSummaryScroll(left: number, source: 'body' | 'summary') {
+  if (reportScrollSyncing) return;
+  reportScrollSyncing = true;
+  if (source === 'body' && reportSummaryScroll.value) {
+    reportSummaryScroll.value.scrollLeft = left;
+  }
+  if (source === 'summary' && reportBodyScrollElement) {
+    reportBodyScrollElement.scrollLeft = left;
+  }
+  requestAnimationFrame(() => {
+    reportScrollSyncing = false;
+  });
+}
+
+function handleReportBodyScroll(event: Event) {
+  syncReportSummaryScroll((event.target as HTMLElement).scrollLeft, 'body');
+}
+
+function handleReportSummaryScroll(event: Event) {
+  syncReportSummaryScroll((event.target as HTMLElement).scrollLeft, 'summary');
+}
+
+function bindReportBodyScroll() {
+  const root = reportSummaryScroll.value?.closest('.report-panel');
+  const nextBody = root?.querySelector('.ant-table-body') as HTMLElement | null;
+  if (reportBodyScrollElement === nextBody) return;
+  if (reportBodyScrollElement) {
+    reportBodyScrollElement.removeEventListener('scroll', handleReportBodyScroll);
+  }
+  reportBodyScrollElement = nextBody;
+  if (reportBodyScrollElement) {
+    reportBodyScrollElement.addEventListener('scroll', handleReportBodyScroll, {
+      passive: true,
+    });
+  }
+}
+
+function handleReportTableReady() {
+  void nextTick(() => {
+    bindReportBodyScroll();
+  });
+}
+
+function handleReportTableChange(
+  pagination: TablePaginationConfig,
+  _filters: Record<string, any>,
+  sorter: any,
+) {
+  reportQuery.page = Number(pagination.current || 1);
+  reportQuery.pageSize = Number(pagination.pageSize || 50);
+  const activeSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+  if (activeSorter?.field && activeSorter.order) {
+    reportQuery.sortField = String(activeSorter.field);
+    reportQuery.sortOrder = activeSorter.order;
+  } else {
+    reportQuery.sortField = 'salesQty';
+    reportQuery.sortOrder = 'descend';
+  }
+  void loadReportData();
+}
+
+function csvCell(value: any) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+async function downloadReportCsv() {
+  if (reportDownloading.value) return;
+  reportDownloading.value = true;
+  try {
+    const rows: AnalyticsReportRow[] = [];
+    let page = 1;
+    let total = 0;
+    do {
+      const data = await fetchAnalyticsReport(
+        buildReportParams({ page, pageSize: 200 }),
+      );
+      total = data.pagination.total;
+      for (const row of data.rows) {
+        rows.push(row);
+      }
+      page += 1;
+    } while (rows.length < total);
+
+    const headers: string[] = [];
+    const keys: string[] = [];
+    for (const column of selectedReportColumnMetas.value) {
+      headers.push(column.label);
+      keys.push(column.key);
+    }
+    const lines = [headers.map((value) => csvCell(value)).join(',')];
+    for (const row of rows) {
+      const cells: string[] = [];
+      for (const key of keys) {
+        const value = key === 'salesTrend'
+          ? reportTrendTitle(row.salesTrend)
+          : formatReportValue(key, row[key]);
+        cells.push(csvCell(value));
+      }
+      lines.push(cells.join(','));
+    }
+    const blob = new Blob([`\uFEFF${lines.join('\n')}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `analytics-report-${reportQuery.startDate}-${reportQuery.endDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    reportDownloading.value = false;
+  }
+}
+
+watch(
+  () => [reportTableColumns.value.length, reportRows.value.length],
+  () => {
+    handleReportTableReady();
+  },
+);
+
+watch(
+  () => [
+    query.departments.join('|'),
+    query.endDate,
+    query.granularity,
+    query.operationGroupIds.join('|'),
+    query.responsibles.join('|'),
+    query.siteDate,
+    query.sites.join('|'),
+    query.startDate,
+    query.transactionStatuses.join('|'),
+  ],
+  scheduleDashboardReload,
+);
+
+onMounted(() => {
+  void (async () => {
+    await reloadAll(false);
+    dashboardAutoReloadReady = true;
+  })();
+});
+
+onBeforeUnmount(() => {
+  if (dashboardAutoReloadTimer) {
+    clearTimeout(dashboardAutoReloadTimer);
+  }
+  if (reportBodyScrollElement) {
+    reportBodyScrollElement.removeEventListener('scroll', handleReportBodyScroll);
+  }
+});
 </script>
 
 <template>
@@ -432,11 +938,21 @@ onMounted(loadData);
         />
         <label>{{ dateLabel }}</label>
         <DatePicker
-          v-model:value="calendarValue"
+          v-if="isMonthMode"
+          v-model:value="monthValue"
+          :allow-clear="false"
           :disabled-date="disabledFutureDate"
-          :picker="isMonthMode ? 'month' : 'date'"
+          picker="month"
           size="small"
-          :value-format="isMonthMode ? 'YYYY-MM' : 'YYYY-MM-DD'"
+          value-format="YYYY-MM"
+        />
+        <DatePicker.RangePicker
+          v-else
+          v-model:value="dateRangeValue"
+          :allow-clear="false"
+          :disabled-date="disabledFutureDate"
+          size="small"
+          value-format="YYYY-MM-DD"
         />
         <label>站点</label>
         <Select
@@ -489,7 +1005,7 @@ onMounted(loadData);
           style="min-width: 140px"
         />
         <Button size="small" @click="resetFilters">重置</Button>
-        <Button size="small" type="primary" @click="loadData">查询</Button>
+
         <Tag :color="source?.status === 'ok' ? 'green' : 'orange'">
           {{ source?.message || '等待查询' }}
         </Tag>
@@ -838,8 +1354,8 @@ onMounted(loadData);
             <div class="panel-heading">
               <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度</h2>
               <span>
-                展示 {{ responsibleCards.length }} 人，
-                有销量 {{ activeResponsibleCount }} 人
+                展示 {{ responsibleCards.length }} 人， 有销量
+                {{ activeResponsibleCount }} 人
               </span>
             </div>
             <div v-if="responsibleCards.length > 0" class="responsible-grid">
@@ -887,8 +1403,154 @@ onMounted(loadData);
         </aside>
       </section>
 
+      <section class="white-panel report-panel">
+        <div class="report-heading">
+          <div>
+            <h2>商品维度明细报表</h2>
+            <span>
+              {{ report?.query.startDate }} ~ {{ report?.query.endDate }}，共
+              {{ formatInteger(report?.pagination.total) }} 条
+            </span>
+          </div>
+          <div class="report-actions">
+            <label>时间</label>
+            <Select
+              v-model:value="reportQuery.dateRangeType"
+              :options="reportDateRangeOptions"
+              size="small"
+              style="width: 104px"
+              @change="() => { reportQuery.page = 1; loadReportData(); }"
+            />
+            <DatePicker.RangePicker
+              v-if="reportQuery.dateRangeType === 'custom'"
+              v-model:value="reportDateRangeValue"
+              :allow-clear="false"
+              :disabled-date="disabledFutureDate"
+              size="small"
+              value-format="YYYY-MM-DD"
+              @change="() => { reportQuery.page = 1; loadReportData(); }"
+            />
+            <label>新品/老品</label>
+            <Select
+              v-model:value="reportQuery.productTypes"
+              :options="reportProductTypeOptions"
+              allow-clear
+              mode="multiple"
+              placeholder="全部"
+              size="small"
+              style="min-width: 118px"
+              @change="() => { reportQuery.page = 1; loadReportData(); }"
+            />
+            <label>负责人</label>
+            <Select
+              v-model:value="reportQuery.responsibles"
+              :options="reportResponsibleOptions"
+              allow-clear
+              mode="multiple"
+              placeholder="继承主筛选"
+              size="small"
+              style="min-width: 150px"
+              @change="() => { reportQuery.page = 1; loadReportData(); }"
+            />
+            <label>列</label>
+            <Select
+              v-model:value="selectedReportColumns"
+              :max-tag-count="2"
+              :options="reportColumnOptions"
+              mode="multiple"
+              placeholder="选择展示列"
+              size="small"
+              style="min-width: 230px"
+            />
+            <Button
+              :loading="reportDownloading"
+              size="small"
+              @click="downloadReportCsv"
+            >
+              下载
+            </Button>
+          </div>
+        </div>
+        <Table
+          bordered
+          class="report-table"
+          :columns="reportTableColumns"
+          :data-source="reportRows"
+          :loading="reportLoading"
+          :pagination="reportPaginationConfig"
+          row-key="key"
+          :scroll="{ x: reportScrollX, y: 430 }"
+          size="small"
+          @change="handleReportTableChange"
+        >
+          <template #bodyCell="{ column, record, text }">
+            <template v-if="column.dataIndex === 'imageUrl'">
+              <img
+                v-if="text"
+                :alt="record.parentAsin"
+                class="report-image"
+                :src="text"
+              />
+              <span v-else class="report-empty">-</span>
+            </template>
+            <template v-else-if="column.dataIndex === 'productType'">
+              <Tag :color="record.productType === 'new' ? 'green' : 'blue'">
+                {{ record.productType === 'new' ? '新品' : '老品' }}
+              </Tag>
+            </template>
+            <template v-else-if="column.dataIndex === 'salesTrend'">
+              <svg
+                class="report-sparkline"
+                preserveAspectRatio="none"
+                :title="reportTrendTitle(record.salesTrend)"
+                viewBox="0 0 118 38"
+              >
+                <polyline
+                  fill="none"
+                  :points="sparklinePoints(record.salesTrend)"
+                  stroke="#2563eb"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                />
+              </svg>
+            </template>
+            <template v-else>
+              <span
+                :class="{ 'report-number': isReportNumberColumn(column) }"
+                :title="formatReportValue(reportColumnKey(column), text)"
+              >
+                {{ formatReportValue(reportColumnKey(column), text) }}
+              </span>
+            </template>
+          </template>
+          <template #footer>
+            <div
+              ref="reportSummaryScroll"
+              class="report-summary-scroll"
+              @scroll="handleReportSummaryScroll"
+            >
+              <div
+                class="report-summary-grid"
+                :style="{ minWidth: `${reportScrollX}px` }"
+              >
+                <div
+                  v-for="(column, index) in selectedReportColumnMetas"
+                  :key="column.key"
+                  :class="reportSummaryCellClass(column, index)"
+                  :style="{ width: `${reportColumnWidth(column.key)}px` }"
+                  :title="reportSummaryValue(column.key, index)"
+                >
+                  {{ reportSummaryValue(column.key, index) }}
+                </div>
+              </div>
+            </div>
+          </template>
+        </Table>
+      </section>
+
       <footer class="screen-note">
-        当前已接入：日/月维度、利润表经营数据、目标完成率、推广占比、库存快照、运营组配置和负责人完成率。
+        当前已接入：日/月维度、利润表经营数据、目标完成率、推广占比、库存快照、运营组配置、负责人完成率和商品维度明细报表。
       </footer>
     </div>
   </Spin>
@@ -1183,12 +1845,15 @@ h2 {
 }
 
 .responsible-panel {
-  min-height: 270px;
+  min-height: 0;
 }
 
 .responsible-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-height: 490px;
+  padding-right: 4px;
   margin-top: 8px;
+  overflow-y: auto;
 }
 
 .responsible-grid article {
@@ -1228,6 +1893,129 @@ h2 {
 
 .neutral {
   color: #94a3b8 !important;
+}
+
+.report-panel {
+  margin-top: 8px;
+}
+
+.report-heading,
+.report-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.report-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.report-heading span,
+.report-actions label,
+.report-empty {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.report-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.report-table :deep(.ant-table) {
+  border-color: #cbd5e1;
+}
+
+.report-table :deep(.ant-table-thead > tr > th),
+.report-table :deep(.ant-table-tbody > tr > td),
+.report-table :deep(.ant-table-summary > tr > td) {
+  border-color: #cbd5e1 !important;
+}
+
+.report-table :deep(.ant-table-thead > tr > th) {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.report-table :deep(.ant-table-tbody > tr > td) {
+  font-size: 12px;
+  color: #334155;
+  background: #fff;
+}
+
+.report-table :deep(.ant-table-tbody > tr:hover > td) {
+  background: #eff6ff;
+}
+
+.report-table :deep(.ant-table-footer) {
+  padding: 0;
+  overflow: hidden;
+  background: #fff7ed;
+  border-top: 2px solid #94a3b8;
+}
+
+.report-image {
+  display: block;
+  width: 42px;
+  height: 42px;
+  object-fit: cover;
+  border: 1px solid #dbe3ef;
+  border-radius: 4px;
+}
+
+.report-number {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.report-sparkline {
+  display: block;
+  width: 118px;
+  height: 38px;
+  background: linear-gradient(180deg, #f8fafc, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+}
+
+.report-summary-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.report-summary-grid {
+  display: flex;
+  min-height: 38px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #111827;
+  background: #fff7ed;
+}
+
+.report-summary-grid > div {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 9px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-right: 1px solid #cbd5e1;
+}
+
+.report-summary-grid > div:first-child {
+  border-left: 0;
+}
+
+.report-summary-grid .report-number {
+  text-align: right;
+}
+
+.report-summary-label {
+  color: #0f172a;
 }
 
 .screen-note {
