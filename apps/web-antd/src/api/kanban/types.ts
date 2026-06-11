@@ -427,7 +427,15 @@ export interface AnalyticsOverview {
 export interface AnalyticsReportColumn {
   defaultVisible: boolean;
   key: string;
-  kind: 'decimal' | 'image' | 'money' | 'number' | 'percent' | 'tag' | 'text' | 'trend';
+  kind:
+    | 'decimal'
+    | 'image'
+    | 'money'
+    | 'number'
+    | 'percent'
+    | 'tag'
+    | 'text'
+    | 'trend';
   label: string;
 }
 

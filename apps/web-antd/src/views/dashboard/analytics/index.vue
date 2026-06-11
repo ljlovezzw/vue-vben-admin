@@ -9,7 +9,15 @@ import type {
   AnalyticsReportRow,
 } from '#/api/kanban/types';
 
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 import VChart from 'vue-echarts';
 
 import {
@@ -87,10 +95,13 @@ const reportDownloading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
 const report = ref<AnalyticsReportOverview | null>(null);
 const reportSummaryScroll = ref<HTMLElement | null>(null);
+const groupUnitsScroll = ref<HTMLElement | null>(null);
+const groupSalesScroll = ref<HTMLElement | null>(null);
 const selectedReportColumns = ref<string[]>([]);
 const reportColumnsInitialized = ref(false);
 let reportBodyScrollElement: HTMLElement | null = null;
 let reportScrollSyncing = false;
+let groupScrollSyncing = false;
 let dashboardAutoReloadReady = false;
 let dashboardAutoReloadTimer: null | ReturnType<typeof setTimeout> = null;
 let syncingDashboardQuery = false;
@@ -165,9 +176,39 @@ const metricPrefix = computed(() => {
   }
   return periodDays.value > 1 ? '区间' : '站点日';
 });
-const advertisingPrefix = computed(() =>
-  isMonthMode.value ? '所选月份' : '所选区间',
+
+const currentPeriodLabel = computed(() =>
+  periodRangeLabel(period.value?.startDate, period.value?.endDate),
 );
+const previousPeriodLabel = computed(() => {
+  const start = period.value?.startDate;
+  const end = period.value?.endDate;
+  if (!start || !end) return '-';
+  if (isMonthMode.value) {
+    const value = dayjs(start).subtract(1, 'month');
+    return value.isValid() ? value.format('YYYY-MM') : '-';
+  }
+  const days = Math.max(1, period.value?.days ?? 1);
+  const previousEnd = dayjs(start).subtract(1, 'day');
+  const previousStart = previousEnd.subtract(days - 1, 'day');
+  return periodRangeLabel(
+    previousStart.format('YYYY-MM-DD'),
+    previousEnd.format('YYYY-MM-DD'),
+  );
+});
+const secondaryPeriodLabel = computed(() => {
+  const start = period.value?.startDate;
+  const end = period.value?.endDate;
+  if (!start || !end) return '-';
+  if (isMonthMode.value) {
+    const value = dayjs(start).subtract(1, 'year');
+    return value.isValid() ? value.format('YYYY-MM') : '-';
+  }
+  return periodRangeLabel(
+    dayjs(start).subtract(7, 'day').format('YYYY-MM-DD'),
+    dayjs(end).subtract(7, 'day').format('YYYY-MM-DD'),
+  );
+});
 const dateLabel = computed(() =>
   isMonthMode.value ? '统计月份' : '统计日期范围',
 );
@@ -258,21 +299,23 @@ const selectedReportColumnMetas = computed(() => {
   }
   return columns;
 });
-const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(() => {
-  const columns: TableColumnsType<AnalyticsReportRow> = [];
-  for (const column of selectedReportColumnMetas.value) {
-    columns.push({
-      align: reportColumnAlign(column.kind),
-      dataIndex: column.key,
-      fixed: fixedReportColumnKeys.has(column.key) ? 'left' : undefined,
-      key: column.key,
-      sorter: sortableReportFields.has(column.key),
-      title: column.label,
-      width: reportColumnWidth(column.key),
-    });
-  }
-  return columns;
-});
+const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
+  () => {
+    const columns: TableColumnsType<AnalyticsReportRow> = [];
+    for (const column of selectedReportColumnMetas.value) {
+      columns.push({
+        align: reportColumnAlign(column.kind),
+        dataIndex: column.key,
+        fixed: fixedReportColumnKeys.has(column.key) ? 'left' : undefined,
+        key: column.key,
+        sorter: sortableReportFields.has(column.key),
+        title: column.label,
+        width: reportColumnWidth(column.key),
+      });
+    }
+    return columns;
+  },
+);
 const reportPaginationConfig = computed<TablePaginationConfig>(() => ({
   current: report.value?.pagination.page ?? reportQuery.page,
   pageSize: report.value?.pagination.pageSize ?? reportQuery.pageSize,
@@ -456,14 +499,20 @@ async function reloadAll(resetReportPage = true) {
   await loadReportData();
 }
 
-function scheduleDashboardReload() {
+function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
   if (!dashboardAutoReloadReady || syncingDashboardQuery) return;
   if (dashboardAutoReloadTimer) {
     clearTimeout(dashboardAutoReloadTimer);
   }
   dashboardAutoReloadTimer = setTimeout(() => {
     dashboardAutoReloadTimer = null;
-    void reloadAll(true);
+    void (async () => {
+      await loadData();
+      if (options.reloadReport) {
+        reportQuery.page = 1;
+        await loadReportData();
+      }
+    })();
   }, 250);
 }
 
@@ -570,6 +619,20 @@ function formatPercent(value?: null | number) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`;
 }
 
+function periodRangeLabel(start?: string, end?: string) {
+  if (!start || !end) return '-';
+  const startValue = dayjs(start);
+  const endValue = dayjs(end);
+  if (!startValue.isValid() || !endValue.isValid()) return '-';
+  if (startValue.isSame(endValue, 'day')) {
+    return startValue.format('YYYY-MM-DD');
+  }
+  if (startValue.isSame(endValue, 'month')) {
+    return `${startValue.format('YYYY-MM-DD')} ~ ${endValue.format('DD')}`;
+  }
+  return `${startValue.format('YYYY-MM-DD')} ~ ${endValue.format('YYYY-MM-DD')}`;
+}
+
 function comparisonText(current?: null | number, before?: null | number) {
   const value = change(current, before);
   if (value === null) return '-';
@@ -644,7 +707,9 @@ function completionColor(value: number) {
   return 'error';
 }
 
-function reportColumnAlign(kind: AnalyticsReportColumn['kind']): 'left' | 'right' {
+function reportColumnAlign(
+  kind: AnalyticsReportColumn['kind'],
+): 'left' | 'right' {
   return ['decimal', 'money', 'number', 'percent'].includes(kind)
     ? 'right'
     : 'left';
@@ -657,7 +722,8 @@ function reportColumnKey(column: unknown) {
 }
 
 function isReportNumberColumn(column: unknown) {
-  const kind = reportColumnMap.value.get(reportColumnKey(column))?.kind ?? 'text';
+  const kind =
+    reportColumnMap.value.get(reportColumnKey(column))?.kind ?? 'text';
   return reportColumnAlign(kind) === 'right';
 }
 
@@ -698,7 +764,7 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     pageSize: reportQuery.pageSize,
     productTypes: reportQuery.productTypes,
     responsibles: reportResponsiblesForRequest(),
-    siteDate: query.siteDate,
+    siteDate: reportQuery.endDate,
     sites: query.sites,
     sortField: reportQuery.sortField,
     sortOrder: reportQuery.sortOrder,
@@ -792,12 +858,34 @@ function handleReportSummaryScroll(event: Event) {
   syncReportSummaryScroll((event.target as HTMLElement).scrollLeft, 'summary');
 }
 
+function syncGroupCompletionScroll(source: 'sales' | 'units', top: number) {
+  if (groupScrollSyncing) return;
+  const target = source === 'units' ? groupSalesScroll.value : groupUnitsScroll.value;
+  if (!target) return;
+  groupScrollSyncing = true;
+  target.scrollTop = top;
+  requestAnimationFrame(() => {
+    groupScrollSyncing = false;
+  });
+}
+
+function handleGroupUnitsScroll(event: Event) {
+  syncGroupCompletionScroll('units', (event.target as HTMLElement).scrollTop);
+}
+
+function handleGroupSalesScroll(event: Event) {
+  syncGroupCompletionScroll('sales', (event.target as HTMLElement).scrollTop);
+}
+
 function bindReportBodyScroll() {
   const root = reportSummaryScroll.value?.closest('.report-panel');
   const nextBody = root?.querySelector('.ant-table-body') as HTMLElement | null;
   if (reportBodyScrollElement === nextBody) return;
   if (reportBodyScrollElement) {
-    reportBodyScrollElement.removeEventListener('scroll', handleReportBodyScroll);
+    reportBodyScrollElement.removeEventListener(
+      'scroll',
+      handleReportBodyScroll,
+    );
   }
   reportBodyScrollElement = nextBody;
   if (reportBodyScrollElement) {
@@ -864,9 +952,10 @@ async function downloadReportCsv() {
     for (const row of rows) {
       const cells: string[] = [];
       for (const key of keys) {
-        const value = key === 'salesTrend'
-          ? reportTrendTitle(row.salesTrend)
-          : formatReportValue(key, row[key]);
+        const value =
+          key === 'salesTrend'
+            ? reportTrendTitle(row.salesTrend)
+            : formatReportValue(key, row[key]);
         cells.push(csvCell(value));
       }
       lines.push(cells.join(','));
@@ -895,16 +984,22 @@ watch(
 watch(
   () => [
     query.departments.join('|'),
-    query.endDate,
-    query.granularity,
     query.operationGroupIds.join('|'),
     query.responsibles.join('|'),
-    query.siteDate,
     query.sites.join('|'),
+  ],
+  () => scheduleDashboardReload({ reloadReport: true }),
+);
+
+watch(
+  () => [
+    query.endDate,
+    query.granularity,
+    query.siteDate,
     query.startDate,
     query.transactionStatuses.join('|'),
   ],
-  scheduleDashboardReload,
+  () => scheduleDashboardReload(),
 );
 
 onMounted(() => {
@@ -919,7 +1014,10 @@ onBeforeUnmount(() => {
     clearTimeout(dashboardAutoReloadTimer);
   }
   if (reportBodyScrollElement) {
-    reportBodyScrollElement.removeEventListener('scroll', handleReportBodyScroll);
+    reportBodyScrollElement.removeEventListener(
+      'scroll',
+      handleReportBodyScroll,
+    );
   }
 });
 </script>
@@ -1227,7 +1325,12 @@ onBeforeUnmount(() => {
               <h2>{{ metricPrefix }}销量完成率 - 运营组维度</h2>
               <span>{{ targetHint }}</span>
             </div>
-            <div v-if="groupCards.length > 0" class="group-placeholder">
+            <div
+              v-if="groupCards.length > 0"
+              ref="groupUnitsScroll"
+              class="group-placeholder group-scroll"
+              @scroll="handleGroupUnitsScroll"
+            >
               <div v-for="item in groupCards" :key="item.name">
                 <b>{{ item.name }}</b>
                 <strong>{{ formatPercent(item.completionRate) }}</strong>
@@ -1245,7 +1348,12 @@ onBeforeUnmount(() => {
               <h2>{{ metricPrefix }}销售额完成率 - 运营组维度</h2>
               <span>{{ targetHint }}</span>
             </div>
-            <div v-if="groupCards.length > 0" class="group-placeholder">
+            <div
+              v-if="groupCards.length > 0"
+              ref="groupSalesScroll"
+              class="group-placeholder group-scroll"
+              @scroll="handleGroupSalesScroll"
+            >
               <div v-for="item in groupCards" :key="item.name">
                 <b>{{ item.name }}</b>
                 <strong>{{ formatPercent(item.salesCompletionRate) }}</strong>
@@ -1266,7 +1374,7 @@ onBeforeUnmount(() => {
               <div class="hero-card blue-card">
                 <span>推广占比</span>
                 <strong>{{ formatPercent(promotionRate) }}</strong>
-                <em>{{ advertisingPrefix }}广告花费绝对值 / 总销售额</em>
+                <em>{{ currentPeriodLabel }} 内广告花费绝对值 / 总销售额</em>
               </div>
               <div class="comparison-card blue-detail">
                 <div>
@@ -1281,8 +1389,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <span>统计区间</span>
-                  <strong>{{ advertising?.startDate }} ~
-                    {{ advertising?.endDate }}</strong>
+                  <strong class="period-value">{{ currentPeriodLabel }}</strong>
                 </div>
                 <div>
                   <span>总销售额</span>
@@ -1297,12 +1404,13 @@ onBeforeUnmount(() => {
               <div class="hero-card blue-card">
                 <span>周转周期(月)</span>
                 <strong>{{ turnover(latest?.turnoverMonths) }}</strong>
-                <em>周转库存 / 销售速度 / 30</em>
+                <em>{{ currentPeriodLabel }} 内周转库存 / 销售速度 / 30</em>
               </div>
               <div class="comparison-card blue-detail">
                 <div>
                   <span>{{ previousLabel }}周转</span>
                   <strong>{{ turnover(previous?.turnoverMonths) }}</strong>
+                  <small>{{ previousPeriodLabel }}</small>
                 </div>
                 <div>
                   <span>{{ previousLabel }}差异</span>
@@ -1324,8 +1432,9 @@ onBeforeUnmount(() => {
                   </strong>
                 </div>
                 <div>
-                  <span>{{ secondaryLabel }}</span>
+                  <span>{{ secondaryLabel }}周转</span>
                   <strong>{{ turnover(weekBefore?.turnoverMonths) }}</strong>
+                  <small>{{ secondaryPeriodLabel }}</small>
                 </div>
                 <div>
                   <span>{{ secondaryLabel }}差异</span>
@@ -1419,7 +1528,12 @@ onBeforeUnmount(() => {
               :options="reportDateRangeOptions"
               size="small"
               style="width: 104px"
-              @change="() => { reportQuery.page = 1; loadReportData(); }"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
             />
             <DatePicker.RangePicker
               v-if="reportQuery.dateRangeType === 'custom'"
@@ -1428,7 +1542,12 @@ onBeforeUnmount(() => {
               :disabled-date="disabledFutureDate"
               size="small"
               value-format="YYYY-MM-DD"
-              @change="() => { reportQuery.page = 1; loadReportData(); }"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
             />
             <label>新品/老品</label>
             <Select
@@ -1439,7 +1558,12 @@ onBeforeUnmount(() => {
               placeholder="全部"
               size="small"
               style="min-width: 118px"
-              @change="() => { reportQuery.page = 1; loadReportData(); }"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
             />
             <label>负责人</label>
             <Select
@@ -1450,7 +1574,12 @@ onBeforeUnmount(() => {
               placeholder="继承主筛选"
               size="small"
               style="min-width: 150px"
-              @change="() => { reportQuery.page = 1; loadReportData(); }"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
             />
             <label>列</label>
             <Select
@@ -1789,13 +1918,31 @@ h2 {
 }
 
 .comparison-card span,
-.comparison-card strong {
+.comparison-card strong,
+.comparison-card small {
   display: block;
 }
 
 .comparison-card strong {
   margin-top: 5px;
   font-size: 17px;
+}
+
+.comparison-card small {
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 1.25;
+  color: inherit;
+  white-space: nowrap;
+  opacity: 0.74;
+}
+
+.comparison-card .period-value {
+  font-size: 15px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .yellow-detail {
@@ -1818,12 +1965,19 @@ h2 {
 }
 
 .group-panel {
-  min-height: 123px;
+  min-height: 0;
 }
 
 .group-placeholder {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   margin-top: 9px;
+}
+
+.group-scroll {
+  max-height: 180px;
+  padding-right: 4px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .group-placeholder div {
@@ -1983,8 +2137,7 @@ h2 {
 
 .report-summary-scroll {
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto hidden;
 }
 
 .report-summary-grid {
