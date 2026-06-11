@@ -499,6 +499,7 @@ export interface AnalyticsReportOverview {
     countries: string[];
     productTypes: Array<'new' | 'old'>;
     responsibles: string[];
+    spus: string[];
   };
   pagination: {
     page: number;
@@ -516,6 +517,7 @@ export interface AnalyticsReportOverview {
     sites: string[];
     sortField: string;
     sortOrder: string;
+    spus: string[];
     startDate: string;
   };
   rows: AnalyticsReportRow[];

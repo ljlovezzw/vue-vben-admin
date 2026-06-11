@@ -124,6 +124,7 @@ const reportQuery = reactive({
   pageSize: 50,
   productTypes: [] as string[],
   responsibles: [] as string[],
+  spus: [] as string[],
   sortField: 'salesQty',
   sortOrder: 'descend' as ReportSortOrder,
   startDate: dayjs().subtract(30, 'day').format('YYYY-MM-DD'),
@@ -137,6 +138,9 @@ const advertising = computed(() => overview.value?.advertising);
 const targets = computed(() => overview.value?.targets);
 const period = computed(() => overview.value?.period);
 const source = computed(() => overview.value?.source);
+const sourceMessage = computed(() =>
+  (source.value?.message || '等待查询').replace(/profitstatement/g, '利润报表'),
+);
 const granularityOptions = [
   { label: '日', value: 'day' },
   { label: '月', value: 'month' },
@@ -245,6 +249,18 @@ const transactionStatusOptions = computed(() =>
     value,
   })),
 );
+const reportDateRangeLabels: Record<string, string> = {
+  currentmonth: '本月',
+  currentMonth: '本月',
+  custom: '自定义',
+  last7: '最近7天',
+  last30: '最近30天',
+  lastmonth: '上月',
+  lastMonth: '上月',
+  today: '今日',
+  year: '今年',
+  yesterday: '昨日',
+};
 const reportDateRangeOptions = [
   { label: '今日', value: 'today' },
   { label: '昨日', value: 'yesterday' },
@@ -283,6 +299,9 @@ const reportResponsibleOptions = computed(() => {
     responsibleOptions.value.map((item) => item.value);
   return values.map((value) => ({ label: value, value }));
 });
+const reportSpuOptions = computed(() =>
+  (report.value?.filters.spus ?? []).map((value) => ({ label: value, value })),
+);
 const reportColumnMap = computed(() => {
   const map = new Map<string, AnalyticsReportColumn>();
   for (const column of report.value?.columns ?? []) {
@@ -480,13 +499,14 @@ async function loadReportData() {
     const data = await fetchAnalyticsReport(buildReportParams());
     report.value = data;
     reportQuery.countries = data.query.countries ?? [];
-    reportQuery.dateRangeType = data.query.dateRangeType as ReportDateRangeType;
+    reportQuery.dateRangeType = normalizeReportDateRangeType(data.query.dateRangeType);
     reportQuery.startDate = data.query.startDate;
     reportQuery.endDate = data.query.endDate;
     reportQuery.page = data.pagination.page;
     reportQuery.pageSize = data.pagination.pageSize;
     reportQuery.productTypes = data.query.productTypes;
     reportQuery.responsibles = data.query.responsibles;
+    reportQuery.spus = data.query.spus ?? [];
     reportQuery.sortField = data.query.sortField || 'salesQty';
     reportQuery.sortOrder = (data.query.sortOrder ||
       'descend') as ReportSortOrder;
@@ -542,6 +562,7 @@ function resetFilters() {
   reportQuery.pageSize = 50;
   reportQuery.productTypes = [];
   reportQuery.responsibles = [];
+  reportQuery.spus = [];
   reportQuery.sortField = 'salesQty';
   reportQuery.sortOrder = 'descend';
   void reloadAll(false);
@@ -549,6 +570,45 @@ function resetFilters() {
 
 function disabledFutureDate(value: ReturnType<typeof dayjs>) {
   return value.isAfter(dayjs(), isMonthMode.value ? 'month' : 'day');
+}
+
+function applyReportDateRangeType(value: ReportDateRangeType) {
+  const today = dayjs();
+  const yesterday = today.subtract(1, 'day');
+  if (value === 'custom') return;
+  if (value === 'today') {
+    reportQuery.startDate = today.format('YYYY-MM-DD');
+    reportQuery.endDate = reportQuery.startDate;
+    return;
+  }
+  if (value === 'yesterday') {
+    reportQuery.startDate = yesterday.format('YYYY-MM-DD');
+    reportQuery.endDate = reportQuery.startDate;
+    return;
+  }
+  if (value === 'last7') {
+    reportQuery.endDate = yesterday.format('YYYY-MM-DD');
+    reportQuery.startDate = yesterday.subtract(6, 'day').format('YYYY-MM-DD');
+    return;
+  }
+  if (value === 'last30') {
+    reportQuery.endDate = yesterday.format('YYYY-MM-DD');
+    reportQuery.startDate = yesterday.subtract(29, 'day').format('YYYY-MM-DD');
+    return;
+  }
+  if (value === 'currentMonth') {
+    reportQuery.startDate = today.startOf('month').format('YYYY-MM-DD');
+    reportQuery.endDate = yesterday.format('YYYY-MM-DD');
+    return;
+  }
+  if (value === 'lastMonth') {
+    const lastMonth = today.subtract(1, 'month');
+    reportQuery.startDate = lastMonth.startOf('month').format('YYYY-MM-DD');
+    reportQuery.endDate = lastMonth.endOf('month').format('YYYY-MM-DD');
+    return;
+  }
+  reportQuery.startDate = today.startOf('year').format('YYYY-MM-DD');
+  reportQuery.endDate = yesterday.format('YYYY-MM-DD');
 }
 
 function ratio(numerator?: null | number, denominator?: null | number) {
@@ -774,6 +834,7 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     pageSize: reportQuery.pageSize,
     productTypes: reportQuery.productTypes,
     responsibles: reportResponsiblesForRequest(),
+    spus: reportQuery.spus,
     siteDate: reportQuery.endDate,
     sites: query.sites,
     sortField: reportQuery.sortField,
@@ -781,6 +842,35 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     startDate: reportQuery.startDate,
     ...overrides,
   };
+}
+
+function normalizeReportDateRangeType(value: unknown): ReportDateRangeType {
+  const rawValue = String(value || 'last30').trim();
+  const normalized = rawValue.toLowerCase();
+  if (normalized === 'currentmonth' || normalized === 'thismonth') {
+    return 'currentMonth';
+  }
+  if (normalized === 'lastmonth') return 'lastMonth';
+  if (normalized === 'today') return 'today';
+  if (normalized === 'yesterday') return 'yesterday';
+  if (normalized === 'last7' || normalized === '7' || normalized === 'recent7') {
+    return 'last7';
+  }
+  if (normalized === 'last30' || normalized === '30' || normalized === 'recent30') {
+    return 'last30';
+  }
+  if (normalized === 'year' || normalized === 'thisyear') return 'year';
+  if (normalized === 'custom') return 'custom';
+  return 'last30';
+}
+
+function reportDateRangeLabel(value: unknown) {
+  const rawValue = String(value || '').trim();
+  return (
+    reportDateRangeLabels[rawValue] ??
+    reportDateRangeLabels[rawValue.toLowerCase()] ??
+    rawValue
+  );
 }
 
 function formatReportValue(key: string, value: any) {
@@ -1116,7 +1206,7 @@ onBeforeUnmount(() => {
         <Button size="small" @click="resetFilters">重置</Button>
 
         <Tag :color="source?.status === 'ok' ? 'green' : 'orange'">
-          {{ source?.message || '等待查询' }}
+          {{ sourceMessage }}
         </Tag>
       </section>
 
@@ -1528,8 +1618,8 @@ onBeforeUnmount(() => {
           <div>
             <h2>商品维度明细报表</h2>
             <span>
-              {{ report?.query.startDate }} ~ {{ report?.query.endDate }}，共
-              {{ formatInteger(report?.pagination.total) }} 条
+              {{ reportDateRangeLabel(report?.query.dateRangeType) }}：{{ report?.query.startDate }} ~
+              {{ report?.query.endDate }}，共 {{ formatInteger(report?.pagination.total) }} 条
             </span>
           </div>
           <div class="report-actions">
@@ -1541,6 +1631,7 @@ onBeforeUnmount(() => {
               style="width: 104px"
               @change="
                 () => {
+                  applyReportDateRangeType(reportQuery.dateRangeType);
                   reportQuery.page = 1;
                   loadReportData();
                 }
@@ -1586,6 +1677,25 @@ onBeforeUnmount(() => {
               placeholder="全部"
               size="small"
               style="min-width: 118px"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
+            />
+            <label>SPU</label>
+            <Select
+              v-model:value="reportQuery.spus"
+              :filter-option="true"
+              :max-tag-count="1"
+              :options="reportSpuOptions"
+              allow-clear
+              mode="multiple"
+              placeholder="全部"
+              show-search
+              size="small"
+              style="min-width: 150px"
               @change="
                 () => {
                   reportQuery.page = 1;

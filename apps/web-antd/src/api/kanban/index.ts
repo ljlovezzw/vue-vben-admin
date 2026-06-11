@@ -57,6 +57,7 @@ export interface AnalyticsReportParams {
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];
+  spus?: string[];
   sortField?: string;
   sortOrder?: string;
   startDate?: string;
