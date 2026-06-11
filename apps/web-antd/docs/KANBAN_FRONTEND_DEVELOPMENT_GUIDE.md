@@ -87,9 +87,7 @@ http://localhost:8001
 
 后端可通过 .env 的 KANBAN_ALLOWED_SHOPS 做全局店铺白名单；前端站点/负责人筛选只是在白名单结果上继续筛选，不需要把店铺列表硬编码到页面。
 
-新品监控的新品详情表列由后端 columns 驱动；当前固定列包含 SPU / 父ASIN / 主图 / 店铺 / ASIN / 运营负责人 / 一级类目 / 二级分类 等基础字段。前端只负责列宽、固定列和图片渲染，不在页面硬编码业务字段顺序。
-新品监控和分析页商品维度明细的主图 URL 均由后端 `product_image.small_image_url` 提供；老品缺图由后端 `product_image_service` 定时从领星 Listing 回填，前端不直接调用领星接口补图。
-如果页面仍显示缺图，先在后端确认 `product_image` 是否存在 `(parent_asin, site)` 记录，再看 `product_image_backfill_log.status`；`no_image/no_rows` 表示领星 Listing 本次没有可用主图或查不到父 ASIN，前端只显示空占位。
+新品监控的新品详情表列由后端 columns 驱动；当前固定列包含 SPU / 父ASIN / 主图 / 店铺 / ASIN / 运营负责人 / 一级类目 / 二级分类 等基础字段。前端只负责列宽、固定列和图片渲染，不在页面硬编码业务字段顺序。新品监控和分析页商品维度明细的主图 URL 均由后端 `product_image.small_image_url` 提供；泛欧聚合行由后端从被聚合的源父 ASIN 中取第一张可用图；老品缺图由后端 `product_image_service` 定时从领星 Listing 回填，前端不直接调用领星接口补图。如果页面仍显示缺图，先在后端确认 `product_image` 是否存在 `(parent_asin, site)` 记录，再看 `product_image_backfill_log.status`；`no_image/no_rows` 表示领星 Listing 本次没有可用主图或查不到父 ASIN，前端只显示空占位。
 
 生产环境 API：
 
@@ -230,8 +228,8 @@ apps\web-antd\src\api\kanban\types.ts
 当前主要封装：
 
 | 前端函数 | 后端路由 |
-| --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses` 和 `productExpressionRealtime` 今日实时产品表现开关 |
+| --- | --- | --- |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses`和`productExpressionRealtime` 今日实时产品表现开关 |
 | `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、新品/老品、负责人、分页、排序和列配置所需元数据 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
@@ -265,7 +263,7 @@ src\views\dashboard\analytics\index.vue
 - 日维度展示所选日期范围、前一同长度周期、上周同期；月维度展示所选月份、上月、去年同期。
 - 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
-- 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、负责人、新品/老品、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。
+- 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、负责人、新品/老品、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。
 
 当前口径：
 
@@ -274,9 +272,9 @@ src\views\dashboard\analytics\index.vue
 - 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
 - 分析页顶部主筛选不保留“查询”按钮；修改维度、时间或交易状态只防抖刷新上方总览，不触发底部商品维度明细报表。修改站点、部门、运营组或负责人属于全局范围变化，会同时刷新总览和底部报表。
 - 顶部主筛选的站点、部门、运营组、负责人会作为底部报表的全局范围；报表自身负责人筛选与主负责人筛选取交集，避免扩大数据范围。
-- 底部报表的时间范围独立于主卡片日期，快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。报表请求的 `siteDate` 跟随报表自身 `endDate`，不要使用顶部主日期兜底。
-- 报表列由后端 `columns/defaultColumns` 驱动，前端仅维护用户当前勾选列；二级分类已纳入后端默认展示列。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。
-- 报表目标销量由后端统一计算：优先使用 `站点 + 负责人 + SPU` 精确目标；新品精确目标为空时，按 `负责人 + 二级分类%` 的类目占位目标兜底，前端只展示返回的 `targetUnits`。
+- 底部报表的时间范围独立于主卡片日期，快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。报表请求的 `siteDate` 跟随报表自身 `endDate`，不要使用顶部主日期兜底。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，包含“泛欧”。
+- 报表列由后端 `columns/defaultColumns` 驱动，前端仅维护用户当前勾选列；二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。
+- 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
 - 顶部“交易状态”默认选择“已发放”，可切换“已发放含预算”。清空后后端仍按默认“已发放”处理，不做利润表全状态查询。
 - “已发放含预算”由后端映射为已发放加预结算/当月结算相关状态，用于查看带预算口径的月度数据。
 - 日维度日期范围如果包含今天或昨天，后端会优先用 `productexpressionnew_live_cache` 覆盖这些近实时日期，再与其余历史日期的 `profitstatement` 数据合并；只有纯历史日期才完全读取 `profitstatement`。
@@ -586,3 +584,4 @@ pnpm build:web
 4. 重导目标并验收 `/analytics`。
 5. 在浏览器验收 ASIN360 店铺名称下拉。
 6. 再安排页面拆分、乱码清理和自动化测试。
+

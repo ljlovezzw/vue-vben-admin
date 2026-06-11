@@ -117,6 +117,7 @@ const query = reactive({
   transactionStatuses: ['已发放'] as string[],
 });
 const reportQuery = reactive({
+  countries: [] as string[],
   dateRangeType: 'last30' as ReportDateRangeType,
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   page: 1,
@@ -266,6 +267,12 @@ const reportDateRangeValue = computed({
   },
 });
 const reportRows = computed(() => report.value?.rows ?? []);
+const reportCountryOptions = computed(() =>
+  (report.value?.filters.countries ?? []).map((country) => ({
+    label: country,
+    value: country,
+  })),
+);
 const reportProductTypeOptions = computed(() => [
   { label: '新品', value: 'new' },
   { label: '老品', value: 'old' },
@@ -472,6 +479,7 @@ async function loadReportData() {
   try {
     const data = await fetchAnalyticsReport(buildReportParams());
     report.value = data;
+    reportQuery.countries = data.query.countries ?? [];
     reportQuery.dateRangeType = data.query.dateRangeType as ReportDateRangeType;
     reportQuery.startDate = data.query.startDate;
     reportQuery.endDate = data.query.endDate;
@@ -526,6 +534,7 @@ function resetFilters() {
   query.siteDate = query.endDate;
   query.sites = [];
   query.transactionStatuses = ['已发放'];
+  reportQuery.countries = [];
   reportQuery.dateRangeType = 'last30';
   reportQuery.startDate = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
   reportQuery.endDate = query.endDate;
@@ -756,6 +765,7 @@ function reportResponsiblesForRequest() {
 
 function buildReportParams(overrides: Record<string, any> = {}) {
   return {
+    countries: reportQuery.countries,
     dateRangeType: reportQuery.dateRangeType,
     departments: query.departments,
     endDate: reportQuery.endDate,
@@ -860,7 +870,8 @@ function handleReportSummaryScroll(event: Event) {
 
 function syncGroupCompletionScroll(source: 'sales' | 'units', top: number) {
   if (groupScrollSyncing) return;
-  const target = source === 'units' ? groupSalesScroll.value : groupUnitsScroll.value;
+  const target =
+    source === 'units' ? groupSalesScroll.value : groupUnitsScroll.value;
   if (!target) return;
   groupScrollSyncing = true;
   target.scrollTop = top;
@@ -1542,6 +1553,23 @@ onBeforeUnmount(() => {
               :disabled-date="disabledFutureDate"
               size="small"
               value-format="YYYY-MM-DD"
+              @change="
+                () => {
+                  reportQuery.page = 1;
+                  loadReportData();
+                }
+              "
+            />
+            <label>国家</label>
+            <Select
+              v-model:value="reportQuery.countries"
+              :max-tag-count="1"
+              :options="reportCountryOptions"
+              allow-clear
+              mode="multiple"
+              placeholder="全部"
+              size="small"
+              style="min-width: 124px"
               @change="
                 () => {
                   reportQuery.page = 1;

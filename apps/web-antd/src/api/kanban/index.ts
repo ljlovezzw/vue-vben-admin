@@ -46,6 +46,7 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
 }
 
 export interface AnalyticsReportParams {
+  countries?: string[];
   dateRangeType?: string;
   departments?: string[];
   endDate?: string;

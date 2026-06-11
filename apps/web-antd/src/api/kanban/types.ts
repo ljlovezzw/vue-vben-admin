@@ -496,6 +496,7 @@ export interface AnalyticsReportOverview {
   columns: AnalyticsReportColumn[];
   defaultColumns: string[];
   filters: {
+    countries: string[];
     productTypes: Array<'new' | 'old'>;
     responsibles: string[];
   };
@@ -505,6 +506,7 @@ export interface AnalyticsReportOverview {
     total: number;
   };
   query: {
+    countries: string[];
     dateRangeType: string;
     departments: string[];
     endDate: string;
