@@ -15,9 +15,12 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Drawer,
+  Dropdown,
   Input,
+  Modal,
   Progress,
   Select,
   Space,
@@ -66,6 +69,13 @@ const productDetailLoading = ref(false);
 const selectedProductCountries = ref<string[]>([]);
 const selectedProductColumns = ref<string[]>([]);
 const productColumnsInitialized = ref(false);
+const productCountryDropdownOpen = ref(false);
+const productCountryDraft = ref<string[]>([]);
+const productColumnConfigOpen = ref(false);
+const productColumnDraft = ref<string[]>([]);
+const productColumnSearch = ref('');
+const pinnedProductColumnKeys = ref<string[]>([]);
+const draggingProductColumnKey = ref('');
 const spuPagination = useTablePagination(
   15,
   ['15', '30', '50', '100'],
@@ -205,12 +215,12 @@ const productCountryOptions = computed(() => {
     values.add(country);
   return [...values].filter(Boolean).map((value) => ({ label: value, value }));
 });
-const productColumnOptions = computed(() =>
-  productDetailColumnDefs.value.map((column) => ({
-    label: column.label,
-    value: column.key,
-  })),
-);
+const productCountryFilterLabel = computed(() => {
+  if (selectedProductCountries.value.length === 0) return '国家';
+  if (selectedProductCountries.value.length === 1)
+    return selectedProductCountries.value[0] ?? '国家';
+  return `国家(${selectedProductCountries.value.length})`;
+});
 const productColumnMap = computed(() => {
   const map = new Map<string, KanbanProductDetailColumn>();
   for (const column of productDetailColumnDefs.value)
@@ -218,15 +228,47 @@ const productColumnMap = computed(() => {
   return map;
 });
 const productVisibleColumns = computed(() => {
-  const selected = new Set(selectedProductColumns.value);
-  return productDetailColumnDefs.value.filter((column) =>
-    selected.has(column.key),
-  );
+  const columns: KanbanProductDetailColumn[] = [];
+  for (const key of selectedProductColumns.value) {
+    const column = productColumnMap.value.get(key);
+    if (column) columns.push(column);
+  }
+  return columns;
 });
-const productFixedKeys = computed(
-  () =>
-    new Set(productDetailColumnDefs.value.slice(0, 9).map((item) => item.key)),
+const selectedProductColumnDraftMetas = computed(() =>
+  productColumnDraft.value
+    .map((key) => productColumnMap.value.get(key))
+    .filter((column): column is KanbanProductDetailColumn => Boolean(column)),
 );
+const productColumnGroups = computed(() => {
+  const groups: Array<{
+    columns: KanbanProductDetailColumn[];
+    key: string;
+    title: string;
+  }> = [
+    { columns: [], key: 'base', title: '基础信息' },
+    { columns: [], key: 'sales', title: '销售数据' },
+    { columns: [], key: 'ad', title: '广告数据' },
+    { columns: [], key: 'inventory', title: '库存价格' },
+    { columns: [], key: 'profit', title: '利润退款' },
+    { columns: [], key: 'other', title: '其他字段' },
+  ];
+  const groupMap = new Map(groups.map((group) => [group.key, group]));
+  const keyword = productColumnSearch.value.trim().toLowerCase();
+  for (const column of productDetailColumnDefs.value) {
+    if (
+      keyword &&
+      !column.key.toLowerCase().includes(keyword) &&
+      !column.label.toLowerCase().includes(keyword) &&
+      !column.source.toLowerCase().includes(keyword)
+    ) {
+      continue;
+    }
+    const groupKey = productColumnGroupKey(column);
+    (groupMap.get(groupKey) ?? groupMap.get('other'))?.columns.push(column);
+  }
+  return groups.filter((group) => group.columns.length > 0);
+});
 const productMetricScale = computed(() => {
   const scale = new Map<string, number>();
   for (const column of productVisibleColumns.value) {
@@ -248,14 +290,7 @@ const productHiddenColumnCount = computed(() =>
 );
 const productDetailColumns = computed<TableColumnsType<Record<string, any>>>(
   () => {
-    const fixedKeys = productFixedKeys.value;
-    const selected = productVisibleColumns.value;
-    const fixedColumns = selected
-      .filter((column) => fixedKeys.has(column.key))
-      .map((column) => buildProductDetailColumn(column, true));
-    const metricColumns = selected
-      .filter((column) => !fixedKeys.has(column.key))
-      .map((column) => buildProductDetailColumn(column, false));
+    const fixedKeys = new Set(pinnedProductColumnKeys.value);
     const columns: TableColumnsType<Record<string, any>> = [
       {
         align: 'center',
@@ -265,21 +300,22 @@ const productDetailColumns = computed<TableColumnsType<Record<string, any>>>(
         title: 'No.',
         width: 52,
       },
-      ...fixedColumns,
+      ...productVisibleColumns.value.map((column) =>
+        buildProductDetailColumn(column, fixedKeys.has(column.key)),
+      ),
     ];
-    if (metricColumns.length > 0) {
-      columns.push({
-        align: 'center',
-        className: 'product-basic-group',
-        children: metricColumns,
-        title: 'Basic',
-      });
-    }
     return columns;
   },
 );
 const productDetailScrollX = computed(() =>
-  Math.max(1320, (productVisibleColumns.value.length + 1) * 122),
+  Math.max(
+    1320,
+    52 +
+      productVisibleColumns.value.reduce(
+        (total, column) => total + productColumnWidth(column),
+        0,
+      ),
+  ),
 );
 
 const failedRows = computed(() =>
@@ -548,6 +584,15 @@ async function loadProductDetailData() {
     });
     productDetail.value = detailResult;
     ensureProductColumnsInitialized(detailResult);
+    const availableKeys = new Set(
+      detailResult.columns.map((column) => column.key),
+    );
+    selectedProductColumns.value = selectedProductColumns.value.filter((key) =>
+      availableKeys.has(key),
+    );
+    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter((key) =>
+      availableKeys.has(key) && selectedProductColumns.value.includes(key),
+    );
   } finally {
     productDetailLoading.value = false;
   }
@@ -584,6 +629,175 @@ function ensureProductColumnsInitialized(detail: KanbanProductDetailOverview) {
   productColumnsInitialized.value = true;
 }
 
+function handleProductCountryDropdownOpen(open: boolean) {
+  productCountryDropdownOpen.value = open;
+  if (open) {
+    productCountryDraft.value = [...selectedProductCountries.value];
+  }
+}
+
+function isProductCountryDraftChecked(value: string) {
+  return productCountryDraft.value.includes(value);
+}
+
+function toggleProductCountryDraftValue(value: string) {
+  productCountryDraft.value = isProductCountryDraftChecked(value)
+    ? productCountryDraft.value.filter((item) => item !== value)
+    : [...productCountryDraft.value, value];
+}
+
+function isProductCountryDraftAllSelected() {
+  return (
+    productCountryOptions.value.length > 0 &&
+    productCountryOptions.value.every((option) =>
+      productCountryDraft.value.includes(option.value),
+    )
+  );
+}
+
+function toggleProductCountryDraftAll() {
+  productCountryDraft.value = isProductCountryDraftAllSelected()
+    ? []
+    : productCountryOptions.value.map((option) => option.value);
+}
+
+function cancelProductCountryFilter() {
+  productCountryDraft.value = [...selectedProductCountries.value];
+  productCountryDropdownOpen.value = false;
+}
+
+function applyProductCountryFilter() {
+  selectedProductCountries.value = [...productCountryDraft.value];
+  productCountryDropdownOpen.value = false;
+  void applyProductDetailFilters();
+}
+
+function openProductColumnConfig() {
+  productColumnDraft.value = selectedProductColumns.value.filter((key) =>
+    productColumnMap.value.has(key),
+  );
+  pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter((key) =>
+    productColumnDraft.value.includes(key),
+  );
+  productColumnSearch.value = '';
+  productColumnConfigOpen.value = true;
+}
+
+function isProductColumnDraftChecked(key: string) {
+  return productColumnDraft.value.includes(key);
+}
+
+function toggleProductColumnDraft(key: string) {
+  if (isProductColumnDraftChecked(key)) {
+    productColumnDraft.value = productColumnDraft.value.filter(
+      (item) => item !== key,
+    );
+    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter(
+      (item) => item !== key,
+    );
+    return;
+  }
+  productColumnDraft.value = [...productColumnDraft.value, key];
+}
+
+function isProductColumnGroupAllSelected(
+  columns: KanbanProductDetailColumn[],
+) {
+  return (
+    columns.length > 0 &&
+    columns.every((column) => productColumnDraft.value.includes(column.key))
+  );
+}
+
+function toggleProductColumnGroup(columns: KanbanProductDetailColumn[]) {
+  if (isProductColumnGroupAllSelected(columns)) {
+    const groupKeys = new Set(columns.map((column) => column.key));
+    productColumnDraft.value = productColumnDraft.value.filter(
+      (key) => !groupKeys.has(key),
+    );
+    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter(
+      (key) => !groupKeys.has(key),
+    );
+    return;
+  }
+  const next = [...productColumnDraft.value];
+  for (const column of columns) {
+    if (!next.includes(column.key)) next.push(column.key);
+  }
+  productColumnDraft.value = next;
+}
+
+function removeProductColumnDraft(key: string) {
+  productColumnDraft.value = productColumnDraft.value.filter(
+    (item) => item !== key,
+  );
+  pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter(
+    (item) => item !== key,
+  );
+}
+
+function moveProductColumnDraft(key: string, direction: -1 | 1) {
+  const currentIndex = productColumnDraft.value.indexOf(key);
+  const nextIndex = currentIndex + direction;
+  if (
+    currentIndex < 0 ||
+    nextIndex < 0 ||
+    nextIndex >= productColumnDraft.value.length
+  ) {
+    return;
+  }
+  const next = [...productColumnDraft.value];
+  const [item] = next.splice(currentIndex, 1);
+  if (item) {
+    next.splice(nextIndex, 0, item);
+  }
+  productColumnDraft.value = next;
+}
+
+function handleProductColumnDragStart(key: string) {
+  draggingProductColumnKey.value = key;
+}
+
+function handleProductColumnDrop(targetKey: string) {
+  const sourceKey = draggingProductColumnKey.value;
+  draggingProductColumnKey.value = '';
+  if (!sourceKey || sourceKey === targetKey) return;
+  const next = [...productColumnDraft.value];
+  const sourceIndex = next.indexOf(sourceKey);
+  const targetIndex = next.indexOf(targetKey);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [item] = next.splice(sourceIndex, 1);
+  if (item) {
+    next.splice(targetIndex, 0, item);
+  }
+  productColumnDraft.value = next;
+}
+
+function isProductColumnPinned(key: string) {
+  return pinnedProductColumnKeys.value.includes(key);
+}
+
+function toggleProductColumnPinned(key: string) {
+  if (!productColumnDraft.value.includes(key)) return;
+  if (isProductColumnPinned(key)) {
+    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter(
+      (item) => item !== key,
+    );
+    return;
+  }
+  if (pinnedProductColumnKeys.value.length >= 7) return;
+  pinnedProductColumnKeys.value = [...pinnedProductColumnKeys.value, key];
+}
+
+function applyProductColumnConfig() {
+  selectedProductColumns.value = [...productColumnDraft.value];
+  pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter((key) =>
+    selectedProductColumns.value.includes(key),
+  );
+  productColumnConfigOpen.value = false;
+  resetTablePagination(productDetailPagination);
+}
+
 function resetFilters() {
   query.alertLevels = [];
   query.categories = [];
@@ -593,6 +807,7 @@ function resetFilters() {
   spuSearch.value = '';
   quickStatus.value = 'all';
   selectedProductCountries.value = [];
+  productCountryDraft.value = [];
   applyFilters();
 }
 
@@ -657,6 +872,71 @@ function productColumnLabel(key: string) {
   return productColumnMap.value.get(key)?.label ?? '';
 }
 
+function productColumnGroupKey(column: KanbanProductDetailColumn) {
+  const label = column.label;
+  const source = column.source.toLowerCase();
+  if (
+    [
+      'SPU',
+      'ASIN',
+      '父ASIN',
+      '主图',
+      '店铺',
+      '运营负责人',
+      '一级类目',
+      '二级分类',
+      '国家',
+      '站点',
+      '上线天数',
+    ].some((flag) => label.includes(flag))
+  ) {
+    return 'base';
+  }
+  if (
+    [
+      '广告',
+      'ACOS',
+      'ACOAS',
+      'TACOS',
+      'ROAS',
+      'ROI',
+      'CPC',
+      'CPM',
+      'CPO',
+      'CPU',
+      'CVR',
+      'CTR',
+      '点击',
+      '展示',
+    ].some((flag) => label.includes(flag)) ||
+    source.includes('ad')
+  ) {
+    return 'ad';
+  }
+  if (
+    ['库存', 'FBA', '评分', '评论', '价格', '均价'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
+    return 'inventory';
+  }
+  if (
+    ['利润', '毛利', '退款', '退货', '结算'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
+    return 'profit';
+  }
+  if (
+    ['销量', '销售', '订单', '目标', '完成率', '自然'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
+    return 'sales';
+  }
+  return 'other';
+}
+
 function isProductMetricKind(kind: string) {
   return kind === 'number' || kind === 'percent' || kind === 'decimal';
 }
@@ -719,6 +999,10 @@ function resetProductColumns() {
   selectedProductColumns.value = productDetailColumnDefs.value
     .filter((column) => column.defaultVisible)
     .map((column) => column.key);
+  pinnedProductColumnKeys.value = [];
+  if (productColumnConfigOpen.value) {
+    productColumnDraft.value = [...selectedProductColumns.value];
+  }
   resetTablePagination(productDetailPagination);
 }
 
@@ -889,34 +1173,67 @@ onMounted(applyFilters);
                     <strong>新品详情表</strong>
                   </div>
                   <Space class="product-detail-controls" wrap>
-                    <span class="product-detail-meta">过滤(0)</span>
+                    <span class="product-detail-meta">
+                      过滤({{ selectedProductCountries.length }})
+                    </span>
                     <span class="product-detail-meta">
                       已选字段({{ selectedProductColumns.length }})
                     </span>
                     <span class="product-detail-meta">
                       隐藏({{ productHiddenColumnCount }})
                     </span>
-                    <Select
-                      v-model:value="selectedProductCountries"
-                      :options="productCountryOptions"
-                      allow-clear
-                      max-tag-count="responsive"
-                      mode="multiple"
-                      option-filter-prop="label"
-                      placeholder="国家"
-                      show-search
-                      style="min-width: 150px"
-                    />
-                    <Select
-                      v-model:value="selectedProductColumns"
-                      :options="productColumnOptions"
-                      max-tag-count="responsive"
-                      mode="multiple"
-                      option-filter-prop="label"
-                      placeholder="展示列"
-                      show-search
-                      style="min-width: 300px"
-                    />
+                    <Dropdown
+                      v-model:open="productCountryDropdownOpen"
+                      :trigger="['click']"
+                      @open-change="handleProductCountryDropdownOpen"
+                    >
+                      <Button class="product-filter-trigger">
+                        {{ productCountryFilterLabel }}
+                      </Button>
+                      <template #overlay>
+                        <div class="product-filter-menu" @click.stop>
+                          <Checkbox
+                            :checked="isProductCountryDraftAllSelected()"
+                            @change="toggleProductCountryDraftAll"
+                          >
+                            全选
+                          </Checkbox>
+                          <div class="product-filter-scroll">
+                            <Checkbox
+                              v-for="option in productCountryOptions"
+                              :key="option.value"
+                              :checked="
+                                isProductCountryDraftChecked(option.value)
+                              "
+                              @change="
+                                () =>
+                                  toggleProductCountryDraftValue(option.value)
+                              "
+                            >
+                              {{ option.label }}
+                            </Checkbox>
+                          </div>
+                          <div class="product-filter-footer">
+                            <Button
+                              size="small"
+                              @click="cancelProductCountryFilter"
+                            >
+                              取消
+                            </Button>
+                            <Button
+                              size="small"
+                              type="primary"
+                              @click="applyProductCountryFilter"
+                            >
+                              确定
+                            </Button>
+                          </div>
+                        </div>
+                      </template>
+                    </Dropdown>
+                    <Button @click="openProductColumnConfig">
+                      列配置（{{ selectedProductColumns.length }}）
+                    </Button>
                     <Button @click="resetProductColumns">默认列</Button>
                     <Button
                       type="primary"
@@ -996,6 +1313,117 @@ onMounted(applyFilters);
                 </template>
               </Table>
             </Card>
+
+            <Modal
+              v-model:open="productColumnConfigOpen"
+              :footer="null"
+              title="新品详情列配置"
+              width="920px"
+              wrap-class-name="product-column-modal-wrap"
+            >
+              <div class="product-column-config">
+                <section class="product-column-pool">
+                  <div class="product-column-config-bar">
+                    <Input
+                      v-model:value="productColumnSearch"
+                      allow-clear
+                      placeholder="搜索字段"
+                      size="small"
+                    />
+                  </div>
+                  <div class="product-column-groups">
+                    <article
+                      v-for="group in productColumnGroups"
+                      :key="group.key"
+                      class="product-column-group"
+                    >
+                      <header>
+                        <span>{{ group.title }}</span>
+                        <button
+                          type="button"
+                          @click="toggleProductColumnGroup(group.columns)"
+                        >
+                          {{
+                            isProductColumnGroupAllSelected(group.columns)
+                              ? '取消全选'
+                              : '全选'
+                          }}
+                        </button>
+                      </header>
+                      <div class="product-column-check-grid">
+                        <Checkbox
+                          v-for="column in group.columns"
+                          :key="column.key"
+                          :checked="isProductColumnDraftChecked(column.key)"
+                          @change="
+                            () => toggleProductColumnDraft(column.key)
+                          "
+                        >
+                          {{ column.label }}
+                        </Checkbox>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+                <aside class="product-column-selected">
+                  <header>
+                    <strong>已选({{ productColumnDraft.length }})</strong>
+                    <span>最多可固定7项，拖拽可调整顺序</span>
+                  </header>
+                  <ol class="product-column-selected-list">
+                    <li
+                      v-for="(column, index) in selectedProductColumnDraftMetas"
+                      :key="column.key"
+                      draggable="true"
+                      @dragover.prevent
+                      @dragstart="handleProductColumnDragStart(column.key)"
+                      @drop="handleProductColumnDrop(column.key)"
+                    >
+                      <span class="product-column-drag">::</span>
+                      <span class="product-column-order">{{ index + 1 }}</span>
+                      <b>{{ column.label }}</b>
+                      <div>
+                        <button
+                          :disabled="index === 0"
+                          type="button"
+                          @click="moveProductColumnDraft(column.key, -1)"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          :disabled="index === productColumnDraft.length - 1"
+                          type="button"
+                          @click="moveProductColumnDraft(column.key, 1)"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          :class="{
+                            active: isProductColumnPinned(column.key),
+                          }"
+                          type="button"
+                          @click="toggleProductColumnPinned(column.key)"
+                        >
+                          固定
+                        </button>
+                        <button
+                          type="button"
+                          @click="removeProductColumnDraft(column.key)"
+                        >
+                          移除
+                        </button>
+                      </div>
+                    </li>
+                  </ol>
+                </aside>
+              </div>
+              <div class="product-column-config-footer">
+                <Button @click="productColumnConfigOpen = false">取消</Button>
+                <Button type="primary" @click="applyProductColumnConfig">
+                  确定
+                </Button>
+              </div>
+            </Modal>
 
             <div class="overview-grid">
               <Card title="各类目成品率" :body-style="{ padding: '16px' }">
@@ -1349,6 +1777,16 @@ onMounted(applyFilters);
 
 <style scoped>
 .monitor-page {
+  --product-border: #e2e8f0;
+  --product-border-strong: #cbd5e1;
+  --product-heading: #334155;
+  --product-hover: #eff6ff;
+  --product-muted: #94a3b8;
+  --product-panel: #fff;
+  --product-panel-muted: #f8fafc;
+  --product-subtle: #64748b;
+  --product-text: #334155;
+
   min-height: 100%;
   padding: 16px;
   background: #f6f8fb;
@@ -1996,13 +2434,213 @@ onMounted(applyFilters);
 
 .product-detail-card {
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  background: var(--product-panel);
+  border: 1px solid var(--product-border);
 }
 
 .product-detail-card :deep(.ant-card-head) {
   min-height: 48px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--product-panel);
+  border-bottom: 1px solid var(--product-border);
+}
+
+.product-filter-trigger {
+  min-width: 118px;
+  text-align: left;
+}
+
+.product-filter-menu {
+  width: 238px;
+  padding-top: 8px;
+  overflow: hidden;
+  background: var(--product-panel, #fff);
+  border: 1px solid var(--product-border, #e2e8f0);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+}
+
+.product-filter-menu > .ant-checkbox-wrapper {
+  display: flex;
+  padding: 5px 12px;
+  margin-inline-start: 0;
+  color: var(--product-text, #334155);
+}
+
+.product-filter-scroll {
+  display: grid;
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+.product-filter-scroll .ant-checkbox-wrapper {
+  display: flex;
+  min-height: 28px;
+  padding: 5px 12px;
+  margin-inline-start: 0;
+  color: var(--product-text, #334155);
+}
+
+.product-filter-scroll .ant-checkbox-wrapper:hover {
+  background: var(--product-panel-muted, #f8fafc);
+}
+
+.product-filter-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  background: var(--product-panel-muted, #f8fafc);
+  border-top: 1px solid var(--product-border, #e2e8f0);
+}
+
+.product-column-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  min-height: 580px;
+  overflow: hidden;
+  border: 1px solid var(--product-border, #e2e8f0);
+}
+
+.product-column-pool {
+  min-width: 0;
+  padding: 14px;
+  background: var(--product-panel, #fff);
+  border-right: 1px solid var(--product-border, #e2e8f0);
+}
+
+.product-column-config-bar {
+  margin-bottom: 12px;
+}
+
+.product-column-groups {
+  display: grid;
+  gap: 16px;
+  max-height: 520px;
+  padding-right: 6px;
+  overflow-y: auto;
+}
+
+.product-column-group header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.product-column-group header::before {
+  width: 4px;
+  height: 4px;
+  content: '';
+  background: var(--product-muted, #94a3b8);
+  border-radius: 50%;
+}
+
+.product-column-group header span {
+  font-weight: 700;
+  color: var(--product-heading, #334155);
+}
+
+.product-column-group header button,
+.product-column-selected button {
+  padding: 0;
+  color: #2563eb;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.product-column-check-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 18px;
+}
+
+.product-column-check-grid .ant-checkbox-wrapper {
+  margin-inline-start: 0;
+  color: var(--product-text, #334155);
+}
+
+.product-column-selected {
+  min-width: 0;
+  padding: 14px 12px;
+  background: var(--product-panel-muted, #f8fafc);
+}
+
+.product-column-selected header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.product-column-selected header strong {
+  color: var(--product-heading, #334155);
+}
+
+.product-column-selected header span {
+  font-size: 11px;
+  color: var(--product-subtle, #64748b);
+}
+
+.product-column-selected-list {
+  display: grid;
+  gap: 2px;
+  max-height: 522px;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.product-column-selected-list li {
+  display: grid;
+  grid-template-columns: 18px 28px minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+  padding: 4px 6px;
+  color: var(--product-text, #334155);
+  cursor: grab;
+  background: var(--product-panel, #fff);
+  border: 1px solid transparent;
+}
+
+.product-column-selected-list li:hover {
+  border-color: var(--product-border-strong, #cbd5e1);
+}
+
+.product-column-drag,
+.product-column-order {
+  font-size: 11px;
+  color: var(--product-muted, #94a3b8);
+}
+
+.product-column-selected-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-column-selected-list li > div {
+  display: flex;
+  gap: 6px;
+}
+
+.product-column-selected button:disabled {
+  color: var(--product-muted, #94a3b8);
+  cursor: not-allowed;
+}
+
+.product-column-selected button.active {
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.product-column-config-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 12px;
 }
 
 .product-detail-card :deep(.ant-table-cell) {
@@ -2011,17 +2649,28 @@ onMounted(applyFilters);
 
 .product-detail-card :deep(.ant-table) {
   font-size: 12px;
-  color: #374151;
+  color: var(--product-text);
+  background: var(--product-panel);
+  border-color: var(--product-border-strong);
+}
+
+.product-detail-card :deep(.ant-table-container),
+.product-detail-card :deep(.ant-table-content),
+.product-detail-card :deep(.ant-table-body),
+.product-detail-card :deep(.ant-table-placeholder),
+.product-detail-card :deep(.ant-table-cell-fix-left),
+.product-detail-card :deep(.ant-table-cell-fix-right) {
+  background: var(--product-panel);
 }
 
 .product-detail-card :deep(.ant-table-thead > tr > th) {
   padding: 8px 10px;
   font-size: 13px;
   font-weight: 800;
-  color: #111827;
+  color: var(--product-heading);
   text-align: center;
-  background: #ffd200 !important;
-  border-color: #efc400 !important;
+  background: var(--product-panel-muted) !important;
+  border-color: var(--product-border-strong) !important;
 }
 
 .product-detail-card :deep(.product-basic-group) {
@@ -2032,35 +2681,35 @@ onMounted(applyFilters);
   height: 56px;
   padding: 6px 10px;
   vertical-align: middle;
-  border-color: #edf0f3;
+  border-color: var(--product-border-strong) !important;
 }
 
 .product-detail-card :deep(.ant-table-tbody > tr:nth-child(2n) > td) {
-  background: #fafafa;
+  background: var(--product-panel-muted);
 }
 
 .product-detail-card :deep(.ant-table-tbody > tr:hover > td) {
-  background: #fff9db !important;
+  background: var(--product-hover) !important;
 }
 
 .product-detail-card :deep(.ant-table-thead .ant-table-cell-fix-left) {
   z-index: 4;
-  background: #ffd200 !important;
+  background: var(--product-panel-muted) !important;
 }
 
 .product-detail-card :deep(.ant-table-tbody > tr > .ant-table-cell-fix-left) {
   z-index: 3;
-  background: #fff !important;
+  background: var(--product-panel) !important;
 }
 
 .product-detail-card
   :deep(.ant-table-tbody > tr:nth-child(2n) > .ant-table-cell-fix-left) {
-  background: #fafafa !important;
+  background: var(--product-panel-muted) !important;
 }
 
 .product-detail-card
   :deep(.ant-table-tbody > tr:hover > .ant-table-cell-fix-left) {
-  background: #fff9db !important;
+  background: var(--product-hover) !important;
 }
 
 .product-detail-card :deep(.ant-table-cell-fix-left-last::after) {
