@@ -73,7 +73,6 @@ export interface AnalyticsOverviewParams {
   siteDate?: string;
   sites?: string[];
   startDate?: string;
-  transactionStatuses?: string[];
 }
 
 export type SpuManagerParams = Partial<SpuManagerFilters>;

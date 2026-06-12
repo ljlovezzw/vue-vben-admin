@@ -71,7 +71,12 @@ type ReportDateRangeType =
   | 'year'
   | 'yesterday';
 type ReportSortOrder = 'ascend' | 'descend';
-type ReportFilterKey = 'countries' | 'productTypes' | 'responsibles' | 'spus';
+type ReportFilterKey =
+  | 'countries'
+  | 'operationGroupIds'
+  | 'productTypes'
+  | 'responsibles'
+  | 'spus';
 
 const defaultPinnedReportColumnKeys = [
   'imageUrl',
@@ -112,16 +117,24 @@ const pinnedReportColumnKeys = ref<string[]>([
 const reportColumnsInitialized = ref(false);
 const reportColumnConfigOpen = ref(false);
 const reportColumnDraft = ref<string[]>([]);
+const reportColumnWidths = reactive<Record<string, number>>({});
 const reportColumnSearch = ref('');
 const draggingReportColumnKey = ref('');
+const resizingReportColumn = ref<null | {
+  key: string;
+  startWidth: number;
+  startX: number;
+}>(null);
 const reportFilterDropdownOpen = reactive<Record<ReportFilterKey, boolean>>({
   countries: false,
+  operationGroupIds: false,
   productTypes: false,
   responsibles: false,
   spus: false,
 });
 const reportFilterDrafts = reactive<Record<ReportFilterKey, string[]>>({
   countries: [],
+  operationGroupIds: [],
   productTypes: [],
   responsibles: [],
   spus: [],
@@ -141,13 +154,13 @@ const query = reactive({
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   siteDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   sites: [] as string[],
-  transactionStatuses: ['已发放'] as string[],
 });
 const reportQuery = reactive({
   countries: [] as string[],
   dateRangeType: 'last30' as ReportDateRangeType,
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   page: 1,
+  operationGroupIds: [] as number[],
   pageSize: 50,
   productTypes: [] as string[],
   responsibles: [] as string[],
@@ -166,7 +179,10 @@ const targets = computed(() => overview.value?.targets);
 const period = computed(() => overview.value?.period);
 const source = computed(() => overview.value?.source);
 const sourceMessage = computed(() =>
-  (source.value?.message || '等待查询').replaceAll('profitstatement', '利润报表'),
+  (source.value?.message || '等待查询').replaceAll(
+    'profitstatement',
+    '利润报表',
+  ),
 );
 const granularityOptions = [
   { label: '日', value: 'day' },
@@ -268,12 +284,11 @@ const operationGroupOptions = computed(() =>
     value: item.id,
   })),
 );
-const transactionStatusOptions = computed(() =>
-  (
-    overview.value?.filters.transactionStatuses ?? ['已发放', '已发放含预算']
-  ).map((value) => ({
-    label: value,
-    value,
+const reportOperationGroupOptions = computed(() =>
+  (overview.value?.filters.operationGroups ?? []).map((item) => ({
+    group: item,
+    label: item.name,
+    value: String(item.id),
   })),
 );
 const reportDateRangeLabels: Record<string, string> = {
@@ -405,12 +420,7 @@ const reportColumnGroups = computed(() => {
     {
       key: 'profit',
       title: '利润退款',
-      columns: [
-        'orderProfit',
-        'settlementProfit',
-        'refundQty',
-        'refundRate',
-      ],
+      columns: ['orderProfit', 'settlementProfit', 'refundQty', 'refundRate'],
     },
   ];
   const known = new Set(groups.flatMap((group) => group.columns));
@@ -444,7 +454,7 @@ const reportColumnGroups = computed(() => {
 const selectedReportColumnDraftMetas = computed(() =>
   reportColumnDraft.value
     .map((key) => reportColumnMap.value.get(key))
-    .filter((column): column is AnalyticsReportColumn => Boolean(column)),
+    .filter(Boolean),
 );
 const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
   () => {
@@ -458,7 +468,7 @@ const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
         key: column.key,
         sorter: sortableReportFields.has(column.key),
         title: column.label,
-        width: reportColumnWidth(column.key),
+        width: reportColumnDisplayWidth(column.key),
       });
     }
     return columns;
@@ -601,11 +611,9 @@ async function loadData() {
       siteDate: query.siteDate,
       sites: query.sites,
       startDate: isMonthMode.value ? undefined : query.startDate,
-      transactionStatuses: query.transactionStatuses,
     });
     syncingDashboardQuery = true;
     query.departments = overview.value.query.departments;
-    query.transactionStatuses = overview.value.query.transactionStatuses;
     query.granularity = overview.value.query.granularity;
     query.siteDate = overview.value.query.siteDate;
     query.startDate = overview.value.query.startDate;
@@ -630,6 +638,7 @@ async function loadReportData() {
     reportQuery.startDate = data.query.startDate;
     reportQuery.endDate = data.query.endDate;
     reportQuery.page = data.pagination.page;
+    reportQuery.operationGroupIds = data.query.operationGroupIds ?? [];
     reportQuery.pageSize = data.pagination.pageSize;
     reportQuery.productTypes = data.query.productTypes;
     reportQuery.responsibles = data.query.responsibles;
@@ -672,10 +681,19 @@ function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
 }
 
 function reportFilterValues(key: ReportFilterKey) {
+  if (key === 'operationGroupIds') {
+    return reportQuery.operationGroupIds.map(String);
+  }
   return reportQuery[key];
 }
 
 function setReportFilterValues(key: ReportFilterKey, values: string[]) {
+  if (key === 'operationGroupIds') {
+    reportQuery.operationGroupIds = values
+      .map(Number)
+      .filter((value) => Number.isFinite(value));
+    return;
+  }
   reportQuery[key] = values;
 }
 
@@ -749,6 +767,14 @@ function applyReportFilter(key: ReportFilterKey) {
   void loadReportData();
 }
 
+function drillReportOperationGroup(group: AnalyticsOperationGroup) {
+  reportFilterDropdownOpen.operationGroupIds = false;
+  reportQuery.operationGroupIds = [group.id];
+  reportQuery.responsibles = [...group.memberNames];
+  reportQuery.page = 1;
+  void loadReportData();
+}
+
 function openReportColumnConfig() {
   reportColumnDraft.value = selectedReportColumns.value.filter((key) =>
     reportColumnMap.value.has(key),
@@ -816,7 +842,11 @@ function removeReportColumnDraft(key: string) {
 function moveReportColumnDraft(key: string, direction: -1 | 1) {
   const currentIndex = reportColumnDraft.value.indexOf(key);
   const nextIndex = currentIndex + direction;
-  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= reportColumnDraft.value.length) {
+  if (
+    currentIndex < 0 ||
+    nextIndex < 0 ||
+    nextIndex >= reportColumnDraft.value.length
+  ) {
     return;
   }
   const next = [...reportColumnDraft.value];
@@ -838,7 +868,7 @@ function handleReportColumnDrop(targetKey: string) {
   const next = [...reportColumnDraft.value];
   const sourceIndex = next.indexOf(sourceKey);
   const targetIndex = next.indexOf(targetKey);
-  if (sourceIndex < 0 || targetIndex < 0) return;
+  if (sourceIndex === -1 || targetIndex === -1) return;
   const [item] = next.splice(sourceIndex, 1);
   if (item) {
     next.splice(targetIndex, 0, item);
@@ -870,6 +900,7 @@ function applyReportColumnConfig() {
   reportColumnConfigOpen.value = false;
 }
 
+
 function resetFilters() {
   query.departments = [];
   query.granularity = 'day';
@@ -879,12 +910,12 @@ function resetFilters() {
   query.endDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   query.siteDate = query.endDate;
   query.sites = [];
-  query.transactionStatuses = ['已发放'];
   reportQuery.countries = [];
   reportQuery.dateRangeType = 'last30';
   reportQuery.startDate = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
   reportQuery.endDate = query.endDate;
   reportQuery.page = 1;
+  reportQuery.operationGroupIds = [];
   reportQuery.pageSize = 50;
   reportQuery.productTypes = [];
   reportQuery.responsibles = [];
@@ -979,7 +1010,7 @@ function formatSignedInteger(value?: null | number) {
 }
 
 function formatMoney(value?: null | number, fractionDigits = 0) {
-  return `¥${Number(value || 0).toLocaleString('zh-CN', {
+  return `$${Number(value || 0).toLocaleString('zh-CN', {
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
   })}`;
@@ -989,7 +1020,7 @@ function formatSignedMoney(value?: null | number, fractionDigits = 0) {
   if (value === null || value === undefined) {
     return '-';
   }
-  const absolute = `¥${Math.abs(Number(value || 0)).toLocaleString('zh-CN', {
+  const absolute = `$${Math.abs(Number(value || 0)).toLocaleString('zh-CN', {
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: fractionDigits,
   })}`;
@@ -1112,7 +1143,8 @@ function reportColumnAlign(
 
 function reportColumnKey(column: unknown) {
   if (!column || typeof column !== 'object') return '';
-  const value = (column as { dataIndex?: unknown }).dataIndex;
+  const record = column as { dataIndex?: unknown; key?: unknown };
+  const value = record.dataIndex ?? record.key;
   return String(value ?? '');
 }
 
@@ -1122,7 +1154,7 @@ function isReportNumberColumn(column: unknown) {
   return reportColumnAlign(kind) === 'right';
 }
 
-function reportColumnWidth(key: string) {
+function reportColumnDefaultWidth(key: string) {
   const widthMap: Record<string, number> = {
     asinList: 170,
     category1: 116,
@@ -1137,6 +1169,59 @@ function reportColumnWidth(key: string) {
     spu: 108,
   };
   return widthMap[key] ?? 104;
+}
+
+function normalizeReportColumnWidth(value: number | string | undefined) {
+  const width = Number(value || 0);
+  if (!Number.isFinite(width) || width <= 0) return 104;
+  return Math.min(Math.max(Math.round(width), 56), 360);
+}
+
+function reportColumnDisplayWidth(key: string) {
+  return normalizeReportColumnWidth(
+    reportColumnWidths[key] ?? reportColumnDefaultWidth(key),
+  );
+}
+
+function startReportColumnResize(key: string, event: MouseEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  resizingReportColumn.value = {
+    key,
+    startWidth: reportColumnDisplayWidth(key),
+    startX: event.clientX,
+  };
+  document.body.classList.add('report-column-resizing');
+  window.addEventListener('mousemove', handleReportColumnResizeMove);
+  window.addEventListener('mouseup', stopReportColumnResize);
+}
+
+function handleReportColumnResizeMove(event: MouseEvent) {
+  const state = resizingReportColumn.value;
+  if (!state) return;
+  reportColumnWidths[state.key] = normalizeReportColumnWidth(
+    state.startWidth + event.clientX - state.startX,
+  );
+}
+
+function stopReportColumnResize() {
+  resizingReportColumn.value = null;
+  document.body.classList.remove('report-column-resizing');
+  window.removeEventListener('mousemove', handleReportColumnResizeMove);
+  window.removeEventListener('mouseup', stopReportColumnResize);
+}
+
+function reportOperationGroupIdsForRequest() {
+  if (
+    query.operationGroupIds.length > 0 &&
+    reportQuery.operationGroupIds.length > 0
+  ) {
+    const base = new Set(query.operationGroupIds);
+    return reportQuery.operationGroupIds.filter((item) => base.has(item));
+  }
+  return reportQuery.operationGroupIds.length > 0
+    ? reportQuery.operationGroupIds
+    : query.operationGroupIds;
 }
 
 function reportResponsiblesForRequest() {
@@ -1155,7 +1240,7 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     dateRangeType: reportQuery.dateRangeType,
     departments: query.departments,
     endDate: reportQuery.endDate,
-    operationGroupIds: query.operationGroupIds,
+    operationGroupIds: reportOperationGroupIdsForRequest(),
     page: reportQuery.page,
     pageSize: reportQuery.pageSize,
     productTypes: reportQuery.productTypes,
@@ -1316,6 +1401,7 @@ function bindReportBodyScroll() {
   const root = reportSummaryScroll.value?.closest('.report-panel');
   const nextBody = root?.querySelector('.ant-table-body') as HTMLElement | null;
   if (reportBodyScrollElement === nextBody) return;
+  stopReportColumnResize();
   if (reportBodyScrollElement) {
     reportBodyScrollElement.removeEventListener(
       'scroll',
@@ -1422,7 +1508,6 @@ watch(
     query.operationGroupIds.join('|'),
     query.responsibles.join('|'),
     query.sites.join('|'),
-    query.transactionStatuses.join('|'),
   ],
   () => scheduleDashboardReload({ reloadReport: true }),
 );
@@ -1443,6 +1528,7 @@ onBeforeUnmount(() => {
   if (dashboardAutoReloadTimer) {
     clearTimeout(dashboardAutoReloadTimer);
   }
+  stopReportColumnResize();
   if (reportBodyScrollElement) {
     reportBodyScrollElement.removeEventListener(
       'scroll',
@@ -1491,16 +1577,6 @@ onBeforeUnmount(() => {
           placeholder="全部"
           size="small"
           style="min-width: 110px"
-        />
-        <label>交易状态</label>
-        <Select
-          v-model:value="query.transactionStatuses"
-          :options="transactionStatusOptions"
-          allow-clear
-          mode="multiple"
-          placeholder="已发放"
-          size="small"
-          style="min-width: 150px"
         />
         <label>部门</label>
         <Select
@@ -2038,7 +2114,10 @@ onBeforeUnmount(() => {
                     </Checkbox>
                   </div>
                   <div class="report-filter-footer">
-                    <Button size="small" @click="cancelReportFilter('countries')">
+                    <Button
+                      size="small"
+                      @click="cancelReportFilter('countries')"
+                    >
                       取消
                     </Button>
                     <Button
@@ -2070,7 +2149,10 @@ onBeforeUnmount(() => {
                 }}
               </Button>
               <template #overlay>
-                <div class="report-filter-menu report-filter-menu-compact" @click.stop>
+                <div
+                  class="report-filter-menu report-filter-menu-compact"
+                  @click.stop
+                >
                   <Checkbox
                     :checked="
                       isReportFilterDraftAllSelected(
@@ -2093,10 +2175,7 @@ onBeforeUnmount(() => {
                       v-for="option in reportProductTypeOptions"
                       :key="option.value"
                       :checked="
-                        isReportFilterDraftChecked(
-                          'productTypes',
-                          option.value,
-                        )
+                        isReportFilterDraftChecked('productTypes', option.value)
                       "
                       @change="
                         () =>
@@ -2127,6 +2206,101 @@ onBeforeUnmount(() => {
                 </div>
               </template>
             </Dropdown>
+            <label>运营组</label>
+            <Dropdown
+              v-model:open="reportFilterDropdownOpen.operationGroupIds"
+              :trigger="['click']"
+              @open-change="
+                (open) => handleReportFilterOpenChange('operationGroupIds', open)
+              "
+            >
+              <Button
+                class="report-filter-trigger report-filter-trigger-wide"
+                size="small"
+              >
+                {{
+                  reportFilterButtonText(
+                    'operationGroupIds',
+                    '继承主筛选',
+                    reportOperationGroupOptions,
+                  )
+                }}
+              </Button>
+              <template #overlay>
+                <div
+                  class="report-filter-menu report-filter-menu-wide"
+                  @click.stop
+                >
+                  <Checkbox
+                    :checked="
+                      isReportFilterDraftAllSelected(
+                        'operationGroupIds',
+                        reportOperationGroupOptions,
+                      )
+                    "
+                    @change="
+                      () =>
+                        toggleReportFilterDraftAll(
+                          'operationGroupIds',
+                          reportOperationGroupOptions,
+                        )
+                    "
+                  >
+                    全选
+                  </Checkbox>
+                  <div class="report-filter-scroll">
+                    <div
+                      v-for="option in reportOperationGroupOptions"
+                      :key="option.value"
+                      class="report-group-option"
+                    >
+                      <Checkbox
+                        :checked="
+                          isReportFilterDraftChecked(
+                            'operationGroupIds',
+                            option.value,
+                          )
+                        "
+                        @change="
+                          () =>
+                            toggleReportFilterDraftValue(
+                              'operationGroupIds',
+                              option.value,
+                            )
+                        "
+                      >
+                        <span class="report-group-name">{{ option.label }}</span>
+                        <span class="report-group-count">
+                          {{ option.group.memberNames.length }}人
+                        </span>
+                      </Checkbox>
+                      <Button
+                        size="small"
+                        type="link"
+                        @click.stop="drillReportOperationGroup(option.group)"
+                      >
+                        下钻
+                      </Button>
+                    </div>
+                  </div>
+                  <div class="report-filter-footer">
+                    <Button
+                      size="small"
+                      @click="cancelReportFilter('operationGroupIds')"
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      size="small"
+                      type="primary"
+                      @click="applyReportFilter('operationGroupIds')"
+                    >
+                      确定
+                    </Button>
+                  </div>
+                </div>
+              </template>
+            </Dropdown>
             <label>SPU</label>
             <Dropdown
               v-model:open="reportFilterDropdownOpen.spus"
@@ -2135,11 +2309,17 @@ onBeforeUnmount(() => {
                 (open) => handleReportFilterOpenChange('spus', open)
               "
             >
-              <Button class="report-filter-trigger report-filter-trigger-wide" size="small">
+              <Button
+                class="report-filter-trigger report-filter-trigger-wide"
+                size="small"
+              >
                 {{ reportFilterButtonText('spus', '全部', reportSpuOptions) }}
               </Button>
               <template #overlay>
-                <div class="report-filter-menu report-filter-menu-wide" @click.stop>
+                <div
+                  class="report-filter-menu report-filter-menu-wide"
+                  @click.stop
+                >
                   <Checkbox
                     :checked="
                       isReportFilterDraftAllSelected('spus', reportSpuOptions)
@@ -2154,10 +2334,11 @@ onBeforeUnmount(() => {
                     <Checkbox
                       v-for="option in reportSpuOptions"
                       :key="option.value"
-                      :checked="isReportFilterDraftChecked('spus', option.value)"
+                      :checked="
+                        isReportFilterDraftChecked('spus', option.value)
+                      "
                       @change="
-                        () =>
-                          toggleReportFilterDraftValue('spus', option.value)
+                        () => toggleReportFilterDraftValue('spus', option.value)
                       "
                     >
                       {{ option.label }}
@@ -2186,7 +2367,10 @@ onBeforeUnmount(() => {
                 (open) => handleReportFilterOpenChange('responsibles', open)
               "
             >
-              <Button class="report-filter-trigger report-filter-trigger-wide" size="small">
+              <Button
+                class="report-filter-trigger report-filter-trigger-wide"
+                size="small"
+              >
                 {{
                   reportFilterButtonText(
                     'responsibles',
@@ -2196,7 +2380,10 @@ onBeforeUnmount(() => {
                 }}
               </Button>
               <template #overlay>
-                <div class="report-filter-menu report-filter-menu-wide" @click.stop>
+                <div
+                  class="report-filter-menu report-filter-menu-wide"
+                  @click.stop
+                >
                   <Checkbox
                     :checked="
                       isReportFilterDraftAllSelected(
@@ -2219,10 +2406,7 @@ onBeforeUnmount(() => {
                       v-for="option in reportResponsibleOptions"
                       :key="option.value"
                       :checked="
-                        isReportFilterDraftChecked(
-                          'responsibles',
-                          option.value,
-                        )
+                        isReportFilterDraftChecked('responsibles', option.value)
                       "
                       @change="
                         () =>
@@ -2278,6 +2462,20 @@ onBeforeUnmount(() => {
           size="small"
           @change="handleReportTableChange"
         >
+          <template #headerCell="{ column }">
+            <div class="report-resizable-header">
+              <span>{{ column.title }}</span>
+              <button
+                aria-label="Resize column"
+                class="report-column-resize-handle"
+                type="button"
+                @click.stop
+                @mousedown="
+                  (event) => startReportColumnResize(reportColumnKey(column), event)
+                "
+              ></button>
+            </div>
+          </template>
           <template #bodyCell="{ column, record, text }">
             <template v-if="column.dataIndex === 'imageUrl'">
               <img
@@ -2333,7 +2531,7 @@ onBeforeUnmount(() => {
                   v-for="(column, index) in selectedReportColumnMetas"
                   :key="column.key"
                   :class="reportSummaryCellClass(column, index)"
-                  :style="{ width: `${reportColumnWidth(column.key)}px` }"
+                  :style="{ width: `${reportColumnDisplayWidth(column.key)}px` }"
                   :title="reportSummaryValue(column.key, index)"
                 >
                   {{ reportSummaryValue(column.key, index) }}
@@ -2369,7 +2567,10 @@ onBeforeUnmount(() => {
               >
                 <header>
                   <span>{{ group.title }}</span>
-                  <button type="button" @click="toggleReportColumnGroup(group.columns)">
+                  <button
+                    type="button"
+                    @click="toggleReportColumnGroup(group.columns)"
+                  >
                     {{
                       isReportColumnGroupAllSelected(group.columns)
                         ? '取消全选'
@@ -2533,7 +2734,7 @@ onBeforeUnmount(() => {
 }
 
 .top-board {
-  grid-template-columns: 242px minmax(530px, 1fr) 490px;
+  grid-template-columns: 226px minmax(520px, 1fr) 380px;
 }
 
 .gauge-column,
@@ -2583,12 +2784,12 @@ h2 {
 }
 
 .gauge-panel {
-  min-height: 241px;
+  min-height: 210px;
 }
 
 .gauge-visual {
   position: relative;
-  height: 181px;
+  height: 150px;
 }
 
 .gauge-chart {
@@ -2615,7 +2816,7 @@ h2 {
 .gauge-center strong {
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 850;
   line-height: 1.1;
   color: var(--analytics-strong);
@@ -2629,7 +2830,7 @@ h2 {
 }
 
 .gauge-panel p {
-  margin: -5px 0 0;
+  margin: 0;
   text-align: center;
 }
 
@@ -2644,8 +2845,8 @@ h2 {
 
 .hero-card {
   position: relative;
-  min-height: 126px;
-  padding: 17px 20px;
+  min-height: 112px;
+  padding: 14px 16px;
   overflow: hidden;
 }
 
@@ -2668,8 +2869,8 @@ h2 {
 
 .hero-card strong {
   display: block;
-  margin: 7px 0 4px;
-  font-size: 38px;
+  margin: 5px 0 3px;
+  font-size: 32px;
   color: #fff;
   letter-spacing: 1px;
 }
@@ -2689,7 +2890,7 @@ h2 {
 .comparison-card {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: 140px;
+  min-height: 118px;
   overflow: hidden;
 }
 
@@ -2698,7 +2899,7 @@ h2 {
 }
 
 .comparison-card div {
-  padding: 13px 15px;
+  padding: 10px 12px;
 }
 
 .comparison-card div:nth-child(odd) {
@@ -2732,8 +2933,8 @@ h2 {
 }
 
 .comparison-card strong {
-  margin-top: 5px;
-  font-size: 17px;
+  margin-top: 4px;
+  font-size: 15px;
 }
 
 .comparison-card small {
@@ -2778,18 +2979,19 @@ h2 {
 
 .group-placeholder {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 9px;
+  margin-top: 7px;
 }
 
 .group-scroll {
-  max-height: 180px;
+  max-height: 132px;
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
 .group-placeholder div {
-  padding: 10px;
+  min-height: 58px;
+  padding: 8px;
   background: var(--analytics-panel-muted);
   border-left: 4px solid var(--analytics-border-strong);
 }
@@ -2801,8 +3003,8 @@ h2 {
 }
 
 .group-placeholder strong {
-  margin: 5px 0;
-  font-size: 22px;
+  margin: 3px 0;
+  font-size: 20px;
   color: var(--analytics-muted);
 }
 
@@ -2811,16 +3013,16 @@ h2 {
 }
 
 .responsible-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  max-height: 490px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: 300px;
   padding-right: 4px;
-  margin-top: 8px;
+  margin-top: 7px;
   overflow-y: auto;
 }
 
 .responsible-grid article {
-  min-height: 158px;
-  padding: 9px;
+  min-height: 0;
+  padding: 8px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);
 }
@@ -2830,14 +3032,15 @@ h2 {
   gap: 5px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 7px;
+  margin-bottom: 5px;
 }
 
 .responsible-grid p {
   display: flex;
   justify-content: space-between;
-  margin: 4px 0;
+  margin: 2px 0;
   font-size: 10px;
+  line-height: 1.25;
   color: var(--analytics-subtle);
 }
 
@@ -2898,10 +3101,17 @@ h2 {
   width: 238px;
   padding-top: 8px;
   overflow: hidden;
-  background: var(--analytics-panel);
+  position: relative;
+  z-index: 1100;
+  background: var(--analytics-panel, #fff);
   border: 1px solid var(--analytics-border);
   border-radius: 4px;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+  opacity: 1;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 24%);
+}
+
+:global(.dark) .report-filter-menu {
+  background: #0f172a;
 }
 
 .report-filter-menu-compact {
@@ -2935,6 +3145,38 @@ h2 {
 
 .report-filter-scroll .ant-checkbox-wrapper:hover {
   background: var(--analytics-panel-muted);
+}
+
+.report-group-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 30px;
+  padding-right: 6px;
+}
+
+.report-group-option:hover {
+  background: var(--analytics-panel-muted);
+}
+
+.report-group-option .ant-checkbox-wrapper {
+  min-width: 0;
+}
+
+.report-group-name {
+  display: inline-block;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.report-group-count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--analytics-muted);
 }
 
 .report-filter-footer {
@@ -3079,6 +3321,7 @@ h2 {
   gap: 6px;
 }
 
+
 .report-column-selected button:disabled {
   color: var(--analytics-muted);
   cursor: not-allowed;
@@ -3122,6 +3365,52 @@ h2 {
   font-weight: 700;
   color: var(--analytics-heading);
   background: var(--analytics-panel-muted);
+}
+
+.report-resizable-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  padding-right: 8px;
+}
+
+.report-resizable-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-column-resize-handle {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  bottom: -8px;
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+}
+
+.report-column-resize-handle::after {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  bottom: 8px;
+  width: 2px;
+  content: '';
+  background: transparent;
+}
+
+.report-column-resize-handle:hover::after {
+  background: #2563eb;
+}
+
+:global(.report-column-resizing) {
+  cursor: col-resize !important;
+  user-select: none;
 }
 
 .report-table :deep(.ant-table-tbody > tr > td) {
@@ -3222,7 +3511,7 @@ h2 {
 
 @media (width <= 1420px) {
   .top-board {
-    grid-template-columns: 220px minmax(480px, 1fr) 430px;
+    grid-template-columns: 210px minmax(480px, 1fr) 360px;
   }
 
   .responsible-grid {

@@ -212,9 +212,14 @@ Authorization: Bearer <accessToken>
 
 分析页主筛选的负责人选项来自后端 `product_life.运营负责人`，不再依赖利润表或目标表。公司经营驾驶舱仍全员可见、全量数据口径；负责人、部门、运营组只是用户主动筛选条件。
 
-商品维度明细报表独立维护自己的查询状态，不跟随上方日期范围自动刷新。明细报表支持国家、新品/老品、SPU、负责人、展示列、固定列和分页/排序筛选；SPU 选项来自后端 `filters.spus`，请求参数为 `spus[]`。国家、新品/老品、SPU、负责人使用 Dropdown + Checkbox 的确认式筛选，不直接用普通多选 Select，避免大选项列表频繁触发表格请求。
+商品维度明细报表独立维护自己的查询状态，不跟随上方日期范围自动刷新。明细报表支持国家、新品/老品、运营组、SPU、负责人、展示列、固定列和分页/排序筛选；SPU 选项来自后端 `filters.spus`，请求参数为 `spus[]`。运营组使用总览接口返回的 `filters.operationGroups`，并支持点击运营组右侧“下钻”把报表负责人筛选切换为该组成员。国家、新品/老品、运营组、SPU、负责人使用 Dropdown + Checkbox 的确认式筛选，不直接用普通多选 Select，避免大选项列表频繁触发表格请求。筛选浮层必须使用实体背景和足够层级，避免透明叠字。
 
 明细报表时间快捷项切换时，前端必须同步更新 `startDate/endDate` 后再请求后端，避免 `dateRangeType` 与显式日期不一致。当前规则：今日=今天，昨日=昨天，最近 7/30 天以昨天为结束日，本月为本月 1 日到昨天，上月为完整上月，今年为今年 1 月 1 日到昨天；自定义日期范围由日期选择器控制。报表标题展示快捷项中文名和实际日期范围。
+
+Ant Design Select dropdown uses global `.ant-select-dropdown` solid background rules in `src\app.vue`; do not add repeated local opacity patches for Select popups.
+Analytics top summary layout is compact: KPI gauges, comparison cards, operation-group cards, and responsible cards use constrained heights so the product detail report stays close to the first screen without large blank gaps.
+Analytics report columns support xlsx-like header drag resizing; widths are applied to table columns and the fixed summary row together. Do not put width inputs inside the column config modal.
+Custom Dropdown + Checkbox menus must use solid `background: var(..., #fff)` plus dark-mode overrides; avoid `color-mix(...)` for popup backgrounds because unsupported browsers may drop the background and make table text show through.
 
 ## 5. API 开发流程
 
@@ -237,8 +242,8 @@ apps\web-antd\src\api\kanban\types.ts
 
 | 前端函数 | 后端路由 |
 | --- | --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`transactionStatuses` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存 |
-| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、SPU、负责人、分页、排序和列配置所需元数据 |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存；分析页不再展示或发送交易状态筛选 |
+| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
@@ -271,31 +276,30 @@ src\views\dashboard\analytics\index.vue
 - 日维度展示所选日期范围、前一同长度周期、上周同期；月维度展示所选月份、上月、去年同期。
 - 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
-- 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、新品/老品、SPU、负责人、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。
+- 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。运营组筛选继承顶部全局范围；点击运营组下钻会把报表负责人切到该组成员。
 
 当前口径：
 
 - 纯历史日期来自数据库 `productexpressionnew`；包含今天或昨天的日维度区间会混合 `productexpressionnew_live_cache` 和 `productexpressionnew`。页面不再把利润表作为分析页主数据源。
 - 页面首次进入和重置时，日维度默认选择北京时间当前日期减 1 到当前日期减 1 的单日范围。
 - 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
-- 分析页顶部主筛选不保留“查询”按钮；修改维度、时间或交易状态只防抖刷新上方总览，不触发底部商品维度明细报表。修改站点、部门、运营组或负责人属于全局范围变化，会同时刷新总览和底部报表。
-- 顶部主筛选的站点、部门、运营组、负责人会作为底部报表的全局范围；报表自身负责人筛选与主负责人筛选取交集，避免扩大数据范围。
+- 顶部主筛选的站点、部门、运营组、负责人会作为底部报表的全局范围；报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。
 - 底部报表的时间范围独立于主卡片日期，快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。报表请求的 `siteDate` 跟随报表自身 `endDate`，不要使用顶部主日期兜底。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，当前包含“泛欧”和非泛欧业务国家；欧洲国家在后端归并到“泛欧”。
 - 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。
 - 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
-- 顶部“交易状态”默认选择“已发放”，可切换“已发放含预算”。该控件目前主要保留为接口兼容和利润表诊断口径；分析页主数据源已经切到产品表现，经营指标不再按利润表交易状态过滤。
+- 顶部不再展示“交易状态”筛选；分析页主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端参数仅作为旧接口兼容和利润表诊断脚本口径保留。
 - 日维度日期范围如果包含今天或昨天，后端会优先用 `productexpressionnew_live_cache` 覆盖这些近实时日期，再与其余历史日期的 `productexpressionnew` 数据合并；只有纯历史日期才完全读取 `productexpressionnew`。
 - 月维度固定使用 `productexpressionnew` 聚合，不触发实时产品表现缓存；当前月默认截止北京时间当前日期减 1。
 - 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
 - 产品表现实时缓存由后端定时任务每 5 分钟刷新今天和昨天两天，按 USD 拉取；前端不直接触发领星全量 API。接口 `source.message` 会显示缓存大约多久前刷新，页面展示金额统一按美元格式。
-- 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_cny` 折算出的 `dailyTargetSales`。
+- 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_original_currency` 的 USD 目标折算出的 `dailyTargetSales`；旧行缺失 USD 字段时后端才使用 CNY 目标兜底换算。
 - 日维度目标为所选日期范围内逐日目标累加后的区间目标；月维度目标为当月目标总额。由于接口兼容原因，仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案按维度显示为“区间目标”或“月目标”。
-- 销售额、销售额目标、销售额差值和推广占比中的总销售额展示美元金额；月维度展示 2 位小数，日维度保留紧凑金额展示。
+- 销售额、销售额目标、销售额差值和推广占比中的总销售额展示美元金额；历史 `productexpressionnew` 的原币种金额由后端统一折算为 USD，实时缓存本身已经是 USD。月维度展示 2 位小数，日维度保留紧凑金额展示。
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片按维度切换文案：日维度为前一周期/上周同期，月维度为上月/去年同期，并展示绝对差值和百分比差异。
 - 右侧推广占比、周转周期和对比卡片展示 `period.startDate/endDate/days` 对应的时间段信息；日维度区间模式下必须显示当前区间、前一同长度周期和上周同期区间，不能只展示单日语义。
-- 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；部门、运营组、负责人多选由后端按交集过滤，前端不要本地扩展成员范围。
+- 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；运营组筛选选项来自后端 `filters.operationGroups`，并会随部门选择收窄，部门、运营组、负责人多选由后端按交集过滤，前端不要本地扩展成员范围。
 - 运营组完成率使用全量负责人行汇总；销量完成率和销售额完成率两个运营组列表均限制为两行卡片高度，超出后列表内部纵向滚动，且两个列表的滚动位置必须同步。负责人明细区域全量展示负责人卡片，并优先排列实时销量大于 0 的运营，不能反向影响运营组汇总口径。
 - 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径，标题显示总展示人数和其中有销量人数。
 - 负责人维度卡片区保留三行卡片高度，桌面端默认每行 3 个卡片，超出后在卡片区内部纵向滚动，避免挤压底部商品维度明细报表。

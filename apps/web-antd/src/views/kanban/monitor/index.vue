@@ -238,7 +238,7 @@ const productVisibleColumns = computed(() => {
 const selectedProductColumnDraftMetas = computed(() =>
   productColumnDraft.value
     .map((key) => productColumnMap.value.get(key))
-    .filter((column): column is KanbanProductDetailColumn => Boolean(column)),
+    .filter(Boolean),
 );
 const productColumnGroups = computed(() => {
   const groups: Array<{
@@ -590,8 +590,9 @@ async function loadProductDetailData() {
     selectedProductColumns.value = selectedProductColumns.value.filter((key) =>
       availableKeys.has(key),
     );
-    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter((key) =>
-      availableKeys.has(key) && selectedProductColumns.value.includes(key),
+    pinnedProductColumnKeys.value = pinnedProductColumnKeys.value.filter(
+      (key) =>
+        availableKeys.has(key) && selectedProductColumns.value.includes(key),
     );
   } finally {
     productDetailLoading.value = false;
@@ -700,9 +701,7 @@ function toggleProductColumnDraft(key: string) {
   productColumnDraft.value = [...productColumnDraft.value, key];
 }
 
-function isProductColumnGroupAllSelected(
-  columns: KanbanProductDetailColumn[],
-) {
+function isProductColumnGroupAllSelected(columns: KanbanProductDetailColumn[]) {
   return (
     columns.length > 0 &&
     columns.every((column) => productColumnDraft.value.includes(column.key))
@@ -765,7 +764,7 @@ function handleProductColumnDrop(targetKey: string) {
   const next = [...productColumnDraft.value];
   const sourceIndex = next.indexOf(sourceKey);
   const targetIndex = next.indexOf(targetKey);
-  if (sourceIndex < 0 || targetIndex < 0) return;
+  if (sourceIndex === -1 || targetIndex === -1) return;
   const [item] = next.splice(sourceIndex, 1);
   if (item) {
     next.splice(targetIndex, 0, item);
@@ -1355,9 +1354,7 @@ onMounted(applyFilters);
                           v-for="column in group.columns"
                           :key="column.key"
                           :checked="isProductColumnDraftChecked(column.key)"
-                          @change="
-                            () => toggleProductColumnDraft(column.key)
-                          "
+                          @change="() => toggleProductColumnDraft(column.key)"
                         >
                           {{ column.label }}
                         </Checkbox>
@@ -2450,13 +2447,20 @@ onMounted(applyFilters);
 }
 
 .product-filter-menu {
+  position: relative;
+  z-index: 1100;
   width: 238px;
   padding-top: 8px;
   overflow: hidden;
   background: var(--product-panel, #fff);
   border: 1px solid var(--product-border, #e2e8f0);
   border-radius: 4px;
-  box-shadow: 0 8px 24px rgb(15 23 42 / 18%);
+  opacity: 1;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 24%);
+}
+
+:global(.dark) .product-filter-menu {
+  background: #0f172a;
 }
 
 .product-filter-menu > .ant-checkbox-wrapper {
