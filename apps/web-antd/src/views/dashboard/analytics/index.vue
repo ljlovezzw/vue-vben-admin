@@ -1,4 +1,4 @@
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
@@ -451,10 +451,10 @@ const reportColumnGroups = computed(() => {
     }))
     .filter((group) => group.columns.length > 0);
 });
-const selectedReportColumnDraftMetas = computed(() =>
+const selectedReportColumnDraftMetas = computed<AnalyticsReportColumn[]>(() =>
   reportColumnDraft.value
     .map((key) => reportColumnMap.value.get(key))
-    .filter(Boolean),
+    .filter((column): column is AnalyticsReportColumn => Boolean(column)),
 );
 const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
   () => {
@@ -547,7 +547,7 @@ const groupCards = computed(() =>
 );
 
 function gaugeOption(rate: null | number, color: string) {
-  const percentage = rate === null ? 0 : Math.min(Math.max(rate * 100, 0), 200);
+  const percentage = rate === null ? 0 : Math.min(Math.max(rate * 100, 0), 100);
   const axisTextColor = isDark.value ? '#94a3b8' : '#94a3b8';
   const pointerColor = isDark.value ? '#e5e7eb' : '#111827';
   const trackColor = isDark.value ? '#1e293b' : '#eef2f7';
@@ -567,7 +567,7 @@ function gaugeOption(rate: null | number, color: string) {
         axisLine: {
           lineStyle: {
             color: [
-              [Math.min(percentage / 200, 1), color],
+              [Math.min(percentage / 100, 1), color],
               [1, trackColor],
             ],
             width: 10,
@@ -579,7 +579,7 @@ function gaugeOption(rate: null | number, color: string) {
         },
         data: [{ value: percentage }],
         endAngle: -40,
-        max: 200,
+        max: 100,
         min: 0,
         pointer: {
           icon: 'path://M2 0 L-2 0 L-1 58 L1 58 Z',
@@ -899,7 +899,6 @@ function applyReportColumnConfig() {
   );
   reportColumnConfigOpen.value = false;
 }
-
 
 function resetFilters() {
   query.departments = [];
@@ -2211,7 +2210,8 @@ onBeforeUnmount(() => {
               v-model:open="reportFilterDropdownOpen.operationGroupIds"
               :trigger="['click']"
               @open-change="
-                (open) => handleReportFilterOpenChange('operationGroupIds', open)
+                (open) =>
+                  handleReportFilterOpenChange('operationGroupIds', open)
               "
             >
               <Button
@@ -2269,7 +2269,9 @@ onBeforeUnmount(() => {
                             )
                         "
                       >
-                        <span class="report-group-name">{{ option.label }}</span>
+                        <span class="report-group-name">{{
+                          option.label
+                        }}</span>
                         <span class="report-group-count">
                           {{ option.group.memberNames.length }}人
                         </span>
@@ -2471,7 +2473,8 @@ onBeforeUnmount(() => {
                 type="button"
                 @click.stop
                 @mousedown="
-                  (event) => startReportColumnResize(reportColumnKey(column), event)
+                  (event) =>
+                    startReportColumnResize(reportColumnKey(column), event)
                 "
               ></button>
             </div>
@@ -2531,7 +2534,9 @@ onBeforeUnmount(() => {
                   v-for="(column, index) in selectedReportColumnMetas"
                   :key="column.key"
                   :class="reportSummaryCellClass(column, index)"
-                  :style="{ width: `${reportColumnDisplayWidth(column.key)}px` }"
+                  :style="{
+                    width: `${reportColumnDisplayWidth(column.key)}px`,
+                  }"
                   :title="reportSummaryValue(column.key, index)"
                 >
                   {{ reportSummaryValue(column.key, index) }}
@@ -2734,16 +2739,52 @@ onBeforeUnmount(() => {
 }
 
 .top-board {
-  grid-template-columns: 226px minmax(520px, 1fr) 380px;
+  grid-template-columns: 226px minmax(390px, 0.56fr) minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(252px, auto) repeat(2, minmax(158px, 1fr));
+  align-items: stretch;
 }
 
 .gauge-column,
-.sales-column,
-.tracking-column,
 .metric-stack {
   display: grid;
   gap: 8px;
-  align-content: start;
+  align-content: stretch;
+}
+
+.gauge-column {
+  grid-row: 1 / 4;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  height: 100%;
+}
+
+.sales-column,
+.tracking-column {
+  display: contents;
+}
+
+.sales-column > .yellow-grid {
+  grid-column: 2 / 4;
+  grid-row: 1;
+}
+
+.tracking-column > .blue-grid {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+.sales-column > .group-panel:nth-of-type(2) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.sales-column > .group-panel:nth-of-type(3) {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.tracking-column > .responsible-panel {
+  grid-column: 3 / 5;
+  grid-row: 2 / 4;
 }
 
 .white-panel,
@@ -2784,7 +2825,9 @@ h2 {
 }
 
 .gauge-panel {
-  min-height: 210px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
 }
 
 .gauge-visual {
@@ -2840,7 +2883,15 @@ h2 {
 
 .yellow-grid,
 .blue-grid {
+  align-self: stretch;
+  height: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.yellow-grid > .metric-stack,
+.blue-grid > .metric-stack {
+  min-height: 0;
+  grid-template-rows: minmax(112px, 1fr) minmax(118px, auto);
 }
 
 .hero-card {
@@ -2982,11 +3033,19 @@ h2 {
   margin-top: 7px;
 }
 
+.sales-column > .group-panel .group-placeholder {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .group-scroll {
   max-height: 132px;
   padding-right: 4px;
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.sales-column > .group-panel .group-scroll {
+  max-height: 88px;
 }
 
 .group-placeholder div {
@@ -3013,8 +3072,8 @@ h2 {
 }
 
 .responsible-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: 300px;
+  grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
+  max-height: 284px;
   padding-right: 4px;
   margin-top: 7px;
   overflow-y: auto;
@@ -3098,16 +3157,16 @@ h2 {
 }
 
 .report-filter-menu {
+  position: relative;
+  z-index: 1100;
   width: 238px;
   padding-top: 8px;
   overflow: hidden;
-  position: relative;
-  z-index: 1100;
   background: var(--analytics-panel, #fff);
   border: 1px solid var(--analytics-border);
   border-radius: 4px;
-  opacity: 1;
   box-shadow: 0 12px 30px rgb(15 23 42 / 24%);
+  opacity: 1;
 }
 
 :global(.dark) .report-filter-menu {
@@ -3321,7 +3380,6 @@ h2 {
   gap: 6px;
 }
 
-
 .report-column-selected button:disabled {
   color: var(--analytics-muted);
   cursor: not-allowed;
@@ -3511,11 +3569,11 @@ h2 {
 
 @media (width <= 1420px) {
   .top-board {
-    grid-template-columns: 210px minmax(480px, 1fr) 360px;
+    grid-template-columns: 210px minmax(330px, 0.58fr) minmax(0, 1fr) 320px;
   }
 
   .responsible-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   }
 }
 
@@ -3524,8 +3582,27 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .gauge-column,
+  .sales-column,
+  .tracking-column {
+    display: grid;
+    gap: 8px;
+    grid-column: auto;
+    grid-row: auto;
+  }
+
   .gauge-column {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto;
+  }
+
+  .sales-column > .yellow-grid,
+  .tracking-column > .blue-grid,
+  .sales-column > .group-panel:nth-of-type(2),
+  .sales-column > .group-panel:nth-of-type(3),
+  .tracking-column > .responsible-panel {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .screen-toolbar {
@@ -3543,3 +3620,5 @@ h2 {
   }
 }
 </style>
+
+

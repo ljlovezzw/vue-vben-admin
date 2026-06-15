@@ -235,10 +235,13 @@ const productVisibleColumns = computed(() => {
   }
   return columns;
 });
-const selectedProductColumnDraftMetas = computed(() =>
-  productColumnDraft.value
-    .map((key) => productColumnMap.value.get(key))
-    .filter(Boolean),
+const selectedProductColumnDraftMetas = computed<KanbanProductDetailColumn[]>(
+  () =>
+    productColumnDraft.value
+      .map((key) => productColumnMap.value.get(key))
+      .filter((column): column is KanbanProductDetailColumn =>
+        Boolean(column),
+      ),
 );
 const productColumnGroups = computed(() => {
   const groups: Array<{
@@ -2455,8 +2458,8 @@ onMounted(applyFilters);
   background: var(--product-panel, #fff);
   border: 1px solid var(--product-border, #e2e8f0);
   border-radius: 4px;
-  opacity: 1;
   box-shadow: 0 12px 30px rgb(15 23 42 / 24%);
+  opacity: 1;
 }
 
 :global(.dark) .product-filter-menu {

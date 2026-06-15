@@ -51,11 +51,13 @@ const tokenTheme = computed(() => {
   background: #fff;
 }
 
-.ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+.ant-select-dropdown
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
   background: #eef4ff !important;
 }
 
-.ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+.ant-select-dropdown
+  .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
   color: #1d4ed8;
   background: #dbeafe !important;
 }
@@ -75,11 +77,15 @@ const tokenTheme = computed(() => {
   background: #111827;
 }
 
-.dark .ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
+.dark
+  .ant-select-dropdown
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
   background: #1e293b !important;
 }
 
-.dark .ant-select-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
+.dark
+  .ant-select-dropdown
+  .ant-select-item-option-selected:not(.ant-select-item-option-disabled) {
   color: #bfdbfe;
   background: #1d4ed8 !important;
 }

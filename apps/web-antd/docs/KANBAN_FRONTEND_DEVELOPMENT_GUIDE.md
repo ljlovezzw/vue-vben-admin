@@ -216,10 +216,7 @@ Authorization: Bearer <accessToken>
 
 明细报表时间快捷项切换时，前端必须同步更新 `startDate/endDate` 后再请求后端，避免 `dateRangeType` 与显式日期不一致。当前规则：今日=今天，昨日=昨天，最近 7/30 天以昨天为结束日，本月为本月 1 日到昨天，上月为完整上月，今年为今年 1 月 1 日到昨天；自定义日期范围由日期选择器控制。报表标题展示快捷项中文名和实际日期范围。
 
-Ant Design Select dropdown uses global `.ant-select-dropdown` solid background rules in `src\app.vue`; do not add repeated local opacity patches for Select popups.
-Analytics top summary layout is compact: KPI gauges, comparison cards, operation-group cards, and responsible cards use constrained heights so the product detail report stays close to the first screen without large blank gaps.
-Analytics report columns support xlsx-like header drag resizing; widths are applied to table columns and the fixed summary row together. Do not put width inputs inside the column config modal.
-Custom Dropdown + Checkbox menus must use solid `background: var(..., #fff)` plus dark-mode overrides; avoid `color-mix(...)` for popup backgrounds because unsupported browsers may drop the background and make table text show through.
+Ant Design Select dropdown uses global `.ant-select-dropdown` solid background rules in `src\app.vue`; do not add repeated local opacity patches for Select popups. Analytics top summary layout is compact: KPI gauges, comparison cards, operation-group cards, and responsible cards use constrained heights so the product detail report stays close to the first screen without large blank gaps. Analytics report columns support xlsx-like header drag resizing; widths are applied to table columns and the fixed summary row together. Do not put width inputs inside the column config modal. Custom Dropdown + Checkbox menus must use solid `background: var(..., #fff)` plus dark-mode overrides; avoid `color-mix(...)` for popup backgrounds because unsupported browsers may drop the background and make table text show through.
 
 ## 5. API 开发流程
 
@@ -285,7 +282,7 @@ src\views\dashboard\analytics\index.vue
 - 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
 - 顶部主筛选的站点、部门、运营组、负责人会作为底部报表的全局范围；报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。
 - 底部报表的时间范围独立于主卡片日期，快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。报表请求的 `siteDate` 跟随报表自身 `endDate`，不要使用顶部主日期兜底。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，当前包含“泛欧”和非泛欧业务国家；欧洲国家在后端归并到“泛欧”。
-- 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。
+- 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。商品维度明细报表的“店铺”是后端聚合维度之一，导出后按店铺二次汇总应与同日期同店铺的原始产品表现销量对齐。
 - 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
 - 顶部不再展示“交易状态”筛选；分析页主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端参数仅作为旧接口兼容和利润表诊断脚本口径保留。
 - 日维度日期范围如果包含今天或昨天，后端会优先用 `productexpressionnew_live_cache` 覆盖这些近实时日期，再与其余历史日期的 `productexpressionnew` 数据合并；只有纯历史日期才完全读取 `productexpressionnew`。
