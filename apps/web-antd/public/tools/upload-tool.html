@@ -270,7 +270,7 @@
 
     .map-row {
       display: grid;
-      grid-template-columns: 130px minmax(180px, 1fr) minmax(220px, 1.1fr) auto;
+      grid-template-columns: 130px minmax(180px, 1fr) minmax(220px, 1.1fr) 150px auto;
       gap: 10px;
       align-items: start;
     }
@@ -292,11 +292,64 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.4;
-      min-height: 38px;
+      min-height: 20px;
       display: flex;
       align-items: center;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .preview-box {
+      width: 100%;
+      min-height: 82px;
+      border: 1px dashed #c8d4e4;
+      border-radius: 10px;
+      background: #f8fbff;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .preview-box img {
+      display: block;
+      width: 100%;
+      height: 96px;
+      object-fit: contain;
+      background: #fff;
+    }
+
+    .preview-box.video {
+      min-height: 52px;
+      border-style: solid;
+      background: #f0fff6;
+      color: #11623a;
+    }
+
+    .flag-checks {
+      display: grid;
+      gap: 6px;
+      min-height: 38px;
+      align-content: center;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .flag-checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .flag-checks input {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--primary);
     }
 
     .icon-btn {
@@ -681,6 +734,21 @@
     function fileLabel(file) {
       return file ? file.name : "未选择文件";
     }
+
+    const previewUrls = new Map();
+
+    function previewUrlForFile(file) {
+      if (!file) return "";
+      if (!previewUrls.has(file)) {
+        previewUrls.set(file, URL.createObjectURL(file));
+      }
+      return previewUrls.get(file);
+    }
+
+    window.addEventListener("beforeunload", () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.clear();
+    });
 
     function setListingStatus(text, type = "normal") {
       els.listingStatus.textContent = text;
@@ -1112,7 +1180,7 @@
     }
 
     function makeSlot({ kind, platform = "", role = "", file = null }) {
-      return { id: uid("slot"), kind, platform, role, file };
+      return { id: uid("slot"), kind, platform, role, file, aiGenerated: false, aiGeneratedPerson: false };
     }
 
     function addAplusFull() {
@@ -1231,6 +1299,60 @@
       return select;
     }
 
+    function createPreview(slot) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "preview-box";
+      if (!slot.file) {
+        wrapper.textContent = "未选择";
+        return wrapper;
+      }
+      if (slot.role === "video") {
+        wrapper.classList.add("video");
+        wrapper.textContent = `已选择视频：${slot.file.name}`;
+        return wrapper;
+      }
+      const img = document.createElement("img");
+      img.alt = slot.file.name;
+      img.src = previewUrlForFile(slot.file);
+      wrapper.appendChild(img);
+      return wrapper;
+    }
+
+    function isImageFlagSlot(slot) {
+      return slot.role !== "video";
+    }
+
+    function createAiFlagControls(slot) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "flag-checks";
+      if (!isImageFlagSlot(slot)) {
+        wrapper.textContent = "视频不标记";
+        wrapper.style.color = "var(--muted)";
+        return wrapper;
+      }
+
+      const aiLabel = document.createElement("label");
+      const aiInput = document.createElement("input");
+      aiInput.type = "checkbox";
+      aiInput.checked = Boolean(slot.aiGenerated);
+      aiInput.addEventListener("change", () => {
+        slot.aiGenerated = aiInput.checked;
+      });
+      aiLabel.append(aiInput, "AI生成");
+
+      const personLabel = document.createElement("label");
+      const personInput = document.createElement("input");
+      personInput.type = "checkbox";
+      personInput.checked = Boolean(slot.aiGeneratedPerson);
+      personInput.addEventListener("change", () => {
+        slot.aiGeneratedPerson = personInput.checked;
+      });
+      personLabel.append(personInput, "AI生成人物");
+
+      wrapper.append(aiLabel, personLabel);
+      return wrapper;
+    }
+
     function renderAPlus() {
       els.aPlusRules.innerHTML = "";
       state.aPlus.forEach((component) => {
@@ -1258,15 +1380,18 @@
           const fileIndex = aPlusFileIndex(component, slot);
           const target = targetForSlot(slot, version, fileIndex);
           row.innerHTML = `
-            <div class="field"><label>文件位</label><div class="source">${label}</div></div>
-            <div class="field select-here"><label>选择文件</label></div>
+            <div class="field preview-here"><label>文件位 / 预览</label><div class="source">${label}</div></div>
+            <div class="field select-here"><label>${slot.file ? "更换文件" : "选择文件"}</label></div>
             <div class="field pool-here"><label>拖入文件池</label></div>
+            <div class="field flags-here"><label>AI标记</label></div>
             <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
           `;
           const accept = slot.role === "video" ? "video/*" : "image/*";
           row.querySelector(".select-here").appendChild(createFileSelect(slot, accept));
           row.querySelector(".pool-here").appendChild(createPoolSelect(slot));
+          row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
           row.querySelector(".source").textContent = `${label} · ${fileLabel(slot.file)}`;
+          row.querySelector(".preview-here").appendChild(createPreview(slot));
           card.appendChild(row);
         });
 
@@ -1304,12 +1429,15 @@
           const row = document.createElement("div");
           row.className = "map-row";
           row.innerHTML = `
-            <div class="field"><label>文件位</label><div class="source">${label} · ${fileLabel(slot.file)}</div></div>
-            <div class="field select-here"><label>选择文件</label></div>
-            <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
+            <div class="field preview-here"><label>文件位 / 预览</label><div class="source">${label} · ${fileLabel(slot.file)}</div></div>
+            <div class="field select-here"><label>${slot.file ? "更换文件" : "选择文件"}</label></div>
             <div></div>
+            <div class="field flags-here"><label>AI标记</label></div>
+            <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
           `;
           row.querySelector(".select-here").appendChild(createFileSelect(slot, "image/*"));
+          row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
+          row.querySelector(".preview-here").appendChild(createPreview(slot));
           card.appendChild(row);
         });
         els.brandRules.appendChild(card);
@@ -1324,7 +1452,13 @@
         component.slots.forEach((slot) => {
           if (!slot.file) return;
           const index = aPlusFileIndex(component, slot);
-          files.push({ file: slot.file, path: `${root}/${targetForSlot(slot, version, index)}` });
+          files.push({
+            aiGenerated: Boolean(slot.aiGenerated),
+            aiGeneratedPerson: Boolean(slot.aiGeneratedPerson),
+            file: slot.file,
+            isImage: isImageFlagSlot(slot),
+            path: `${root}/${targetForSlot(slot, version, index)}`,
+          });
         });
       });
       return files;
@@ -1337,10 +1471,45 @@
         component.slots.forEach((slot) => {
           if (!slot.file) return;
           const index = component.type === "brandMedia" ? brandMediaIndex(component) : 1;
-          files.push({ file: slot.file, path: `${root}/${targetForSlot(slot, 1, index)}` });
+          files.push({
+            aiGenerated: Boolean(slot.aiGenerated),
+            aiGeneratedPerson: Boolean(slot.aiGeneratedPerson),
+            file: slot.file,
+            isImage: isImageFlagSlot(slot),
+            path: `${root}/${targetForSlot(slot, 1, index)}`,
+          });
         });
       });
       return files;
+    }
+
+    function imageFlagRecord(entry) {
+      const fileName = entry.path.split("/").pop() || entry.path;
+      return {
+        path: entry.path,
+        fileName,
+        originalName: entry.file?.name || "",
+        aiGenerated: Boolean(entry.aiGenerated),
+        aiGeneratedPerson: Boolean(entry.aiGeneratedPerson),
+        "AI生成": Boolean(entry.aiGenerated),
+        "AI生成人物": Boolean(entry.aiGeneratedPerson),
+      };
+    }
+
+    function withImageFlagJson(entries, root) {
+      const manifest = {
+        version: 1,
+        root,
+        generatedAt: new Date().toISOString(),
+        images: entries.filter((entry) => entry.isImage).map(imageFlagRecord),
+      };
+      return [
+        ...entries,
+        {
+          file: new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }),
+          path: `${root}/image_ai_flags.json`,
+        },
+      ];
     }
 
     function renderPool() {
@@ -1473,7 +1642,7 @@
         alert("请先选择要打包的文件。");
         return;
       }
-      const zip = await buildZip(entries);
+      const zip = await buildZip(withImageFlagJson(entries, root));
       const url = URL.createObjectURL(zip);
       const a = document.createElement("a");
       a.href = url;
@@ -1537,7 +1706,7 @@
 
     async function buildUploadZip(entries, root) {
       if (!entries.length) return null;
-      const zip = await buildZip(entries);
+      const zip = await buildZip(withImageFlagJson(entries, root));
       return {
         filename: `${root}.zip`,
         contentType: "application/zip",

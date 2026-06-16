@@ -1,6 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-06-12
+更新时间：2026-06-16
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。后端说明文档位于：
 
@@ -142,6 +142,7 @@ apps/web-antd/src/
 
   views/
     dashboard/analytics/        公司经营驾驶舱
+      components/ProductDetailTable.vue  分析页内嵌新品详情表
     kanban/monitor/             新品监控
     kanban/ads/                 广告监控
     kanban/targets/             目标跟踪
@@ -151,6 +152,18 @@ apps/web-antd/src/
     kanban/config/              配置中心
     kanban/shared/              页面共用辅助
 ```
+
+## 3.1 最新代码地图（2026-06-16）
+
+当前前端最新改动主要集中在这些文件：
+
+- `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额卡片、推广与周转卡片、运营组销量完成率、负责人完成率和底部商品维度明细报表。
+- `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，拥有独立时间范围、国家、负责人、列配置、固定列、分页和点击排序。
+- `src\views\kanban\monitor\index.vue`：新品监控主页面，新品详情表已改成类似商品维度明细报表的确认式筛选和列配置，并增加时间范围、负责人筛选。
+- `public\tools\upload-tool.html`：图片标准命名打包工具，负责本地预览、AI 标记、ZIP 生成、JSON 元数据打包和飞书任务上传。
+- `src\api\kanban\index.ts` 与 `src\api\kanban\types.ts`：补齐 `fetchKanbanProductDetail` 的时间范围参数和 `KanbanProductDetailOverview.query` 类型。
+
+后续修改时先按页面定位到上述文件，再决定是否需要调整后端 DTO；不要把新品详情表和商品维度明细报表的逻辑混在同一个接口里。
 
 ## 4. 登录、权限与路由
 
@@ -242,7 +255,7 @@ apps\web-antd\src\api\kanban\types.ts
 | `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存；分析页不再展示或发送交易状态筛选 |
 | `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
-| `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail` |
+| `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail`，支持新品详情表 `dateRangeType/startDate/endDate`、国家、负责人、类目、状态、预警和站点筛选；响应包含 `query` 回显 |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
 | `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
 | `fetchTargetTrackerOverview` | `GET /kanban/targets/overview` |
@@ -264,6 +277,7 @@ apps\web-antd\src\api\kanban\types.ts
 
 ```text
 src\views\dashboard\analytics\index.vue
+src\views\dashboard\analytics\components\ProductDetailTable.vue
 ```
 
 用途：
@@ -274,6 +288,7 @@ src\views\dashboard\analytics\index.vue
 - 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可查看全量经营数据，不按登录人的负责人范围裁剪。
 - 底部已接入商品维度明细报表，规格见 `E:\junlee\Kanban\docs\报表设计.md`。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。运营组筛选继承顶部全局范围；点击运营组下钻会把报表负责人切到该组成员。
+- 商品维度明细报表下方已接入“新品详情表”。该表由 `components\ProductDetailTable.vue` 维护，复用 `/kanban/monitor/product-detail`，继承顶部站点与负责人/运营组范围，但拥有自己的时间范围、国家、负责人、列配置和分页状态。
 
 当前口径：
 
@@ -292,14 +307,17 @@ src\views\dashboard\analytics\index.vue
 - 第二个仪表盘是销售额完成率，目标值来自后端按 `operator_targets.target_sales_original_currency` 的 USD 目标折算出的 `dailyTargetSales`；旧行缺失 USD 字段时后端才使用 CNY 目标兜底换算。
 - 日维度目标为所选日期范围内逐日目标累加后的区间目标；月维度目标为当月目标总额。由于接口兼容原因，仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案按维度显示为“区间目标”或“月目标”。
 - 销售额、销售额目标、销售额差值和推广占比中的总销售额展示美元金额；历史 `productexpressionnew` 的原币种金额由后端统一折算为 USD，实时缓存本身已经是 USD。月维度展示 2 位小数，日维度保留紧凑金额展示。
-- 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `周转库存 / 销售速度 / 30`；实时产品表现模式下周转库存包含可用库存和在途/入库库存，不包含不可售和预留库存。
+- 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `(FBA库存 + FBA在途 + FBA调仓中) / 当天销量 / 30`；前端不再用其它库存字段补算。右侧周转卡片经过压缩布局，主值、前一周期和上周同期需要保持上下对齐。
 - 两个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示实际销售额；下方继续展示实际值和日目标。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片按维度切换文案：日维度为前一周期/上周同期，月维度为上月/去年同期，并展示绝对差值和百分比差异。
 - 右侧推广占比、周转周期和对比卡片展示 `period.startDate/endDate/days` 对应的时间段信息；日维度区间模式下必须显示当前区间、前一同长度周期和上周同期区间，不能只展示单日语义。
 - 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；运营组筛选选项来自后端 `filters.operationGroups`，并会随部门选择收窄，部门、运营组、负责人多选由后端按交集过滤，前端不要本地扩展成员范围。
-- 运营组完成率使用全量负责人行汇总；销量完成率和销售额完成率两个运营组列表均限制为两行卡片高度，超出后列表内部纵向滚动，且两个列表的滚动位置必须同步。负责人明细区域全量展示负责人卡片，并优先排列实时销量大于 0 的运营，不能反向影响运营组汇总口径。
-- 负责人列表展示有日目标、实时实际值或库存快照的运营人员；实时产品表现模式下负责人销量合计应与顶部实时销量保持同一筛选口径，标题显示总展示人数和其中有销量人数。
+- 运营组区域当前只保留“实时销量完成率 - 运营组维度”，已移除“实时销售额完成率 - 运营组维度”。运营组卡片按完成率填色，布局高度让位给负责人区域和底部表格。
+- 负责人列表只展示后端返回的活跃负责人，优先排列实时销量大于 0 的运营；后端已过滤不在 `users` 表里的离职人员和区间目标销量为 0 的人员。标题显示总展示人数和其中有销量人数。
 - 负责人维度卡片区保留三行卡片高度，桌面端默认每行 3 个卡片，超出后在卡片区内部纵向滚动，避免挤压底部商品维度明细报表。
+- 左侧两个完成率环形图内部比例单独维护：ECharts gauge 只画环形，中心数字用覆盖层；图表中心下移到 `55%`，图表区域随卡片伸展，避免底部说明上方出现大块空白。
+- 新品详情表的 `上线天数`、`销量`、`目标销量`、`销量完成率`、`销售额` 支持点击排序，排序取指标对象的真实 `value`，不是格式化后的文本。
+- 新品详情表父 ASIN 展示为 Amazon 链接，按行内站点/国家映射到对应 Amazon 域名，打开新标签；无站点兜底到 `www.amazon.com`。
 
 已完成：
 
@@ -339,6 +357,11 @@ src\views\kanban\monitor\components\
 - 大表分页使用 `src\views\kanban\shared\pagination.ts`；主筛选、SPU 搜索、快捷状态、商品明细国家筛选和列配置变化后都回到第一页。
 - 商品明细表已经改为类似分析页的确认式筛选和列配置：国家筛选使用 Dropdown + Checkbox；列配置弹窗支持字段分组、搜索、勾选、拖拽排序、上下移动、移除和固定列。当前不再要求新品详情表强制冻结固定列，固定列由用户配置决定。
 - 顶部主筛选同时刷新概览和商品明细；商品明细页签内的国家筛选只刷新 `GET /kanban/monitor/product-detail`，避免重复请求概览接口。国家下拉候选项必须使用后端返回的 `countries`，不要从当前表格 rows 本地反推；后端保证该候选项不受当前国家筛选影响。
+- 新品详情表已经增加与商品维度明细报表相同语义的时间范围和负责人筛选。时间快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；负责人为空时继承顶部主筛选负责人。
+- 新品详情表的金额、毛利、利润、花费、退款、运费、销售额、净销售额等金额类字段展示两位小数；后端已经统一折算 USD，前端不要再按站点二次换算。
+- 指标填色只用于有明确进度或占比含义的字段。`目标销量`、`销量完成率` 使用完成率口径；广告订单、自然订单、退款量等字段如果展示进度，应与同 SPU 当前时间维度下的总订单、总销量或销售额相比，不能简单按自身数值填满。
+- 父 ASIN 在新品详情表中应渲染为 Amazon 链接，点击新窗口打开对应站点商品页。
+- `上线天数`、`销量`、`目标销量`、`销量完成率`、`销售额` 这几列支持点击排序；排序使用后端返回指标对象中的原始数值。
 
 后端规则说明：
 
@@ -431,6 +454,8 @@ public\tools\upload-tool.html
 
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
+- 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
+- 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
 - 在线 Listing 查询完成后，从返回行提取父 ASIN 下拉选项，并按所选父 ASIN 展示对应 ASIN 列表和 Listing 明细。查询前父 ASIN 下拉保留可操作状态，只显示提示项。
 - Listing 明细表固定展示：父ASIN、ASIN、图片、MSKU、SKU、品名、店铺、国家、品牌、状态、负责人；Listing 代理当前返回中文列名，图片列优先读取 `图片`，兼容 `small_image_url`、对象、数组、JSON 字符串和 `//` 协议相对地址，并在候选字段未命中时从图片类字段名兜底提取 URL；品牌读取 `亚马逊品牌`，状态 1/true 显示在售，0/false 显示停售。图片加载失败显示空占位。

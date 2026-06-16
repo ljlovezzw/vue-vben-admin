@@ -77,6 +77,14 @@ export interface AnalyticsOverviewParams {
 
 export type SpuManagerParams = Partial<SpuManagerFilters>;
 
+export interface KanbanProductDetailParams extends KanbanOverviewParams {
+  countries?: string[];
+  dateRangeType?: string;
+  endDate?: string;
+  startDate?: string;
+  year?: number;
+}
+
 export interface Asin360OverviewParams {
   endDate?: string;
   parent_ASIN: string;
@@ -131,7 +139,7 @@ export async function fetchAnalyticsReport(
 }
 
 export async function fetchKanbanProductDetail(
-  params: KanbanOverviewParams & { countries?: string[]; year?: number } = {},
+  params: KanbanProductDetailParams = {},
 ): Promise<KanbanProductDetailOverview> {
   return requestClient.get('/kanban/monitor/product-detail', { params });
 }

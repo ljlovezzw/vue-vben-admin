@@ -43,6 +43,8 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchAnalyticsOverview, fetchAnalyticsReport } from '#/api/kanban';
 
+import ProductDetailTable from './components/ProductDetailTable.vue';
+
 use([CanvasRenderer, GaugeChart, TooltipComponent]);
 
 const { isDark } = usePreferences();
@@ -82,7 +84,6 @@ const defaultPinnedReportColumnKeys = [
   'imageUrl',
   'parentAsin',
   'responsible',
-  'spu',
 ] as const;
 const sortableReportFields = new Set([
   'acos',
@@ -108,8 +109,6 @@ const reportDownloading = ref(false);
 const overview = ref<AnalyticsOverview | null>(null);
 const report = ref<AnalyticsReportOverview | null>(null);
 const reportSummaryScroll = ref<HTMLElement | null>(null);
-const groupUnitsScroll = ref<HTMLElement | null>(null);
-const groupSalesScroll = ref<HTMLElement | null>(null);
 const selectedReportColumns = ref<string[]>([]);
 const pinnedReportColumnKeys = ref<string[]>([
   ...defaultPinnedReportColumnKeys,
@@ -139,9 +138,14 @@ const reportFilterDrafts = reactive<Record<ReportFilterKey, string[]>>({
   responsibles: [],
   spus: [],
 });
+const dashboardCountryDropdownOpen = ref(false);
+const dashboardCountryDraft = ref<string[]>([]);
+const dashboardOwnerDropdownOpen = ref(false);
+const dashboardOwnerDraftGroups = ref<string[]>([]);
+const dashboardOwnerDraftResponsibles = ref<string[]>([]);
+const activeDashboardOwnerGroupId = ref('');
 let reportBodyScrollElement: HTMLElement | null = null;
 let reportScrollSyncing = false;
-let groupScrollSyncing = false;
 let dashboardAutoReloadReady = false;
 let dashboardAutoReloadTimer: null | ReturnType<typeof setTimeout> = null;
 let syncingDashboardQuery = false;
@@ -185,8 +189,8 @@ const sourceMessage = computed(() =>
   ),
 );
 const granularityOptions = [
-  { label: '日', value: 'day' },
-  { label: '月', value: 'month' },
+  { label: '按天', value: 'day' },
+  { label: '按月', value: 'month' },
 ];
 const isMonthMode = computed(() => query.granularity === 'month');
 const periodDays = computed(() => period.value?.days ?? 1);
@@ -257,20 +261,19 @@ const secondaryPeriodLabel = computed(() => {
     dayjs(end).subtract(7, 'day').format('YYYY-MM-DD'),
   );
 });
-const dateLabel = computed(() =>
-  isMonthMode.value ? '统计月份' : '统计日期范围',
-);
 const departmentOptions = computed(() =>
   (overview.value?.filters.departments ?? []).map((value) => ({
     label: value,
     value,
   })),
 );
-const siteOptions = computed(() =>
-  (overview.value?.filters.sites ?? []).map((value) => ({
-    label: value,
-    value,
-  })),
+const availableSiteSet = computed(
+  () =>
+    new Set(
+      (overview.value?.filters.sites ?? []).map((site) =>
+        site.toUpperCase(),
+      ),
+    ),
 );
 const responsibleOptions = computed(() =>
   (overview.value?.filters.responsibles ?? []).map((value) => ({
@@ -278,11 +281,29 @@ const responsibleOptions = computed(() =>
     value,
   })),
 );
-const operationGroupOptions = computed(() =>
-  (overview.value?.filters.operationGroups ?? []).map((item) => ({
-    label: item.name,
-    value: item.id,
-  })),
+const dashboardOperationGroups = computed(
+  () => overview.value?.filters.operationGroups ?? [],
+);
+const dashboardCountryOptionDefs = [
+  {
+    label: '泛欧',
+    sites: ['BE', 'DE', 'ES', 'FR', 'IE', 'IT', 'NL', 'PL', 'SE'],
+    value: 'PAN_EU',
+  },
+  { label: '美国', sites: ['US'], value: 'US' },
+  { label: '英国', sites: ['UK'], value: 'UK' },
+  { label: '加拿大', sites: ['CA'], value: 'CA' },
+  { label: '墨西哥', sites: ['MX'], value: 'MX' },
+  { label: '巴西', sites: ['BR'], value: 'BR' },
+  { label: '澳洲', sites: ['AU'], value: 'AU' },
+];
+const dashboardCountryOptions = computed(() =>
+  dashboardCountryOptionDefs
+    .map((option) => ({
+      ...option,
+      sites: option.sites.filter((site) => availableSiteSet.value.has(site)),
+    }))
+    .filter((option) => option.sites.length > 0),
 );
 const reportOperationGroupOptions = computed(() =>
   (overview.value?.filters.operationGroups ?? []).map((item) => ({
@@ -503,11 +524,18 @@ const promotionRate = computed(() =>
     advertising.value?.summary.totalSales,
   ),
 );
-const adAcos = computed(() =>
-  ratio(
-    advertising.value?.summary.totalSpend,
-    advertising.value?.summary.adSales,
-  ),
+
+const previousPromotionRate = computed(() =>
+  ratio(previous.value?.adSpend, previous.value?.salesAmount),
+);
+const weekBeforePromotionRate = computed(() =>
+  ratio(weekBefore.value?.adSpend, weekBefore.value?.salesAmount),
+);
+const previousCompareLabel = computed(() =>
+  periodDays.value > 1 ? previousLabel.value : '前一天',
+);
+const weekCompareLabel = computed(() =>
+  periodDays.value > 1 ? secondaryLabel.value : '上周这一天',
 );
 
 const allResponsibleCards = computed<ResponsibleCard[]>(() => {
@@ -545,6 +573,18 @@ const groupCards = computed(() =>
     buildGroupCard(group, allResponsibleCards.value),
   ),
 );
+const productDetailBaseParams = computed(() => {
+  const responsibleNames = new Set(query.responsibles);
+  const selectedGroupIds = new Set(query.operationGroupIds.map(String));
+  for (const group of dashboardOperationGroups.value) {
+    if (!selectedGroupIds.has(String(group.id))) continue;
+    for (const name of group.memberNames) responsibleNames.add(name);
+  }
+  return {
+    responsibles: [...responsibleNames],
+    sites: [...query.sites],
+  };
+});
 
 function gaugeOption(rate: null | number, color: string) {
   const percentage = rate === null ? 0 : Math.min(Math.max(rate * 100, 0), 100);
@@ -589,6 +629,7 @@ function gaugeOption(rate: null | number, color: string) {
           width: 4,
         },
         progress: { show: false },
+        center: ['50%', '55%'],
         radius: '92%',
         splitLine: { show: false },
         splitNumber: 4,
@@ -678,6 +719,194 @@ function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
       }
     })();
   }, 1000);
+}
+
+function dashboardCountryValuesFromSites(sites: string[]) {
+  if (sites.length === 0) return [];
+  const siteSet = new Set(sites.map((site) => site.toUpperCase()));
+  return dashboardCountryOptions.value
+    .filter((option) => option.sites.every((site) => siteSet.has(site)))
+    .map((option) => option.value);
+}
+
+function dashboardSitesFromCountryValues(values: string[]) {
+  const selected = new Set(values);
+  return [
+    ...new Set(
+      dashboardCountryOptions.value
+        .filter((option) => selected.has(option.value))
+        .flatMap((option) => option.sites),
+    ),
+  ];
+}
+
+const dashboardCountryButtonText = computed(() => {
+  if (query.sites.length === 0) return '全部';
+  const selected = dashboardCountryValuesFromSites(query.sites);
+  if (selected.length === 1) {
+    return (
+      dashboardCountryOptions.value.find(
+        (option) => option.value === selected[0],
+      )?.label ?? '已选1项'
+    );
+  }
+  return `已选${selected.length || query.sites.length}项`;
+});
+
+function syncDashboardCountryDraft() {
+  dashboardCountryDraft.value = dashboardCountryValuesFromSites(query.sites);
+}
+
+function handleDashboardCountryOpenChange(open: boolean) {
+  dashboardCountryDropdownOpen.value = open;
+  if (!open) return;
+  syncDashboardCountryDraft();
+}
+
+function isDashboardCountryDraftChecked(value: string) {
+  return dashboardCountryDraft.value.includes(value);
+}
+
+function toggleDashboardCountryDraftValue(value: string) {
+  dashboardCountryDraft.value = dashboardCountryDraft.value.includes(value)
+    ? dashboardCountryDraft.value.filter((item) => item !== value)
+    : [...dashboardCountryDraft.value, value];
+}
+
+function isDashboardCountryDraftAllSelected() {
+  return (
+    dashboardCountryOptions.value.length > 0 &&
+    dashboardCountryOptions.value.every((option) =>
+      dashboardCountryDraft.value.includes(option.value),
+    )
+  );
+}
+
+function toggleDashboardCountryDraftAll() {
+  dashboardCountryDraft.value = isDashboardCountryDraftAllSelected()
+    ? []
+    : dashboardCountryOptions.value.map((option) => option.value);
+}
+
+function applyDashboardCountryFilter() {
+  query.sites = isDashboardCountryDraftAllSelected()
+    ? []
+    : dashboardSitesFromCountryValues(dashboardCountryDraft.value);
+  dashboardCountryDropdownOpen.value = false;
+}
+
+function cancelDashboardCountryFilter() {
+  syncDashboardCountryDraft();
+  dashboardCountryDropdownOpen.value = false;
+}
+
+const dashboardOwnerButtonText = computed(() => {
+  const selectedGroupCount = query.operationGroupIds.length;
+  const selectedResponsibleCount = query.responsibles.length;
+  if (selectedGroupCount === 0 && selectedResponsibleCount === 0) return '全部';
+  if (selectedGroupCount === 1 && selectedResponsibleCount === 0) {
+    return (
+      dashboardOperationGroups.value.find(
+        (group) => group.id === query.operationGroupIds[0],
+      )?.name ?? '已选1组'
+    );
+  }
+  if (selectedGroupCount === 0 && selectedResponsibleCount === 1) {
+    return query.responsibles[0] ?? '已选1人';
+  }
+  return `已选${selectedGroupCount}组/${selectedResponsibleCount}人`;
+});
+
+const activeDashboardOwnerGroup = computed(
+  () =>
+    dashboardOperationGroups.value.find(
+      (group) => String(group.id) === activeDashboardOwnerGroupId.value,
+    ) ?? dashboardOperationGroups.value[0],
+);
+
+function syncDashboardOwnerDraft() {
+  dashboardOwnerDraftGroups.value = query.operationGroupIds.map(String);
+  dashboardOwnerDraftResponsibles.value = [...query.responsibles];
+}
+
+function handleDashboardOwnerOpenChange(open: boolean) {
+  dashboardOwnerDropdownOpen.value = open;
+  if (!open) return;
+  syncDashboardOwnerDraft();
+  activeDashboardOwnerGroupId.value = String(
+    dashboardOperationGroups.value[0]?.id ?? '',
+  );
+}
+
+function isDashboardOwnerGroupChecked(group: AnalyticsOperationGroup) {
+  return dashboardOwnerDraftGroups.value.includes(String(group.id));
+}
+
+function isDashboardResponsibleChecked(name: string) {
+  return dashboardOwnerDraftResponsibles.value.includes(name);
+}
+
+function toggleDashboardOwnerGroup(group: AnalyticsOperationGroup) {
+  const groupId = String(group.id);
+  const checked = isDashboardOwnerGroupChecked(group);
+  dashboardOwnerDraftGroups.value = checked
+    ? dashboardOwnerDraftGroups.value.filter((item) => item !== groupId)
+    : [...dashboardOwnerDraftGroups.value, groupId];
+  const members = new Set(group.memberNames);
+  dashboardOwnerDraftResponsibles.value = checked
+    ? dashboardOwnerDraftResponsibles.value.filter((name) => !members.has(name))
+    : [...new Set([...dashboardOwnerDraftResponsibles.value, ...group.memberNames])];
+}
+
+function toggleDashboardResponsible(name: string) {
+  dashboardOwnerDraftResponsibles.value = isDashboardResponsibleChecked(name)
+    ? dashboardOwnerDraftResponsibles.value.filter((item) => item !== name)
+    : [...dashboardOwnerDraftResponsibles.value, name];
+}
+
+function isDashboardOwnerDraftAllSelected() {
+  const allGroups = dashboardOperationGroups.value.map((group) =>
+    String(group.id),
+  );
+  const allResponsibles = responsibleOptions.value.map((option) => option.value);
+  return (
+    allGroups.length > 0 &&
+    allGroups.every((id) => dashboardOwnerDraftGroups.value.includes(id)) &&
+    allResponsibles.every((name) =>
+      dashboardOwnerDraftResponsibles.value.includes(name),
+    )
+  );
+}
+
+function toggleDashboardOwnerDraftAll() {
+  if (isDashboardOwnerDraftAllSelected()) {
+    dashboardOwnerDraftGroups.value = [];
+    dashboardOwnerDraftResponsibles.value = [];
+    return;
+  }
+  dashboardOwnerDraftGroups.value = dashboardOperationGroups.value.map((group) =>
+    String(group.id),
+  );
+  dashboardOwnerDraftResponsibles.value = responsibleOptions.value.map(
+    (option) => option.value,
+  );
+}
+
+function applyDashboardOwnerFilter() {
+  query.operationGroupIds = isDashboardOwnerDraftAllSelected()
+    ? []
+    : dashboardOwnerDraftGroups.value
+        .map(Number)
+        .filter((value) => Number.isFinite(value));
+  query.responsibles = isDashboardOwnerDraftAllSelected()
+    ? []
+    : [...dashboardOwnerDraftResponsibles.value];
+  dashboardOwnerDropdownOpen.value = false;
+}
+
+function cancelDashboardOwnerFilter() {
+  syncDashboardOwnerDraft();
+  dashboardOwnerDropdownOpen.value = false;
 }
 
 function reportFilterValues(key: ReportFilterKey) {
@@ -1088,7 +1317,8 @@ function comparisonClass(
 }
 
 function turnover(value?: null | number) {
-  return value ? value.toFixed(2) : '0.00';
+  if (value === null || value === undefined) return '-';
+  return Number(value).toFixed(2);
 }
 
 function buildGroupCard(
@@ -1101,27 +1331,20 @@ function buildGroupCard(
   let dailyTargetUnits = 0;
   let grossProfit = 0;
   let dailyTargetProfit = 0;
-  let salesAmount = 0;
-  let dailyTargetSales = 0;
   for (const row of members) {
     salesQty += row.salesQty;
     dailyTargetUnits += row.dailyTargetUnits;
     grossProfit += row.grossProfit;
     dailyTargetProfit += row.dailyTargetProfit;
-    salesAmount += row.salesAmount;
-    dailyTargetSales += row.dailyTargetSales;
   }
   return {
     completionRate: ratio(salesQty, dailyTargetUnits),
     dailyTargetProfit,
-    dailyTargetSales,
     dailyTargetUnits,
     grossProfit,
     memberCount: group.memberNames.length,
     name: group.name,
     profitCompletionRate: ratio(grossProfit, dailyTargetProfit),
-    salesAmount,
-    salesCompletionRate: ratio(salesAmount, dailyTargetSales),
     salesQty,
   };
 }
@@ -1130,6 +1353,12 @@ function completionColor(value: number) {
   if (value >= 1) return 'success';
   if (value >= 0.8) return 'warning';
   return 'error';
+}
+
+function completionClass(value: number) {
+  if (value >= 1) return 'completion-good';
+  if (value >= 0.8) return 'completion-warning';
+  return 'completion-error';
 }
 
 function reportColumnAlign(
@@ -1376,26 +1605,6 @@ function handleReportSummaryScroll(event: Event) {
   syncReportSummaryScroll((event.target as HTMLElement).scrollLeft, 'summary');
 }
 
-function syncGroupCompletionScroll(source: 'sales' | 'units', top: number) {
-  if (groupScrollSyncing) return;
-  const target =
-    source === 'units' ? groupSalesScroll.value : groupUnitsScroll.value;
-  if (!target) return;
-  groupScrollSyncing = true;
-  target.scrollTop = top;
-  requestAnimationFrame(() => {
-    groupScrollSyncing = false;
-  });
-}
-
-function handleGroupUnitsScroll(event: Event) {
-  syncGroupCompletionScroll('units', (event.target as HTMLElement).scrollTop);
-}
-
-function handleGroupSalesScroll(event: Event) {
-  syncGroupCompletionScroll('sales', (event.target as HTMLElement).scrollTop);
-}
-
 function bindReportBodyScroll() {
   const root = reportSummaryScroll.value?.closest('.report-panel');
   const nextBody = root?.querySelector('.ant-table-body') as HTMLElement | null;
@@ -1542,41 +1751,75 @@ onBeforeUnmount(() => {
     <div class="completion-screen">
       <section class="screen-toolbar">
         <span class="toolbar-flag">▼</span>
-        <label>维度</label>
-        <Select
-          v-model:value="query.granularity"
-          :options="granularityOptions"
-          size="small"
-          style="width: 74px"
-        />
-        <label>{{ dateLabel }}</label>
-        <DatePicker
-          v-if="isMonthMode"
-          v-model:value="monthValue"
-          :allow-clear="false"
-          :disabled-date="disabledFutureDate"
-          picker="month"
-          size="small"
-          value-format="YYYY-MM"
-        />
-        <DatePicker.RangePicker
-          v-else
-          v-model:value="dateRangeValue"
-          :allow-clear="false"
-          :disabled-date="disabledFutureDate"
-          size="small"
-          value-format="YYYY-MM-DD"
-        />
-        <label>站点</label>
-        <Select
-          v-model:value="query.sites"
-          :options="siteOptions"
-          allow-clear
-          mode="multiple"
-          placeholder="全部"
-          size="small"
-          style="min-width: 110px"
-        />
+        <div class="toolbar-combo time-combo">
+          <Select
+            v-model:value="query.granularity"
+            :options="granularityOptions"
+            class="time-granularity-select"
+            size="small"
+          />
+          <DatePicker
+            v-if="isMonthMode"
+            v-model:value="monthValue"
+            :allow-clear="false"
+            :disabled-date="disabledFutureDate"
+            class="time-picker-merged"
+            picker="month"
+            size="small"
+            value-format="YYYY-MM"
+          />
+          <DatePicker.RangePicker
+            v-else
+            v-model:value="dateRangeValue"
+            :allow-clear="false"
+            :disabled-date="disabledFutureDate"
+            class="time-picker-merged"
+            size="small"
+            value-format="YYYY-MM-DD"
+          />
+        </div>
+        <label>国家</label>
+        <Dropdown
+          v-model:open="dashboardCountryDropdownOpen"
+          :trigger="['click']"
+          @open-change="handleDashboardCountryOpenChange"
+        >
+          <Button class="toolbar-filter-trigger" size="small">
+            {{ dashboardCountryButtonText }}
+          </Button>
+          <template #overlay>
+            <div class="report-filter-menu dashboard-country-menu" @click.stop>
+              <Checkbox
+                :checked="isDashboardCountryDraftAllSelected()"
+                @change="toggleDashboardCountryDraftAll"
+              >
+                全选
+              </Checkbox>
+              <div class="report-filter-scroll dashboard-country-scroll">
+                <Checkbox
+                  v-for="option in dashboardCountryOptions"
+                  :key="option.value"
+                  :checked="isDashboardCountryDraftChecked(option.value)"
+                  @change="toggleDashboardCountryDraftValue(option.value)"
+                >
+                  {{ option.label }}
+                </Checkbox>
+              </div>
+              <div class="report-filter-footer">
+                <Button size="small" @click="cancelDashboardCountryFilter">
+                  取消
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  @click="applyDashboardCountryFilter"
+                >
+                  确定
+                </Button>
+              </div>
+            </div>
+          </template>
+        </Dropdown>
         <label>部门</label>
         <Select
           v-model:value="query.departments"
@@ -1587,26 +1830,70 @@ onBeforeUnmount(() => {
           size="small"
           style="min-width: 130px"
         />
-        <label>运营组</label>
-        <Select
-          v-model:value="query.operationGroupIds"
-          :options="operationGroupOptions"
-          allow-clear
-          mode="multiple"
-          placeholder="全部"
-          size="small"
-          style="min-width: 140px"
-        />
-        <label>负责人</label>
-        <Select
-          v-model:value="query.responsibles"
-          :options="responsibleOptions"
-          allow-clear
-          mode="multiple"
-          placeholder="全部"
-          size="small"
-          style="min-width: 140px"
-        />
+        <label>运营</label>
+        <Dropdown
+          v-model:open="dashboardOwnerDropdownOpen"
+          :trigger="['click']"
+          @open-change="handleDashboardOwnerOpenChange"
+        >
+          <Button class="toolbar-filter-trigger toolbar-filter-trigger-wide" size="small">
+            {{ dashboardOwnerButtonText }}
+          </Button>
+          <template #overlay>
+            <div class="cascade-filter-menu owner-filter-menu" @click.stop>
+              <div class="cascade-filter-left">
+                <Checkbox
+                  :checked="isDashboardOwnerDraftAllSelected()"
+                  class="cascade-all-check"
+                  @change="toggleDashboardOwnerDraftAll"
+                >
+                  全选
+                </Checkbox>
+                <div
+                  v-for="group in dashboardOperationGroups"
+                  :key="group.id"
+                  class="cascade-filter-row owner-group-row"
+                  :class="{
+                    active: activeDashboardOwnerGroupId === String(group.id),
+                  }"
+                  @mouseenter="activeDashboardOwnerGroupId = String(group.id)"
+                  @click="activeDashboardOwnerGroupId = String(group.id)"
+                >
+                  <Checkbox
+                    :checked="isDashboardOwnerGroupChecked(group)"
+                    @click.stop
+                    @change="toggleDashboardOwnerGroup(group)"
+                  >
+                    <span class="cascade-name">{{ group.name }}</span>
+                  </Checkbox>
+                  <b>›</b>
+                </div>
+              </div>
+              <div class="cascade-filter-right">
+                <Checkbox
+                  v-for="name in activeDashboardOwnerGroup?.memberNames ?? []"
+                  :key="name"
+                  :checked="isDashboardResponsibleChecked(name)"
+                  @change="toggleDashboardResponsible(name)"
+                >
+                  {{ name }}
+                </Checkbox>
+              </div>
+              <div class="cascade-filter-footer">
+                <Button size="small" @click="cancelDashboardOwnerFilter">
+                  取消
+                </Button>
+                <Button
+                  size="small"
+                  type="primary"
+                  @click="applyDashboardOwnerFilter"
+                >
+                  确定
+                </Button>
+              </div>
+            </div>
+          </template>
+        </Dropdown>
         <Button size="small" @click="resetFilters">重置</Button>
 
         <Tag :color="source?.status === 'ok' ? 'green' : 'orange'">
@@ -1832,40 +2119,24 @@ onBeforeUnmount(() => {
             </div>
             <div
               v-if="groupCards.length > 0"
-              ref="groupUnitsScroll"
               class="group-placeholder group-scroll"
-              @scroll="handleGroupUnitsScroll"
             >
-              <div v-for="item in groupCards" :key="item.name">
+              <div
+                v-for="item in groupCards"
+                :key="item.name"
+                class="group-completion-card"
+                :class="completionClass(item.completionRate)"
+              >
                 <b>{{ item.name }}</b>
-                <strong>{{ formatPercent(item.completionRate) }}</strong>
+                <Tag
+                  class="group-completion-tag"
+                  :color="completionColor(item.completionRate)"
+                >
+                  {{ formatPercent(item.completionRate) }}
+                </Tag>
                 <span>
                   销量 {{ formatInteger(item.salesQty) }} / {{ targetLabel }}
                   {{ formatInteger(item.dailyTargetUnits) }}
-                </span>
-              </div>
-            </div>
-            <p v-else class="pending-text">请先在配置中心维护运营组</p>
-          </div>
-
-          <div class="white-panel group-panel">
-            <div class="panel-heading">
-              <h2>{{ metricPrefix }}销售额完成率 - 运营组维度</h2>
-              <span>{{ targetHint }}</span>
-            </div>
-            <div
-              v-if="groupCards.length > 0"
-              ref="groupSalesScroll"
-              class="group-placeholder group-scroll"
-              @scroll="handleGroupSalesScroll"
-            >
-              <div v-for="item in groupCards" :key="item.name">
-                <b>{{ item.name }}</b>
-                <strong>{{ formatPercent(item.salesCompletionRate) }}</strong>
-                <span>
-                  销售额 {{ formatSalesMoney(item.salesAmount) }} /
-                  {{ targetLabel }}
-                  {{ formatSalesMoney(item.dailyTargetSales) }}
                 </span>
               </div>
             </div>
@@ -1877,30 +2148,58 @@ onBeforeUnmount(() => {
           <div class="blue-grid">
             <div class="metric-stack">
               <div class="hero-card blue-card">
-                <span>推广占比</span>
+                <span>推广费用占比</span>
                 <strong>{{ formatPercent(promotionRate) }}</strong>
                 <em>{{ currentPeriodLabel }} 内广告花费绝对值 / 总销售额</em>
               </div>
-              <div class="comparison-card blue-detail">
+              <div class="comparison-card blue-detail blue-detail-six">
                 <div>
-                  <span>广告花费</span>
+                  <span>广告费</span>
                   <strong>{{
                     formatUsd(advertising?.summary.totalSpend)
                   }}</strong>
                 </div>
                 <div>
-                  <span>广告 ACOS</span>
-                  <strong>{{ formatPercent(adAcos) }}</strong>
+                  <span>ACoAS</span>
+                  <strong>{{ formatPercent(promotionRate) }}</strong>
                 </div>
                 <div>
-                  <span>统计区间</span>
-                  <strong class="period-value">{{ currentPeriodLabel }}</strong>
+                  <span>{{ previousCompareLabel }}推广费占比</span>
+                  <strong>{{ formatPercent(previousPromotionRate) }}</strong>
+                  <small>{{ previousPeriodLabel }}</small>
                 </div>
                 <div>
-                  <span>总销售额</span>
-                  <strong>{{
-                    formatSalesMoney(advertising?.summary.totalSales)
-                  }}</strong>
+                  <span>环比</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        promotionRate,
+                        previousPromotionRate,
+                        true,
+                      )
+                    "
+                  >
+                    {{ comparisonText(promotionRate, previousPromotionRate) }}
+                  </strong>
+                </div>
+                <div>
+                  <span>{{ weekCompareLabel }}推广费占比</span>
+                  <strong>{{ formatPercent(weekBeforePromotionRate) }}</strong>
+                  <small>{{ secondaryPeriodLabel }}</small>
+                </div>
+                <div>
+                  <span>周同比</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        promotionRate,
+                        weekBeforePromotionRate,
+                        true,
+                      )
+                    "
+                  >
+                    {{ comparisonText(promotionRate, weekBeforePromotionRate) }}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -1913,12 +2212,12 @@ onBeforeUnmount(() => {
               </div>
               <div class="comparison-card blue-detail">
                 <div>
-                  <span>{{ previousLabel }}周转</span>
+                  <span>{{ previousCompareLabel }}周转</span>
                   <strong>{{ turnover(previous?.turnoverMonths) }}</strong>
                   <small>{{ previousPeriodLabel }}</small>
                 </div>
                 <div>
-                  <span>{{ previousLabel }}差异</span>
+                  <span>环比</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -1937,12 +2236,12 @@ onBeforeUnmount(() => {
                   </strong>
                 </div>
                 <div>
-                  <span>{{ secondaryLabel }}周转</span>
+                  <span>{{ weekCompareLabel }}周转</span>
                   <strong>{{ turnover(weekBefore?.turnoverMonths) }}</strong>
                   <small>{{ secondaryPeriodLabel }}</small>
                 </div>
                 <div>
-                  <span>{{ secondaryLabel }}差异</span>
+                  <span>周同比</span>
                   <strong
                     :class="
                       comparisonClass(
@@ -2547,6 +2846,11 @@ onBeforeUnmount(() => {
         </Table>
       </section>
 
+      <ProductDetailTable
+        :base-params="productDetailBaseParams"
+        :responsible-options="overview?.filters.responsibles ?? []"
+      />
+
       <Modal
         v-model:open="reportColumnConfigOpen"
         :footer="null"
@@ -2738,9 +3042,142 @@ onBeforeUnmount(() => {
   color: var(--analytics-accent-label);
 }
 
+.toolbar-combo {
+  display: inline-flex;
+  align-items: center;
+}
+
+.time-combo :deep(.ant-select-selector) {
+  border-start-end-radius: 0 !important;
+  border-end-end-radius: 0 !important;
+}
+
+.time-granularity-select {
+  width: 76px;
+}
+
+.time-picker-merged {
+  min-width: 205px;
+  margin-left: -1px;
+}
+
+.time-picker-merged :deep(.ant-picker) {
+  border-start-start-radius: 0 !important;
+  border-end-start-radius: 0 !important;
+}
+
+.toolbar-filter-trigger {
+  min-width: 112px;
+  text-align: left;
+}
+
+.toolbar-filter-trigger-wide {
+  min-width: 150px;
+}
+
+.cascade-filter-menu {
+  position: relative;
+  z-index: 1100;
+  display: grid;
+  grid-template-rows: minmax(238px, auto) auto;
+  grid-template-columns: 228px 180px;
+  overflow: hidden;
+  background: var(--analytics-panel, #fff);
+  border: 1px solid var(--analytics-border);
+  border-radius: 4px;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 24%);
+}
+
+:global(.dark) .cascade-filter-menu {
+  background: #0f172a;
+}
+
+.owner-filter-menu {
+  grid-template-columns: 250px 180px;
+}
+
+.cascade-filter-left,
+.cascade-filter-right {
+  display: grid;
+  align-content: start;
+  max-height: 288px;
+  overflow-y: auto;
+}
+
+.cascade-filter-left {
+  border-right: 1px solid var(--analytics-border);
+}
+
+.cascade-filter-right {
+  padding-top: 8px;
+}
+
+.cascade-all-check,
+.cascade-filter-right .ant-checkbox-wrapper {
+  display: flex;
+  min-height: 30px;
+  padding: 6px 12px;
+  margin-inline-start: 0;
+  color: var(--analytics-text);
+}
+
+.cascade-filter-right .ant-checkbox-wrapper:hover,
+.cascade-filter-row:hover,
+.cascade-filter-row.active {
+  background: var(--analytics-panel-muted);
+}
+
+.cascade-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px 6px 12px;
+  color: var(--analytics-text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.cascade-filter-row b {
+  color: var(--analytics-muted);
+}
+
+.owner-group-row {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.owner-group-row .ant-checkbox-wrapper {
+  min-width: 0;
+  margin-inline-start: 0;
+  color: var(--analytics-text);
+}
+
+.cascade-name {
+  display: inline-block;
+  max-width: 176px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.cascade-filter-footer {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 8px 10px;
+  background: var(--analytics-panel-muted);
+  border-top: 1px solid var(--analytics-border);
+}
+
 .top-board {
-  grid-template-columns: 226px minmax(390px, 0.56fr) minmax(0, 1fr) 360px;
   grid-template-rows: minmax(252px, auto) repeat(2, minmax(158px, 1fr));
+  grid-template-columns: 226px minmax(390px, 0.56fr) minmax(0, 1fr) 360px;
   align-items: stretch;
 }
 
@@ -2752,8 +3189,8 @@ onBeforeUnmount(() => {
 }
 
 .gauge-column {
-  grid-row: 1 / 4;
   grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-row: 1 / 4;
   height: 100%;
 }
 
@@ -2763,28 +3200,23 @@ onBeforeUnmount(() => {
 }
 
 .sales-column > .yellow-grid {
-  grid-column: 2 / 4;
   grid-row: 1;
+  grid-column: 2 / 4;
 }
 
 .tracking-column > .blue-grid {
-  grid-column: 4;
   grid-row: 1;
+  grid-column: 4;
 }
 
 .sales-column > .group-panel:nth-of-type(2) {
+  grid-row: 2 / 4;
   grid-column: 2;
-  grid-row: 2;
-}
-
-.sales-column > .group-panel:nth-of-type(3) {
-  grid-column: 2;
-  grid-row: 3;
 }
 
 .tracking-column > .responsible-panel {
-  grid-column: 3 / 5;
   grid-row: 2 / 4;
+  grid-column: 3 / 5;
 }
 
 .white-panel,
@@ -2826,13 +3258,15 @@ h2 {
 
 .gauge-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(178px, 1fr) auto;
+  gap: 4px;
   min-height: 0;
 }
 
 .gauge-visual {
   position: relative;
-  height: 150px;
+  align-self: stretch;
+  min-height: 178px;
 }
 
 .gauge-chart {
@@ -2841,7 +3275,7 @@ h2 {
 
 .gauge-center {
   position: absolute;
-  top: 51%;
+  top: 55%;
   left: 50%;
   display: grid;
   gap: 3px;
@@ -2883,15 +3317,23 @@ h2 {
 
 .yellow-grid,
 .blue-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-self: stretch;
   height: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .yellow-grid > .metric-stack,
 .blue-grid > .metric-stack {
-  min-height: 0;
   grid-template-rows: minmax(112px, 1fr) minmax(118px, auto);
+  min-height: 0;
+}
+
+.yellow-grid > .metric-stack {
+  grid-template-rows: 90px minmax(0, 1fr);
+}
+
+.blue-grid > .metric-stack {
+  grid-template-rows: 96px minmax(0, 1fr);
 }
 
 .hero-card {
@@ -2930,12 +3372,51 @@ h2 {
   background: linear-gradient(135deg, #f59e0b, #facc15);
 }
 
+.yellow-grid .hero-card {
+  min-height: 0;
+  padding: 8px 16px;
+}
+
+.yellow-grid .hero-card strong {
+  margin: 3px 0 2px;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.yellow-grid .hero-card span,
+.yellow-grid .hero-card em {
+  line-height: 1.2;
+}
+
 .blue-card {
   background: linear-gradient(135deg, #3730a3, #2563eb);
 }
 
 .blue-card strong {
   color: #fde047;
+}
+
+.blue-grid .hero-card {
+  min-height: 0;
+  padding: 10px 14px;
+}
+
+.blue-grid .hero-card strong {
+  margin: 3px 0 2px;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.blue-grid .hero-card em {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.blue-grid .comparison-card {
+  min-height: 0;
 }
 
 .comparison-card {
@@ -3006,12 +3487,31 @@ h2 {
 }
 
 .yellow-detail {
+  align-content: center;
   background: var(--analytics-yellow-detail-bg);
   border-color: var(--analytics-yellow-detail-border);
 }
 
+.yellow-detail div {
+  display: flex;
+  min-height: 62px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 9px 14px;
+}
+
 .yellow-detail span {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: 0.2px;
   color: var(--analytics-yellow-detail-text);
+}
+
+.yellow-detail strong {
+  margin-top: 7px;
+  font-size: 15px;
+  line-height: 1.25;
 }
 
 .blue-detail {
@@ -3022,6 +3522,10 @@ h2 {
 
 .blue-detail span {
   color: #bfdbfe;
+}
+
+.blue-detail-six div:nth-child(-n + 4) {
+  border-bottom: 1px solid rgb(255 255 255 / 18%);
 }
 
 .group-panel {
@@ -3045,7 +3549,7 @@ h2 {
 }
 
 .sales-column > .group-panel .group-scroll {
-  max-height: 88px;
+  max-height: 284px;
 }
 
 .group-placeholder div {
@@ -3055,10 +3559,37 @@ h2 {
   border-left: 4px solid var(--analytics-border-strong);
 }
 
+.group-placeholder .group-completion-card {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.group-completion-card.completion-good {
+  background: rgb(22 163 74 / 8%);
+  border-left-color: #16a34a;
+}
+
+.group-completion-card.completion-warning {
+  background: rgb(245 158 11 / 10%);
+  border-left-color: #f59e0b;
+}
+
+.group-completion-card.completion-error {
+  background: rgb(239 68 68 / 8%);
+  border-left-color: #ef4444;
+}
+
 .group-placeholder b,
 .group-placeholder strong,
 .group-placeholder span {
   display: block;
+}
+
+.group-completion-tag {
+  width: fit-content;
+  margin: 4px 0;
+  font-weight: 600;
 }
 
 .group-placeholder strong {
@@ -3179,6 +3710,14 @@ h2 {
 
 .report-filter-menu-wide {
   width: 280px;
+}
+
+.dashboard-country-menu {
+  width: 228px;
+}
+
+.dashboard-country-scroll {
+  max-height: 218px;
 }
 
 .report-filter-menu > .ant-checkbox-wrapper {
@@ -3586,23 +4125,22 @@ h2 {
   .sales-column,
   .tracking-column {
     display: grid;
-    gap: 8px;
-    grid-column: auto;
     grid-row: auto;
+    grid-column: auto;
+    gap: 8px;
   }
 
   .gauge-column {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sales-column > .yellow-grid,
   .tracking-column > .blue-grid,
   .sales-column > .group-panel:nth-of-type(2),
-  .sales-column > .group-panel:nth-of-type(3),
   .tracking-column > .responsible-panel {
-    grid-column: auto;
     grid-row: auto;
+    grid-column: auto;
   }
 
   .screen-toolbar {
@@ -3620,5 +4158,3 @@ h2 {
   }
 }
 </style>
-
-

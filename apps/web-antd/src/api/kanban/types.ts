@@ -165,6 +165,17 @@ export interface KanbanProductDetailRow {
 export interface KanbanProductDetailOverview {
   columns: KanbanProductDetailColumn[];
   countries: string[];
+  query: {
+    countries: string[];
+    dateRangeType: string;
+    days: number;
+    endDate: string;
+    previousEndDate: string;
+    previousStartDate: string;
+    responsibles: string[];
+    sites: string[];
+    startDate: string;
+  };
   rows: KanbanProductDetailRow[];
 }
 
