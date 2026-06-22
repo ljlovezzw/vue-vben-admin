@@ -50,15 +50,20 @@ use([CanvasRenderer, GaugeChart, TooltipComponent]);
 const { isDark } = usePreferences();
 
 interface ResponsibleCard {
+  adAcoas: number;
   completionRate: number;
   dailyTargetProfit: number;
   dailyTargetSales: number;
   dailyTargetUnits: number;
+  department: string;
+  fbaAvailableQty: number;
   grossProfit: number;
   inventoryQty: number;
   name: string;
+  promotionRate: number;
   salesAmount: number;
   salesQty: number;
+  turnoverFbaAvailableMonths: number;
   turnoverMonths: number;
 }
 
@@ -144,6 +149,10 @@ const dashboardOwnerDropdownOpen = ref(false);
 const dashboardOwnerDraftGroups = ref<string[]>([]);
 const dashboardOwnerDraftResponsibles = ref<string[]>([]);
 const activeDashboardOwnerGroupId = ref('');
+const responsibleOwnerDropdownOpen = ref(false);
+const responsibleOwnerDraftGroups = ref<string[]>([]);
+const responsibleOwnerDraftResponsibles = ref<string[]>([]);
+const activeResponsibleOwnerGroupId = ref('');
 let reportBodyScrollElement: HTMLElement | null = null;
 let reportScrollSyncing = false;
 let dashboardAutoReloadReady = false;
@@ -213,13 +222,9 @@ const dateRangeValue = computed({
     query.siteDate = value[1];
   },
 });
-const targetLabel = computed(() => period.value?.targetLabel ?? '区间目标');
 const previousLabel = computed(() => period.value?.previousLabel ?? '前一周期');
 const secondaryLabel = computed(
   () => period.value?.secondaryLabel ?? '上周同期',
-);
-const targetHint = computed(() =>
-  isMonthMode.value ? '按所选月份汇总月目标' : '按所选日期范围累加日目标',
 );
 const metricPrefix = computed(() => {
   if (isMonthMode.value) return '月度';
@@ -270,9 +275,7 @@ const departmentOptions = computed(() =>
 const availableSiteSet = computed(
   () =>
     new Set(
-      (overview.value?.filters.sites ?? []).map((site) =>
-        site.toUpperCase(),
-      ),
+      (overview.value?.filters.sites ?? []).map((site) => site.toUpperCase()),
     ),
 );
 const responsibleOptions = computed(() =>
@@ -475,7 +478,7 @@ const reportColumnGroups = computed(() => {
 const selectedReportColumnDraftMetas = computed<AnalyticsReportColumn[]>(() =>
   reportColumnDraft.value
     .map((key) => reportColumnMap.value.get(key))
-    .filter((column): column is AnalyticsReportColumn => Boolean(column)),
+    .filter(Boolean),
 );
 const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
   () => {
@@ -541,15 +544,20 @@ const weekCompareLabel = computed(() =>
 const allResponsibleCards = computed<ResponsibleCard[]>(() => {
   return (operations.value?.responsibleRows ?? [])
     .map((row) => ({
+      adAcoas: row.adAcoas ?? 0,
       completionRate: ratio(row.salesQty, row.dailyTargetUnits),
       dailyTargetProfit: row.dailyTargetProfit ?? 0,
       dailyTargetSales: row.dailyTargetSales ?? 0,
       dailyTargetUnits: row.dailyTargetUnits ?? 0,
+      department: row.department || '未配置部门',
+      fbaAvailableQty: row.fbaAvailableQty ?? 0,
       grossProfit: row.grossProfit,
       inventoryQty: row.inventoryQty,
       name: row.responsible,
+      promotionRate: row.promotionRate ?? 0,
       salesAmount: row.salesAmount,
       salesQty: row.salesQty,
+      turnoverFbaAvailableMonths: row.turnoverFbaAvailableMonths ?? 0,
       turnoverMonths: row.turnoverMonths,
     }))
     .toSorted((a, b) => {
@@ -568,10 +576,26 @@ const activeResponsibleCount = computed(
   () => allResponsibleCards.value.filter((item) => item.salesQty > 0).length,
 );
 
-const groupCards = computed(() =>
-  (overview.value?.filters.operationGroups ?? []).map((group) =>
-    buildGroupCard(group, allResponsibleCards.value),
-  ),
+const departmentCards = computed(() =>
+  (operations.value?.departmentRows ?? [])
+    .map((row) => ({
+      adAcoas: row.adAcoas ?? 0,
+      completionRate: ratio(row.salesQty, row.dailyTargetUnits),
+      dailyTargetProfit: row.dailyTargetProfit ?? 0,
+      dailyTargetSales: row.dailyTargetSales ?? 0,
+      dailyTargetUnits: row.dailyTargetUnits ?? 0,
+      fbaAvailableQty: row.fbaAvailableQty ?? 0,
+      grossProfit: row.grossProfit,
+      inventoryQty: row.inventoryQty,
+      name: row.department || '未配置部门',
+      promotionRate: row.promotionRate ?? 0,
+      salesAmount: row.salesAmount,
+      salesCompletionRate: ratio(row.salesAmount, row.dailyTargetSales),
+      salesQty: row.salesQty,
+      turnoverFbaAvailableMonths: row.turnoverFbaAvailableMonths ?? 0,
+      turnoverMonths: row.turnoverMonths,
+    }))
+    .toSorted((a, b) => b.salesQty - a.salesQty),
 );
 const productDetailBaseParams = computed(() => {
   const responsibleNames = new Set(query.responsibles);
@@ -855,7 +879,12 @@ function toggleDashboardOwnerGroup(group: AnalyticsOperationGroup) {
   const members = new Set(group.memberNames);
   dashboardOwnerDraftResponsibles.value = checked
     ? dashboardOwnerDraftResponsibles.value.filter((name) => !members.has(name))
-    : [...new Set([...dashboardOwnerDraftResponsibles.value, ...group.memberNames])];
+    : [
+        ...new Set([
+          ...dashboardOwnerDraftResponsibles.value,
+          ...group.memberNames,
+        ]),
+      ];
 }
 
 function toggleDashboardResponsible(name: string) {
@@ -868,7 +897,9 @@ function isDashboardOwnerDraftAllSelected() {
   const allGroups = dashboardOperationGroups.value.map((group) =>
     String(group.id),
   );
-  const allResponsibles = responsibleOptions.value.map((option) => option.value);
+  const allResponsibles = responsibleOptions.value.map(
+    (option) => option.value,
+  );
   return (
     allGroups.length > 0 &&
     allGroups.every((id) => dashboardOwnerDraftGroups.value.includes(id)) &&
@@ -884,8 +915,8 @@ function toggleDashboardOwnerDraftAll() {
     dashboardOwnerDraftResponsibles.value = [];
     return;
   }
-  dashboardOwnerDraftGroups.value = dashboardOperationGroups.value.map((group) =>
-    String(group.id),
+  dashboardOwnerDraftGroups.value = dashboardOperationGroups.value.map(
+    (group) => String(group.id),
   );
   dashboardOwnerDraftResponsibles.value = responsibleOptions.value.map(
     (option) => option.value,
@@ -907,6 +938,132 @@ function applyDashboardOwnerFilter() {
 function cancelDashboardOwnerFilter() {
   syncDashboardOwnerDraft();
   dashboardOwnerDropdownOpen.value = false;
+}
+
+const responsibleOwnerButtonText = computed(() => {
+  const selectedGroupCount = query.operationGroupIds.length;
+  const selectedResponsibleCount = query.responsibles.length;
+  if (selectedGroupCount === 0 && selectedResponsibleCount === 0) return '全部';
+  if (selectedGroupCount === 1 && selectedResponsibleCount === 0) {
+    return (
+      dashboardOperationGroups.value.find(
+        (group) => group.id === query.operationGroupIds[0],
+      )?.name ?? '已选1组'
+    );
+  }
+  if (selectedGroupCount === 0 && selectedResponsibleCount === 1) {
+    return query.responsibles[0] ?? '已选1人';
+  }
+  return `已选${selectedGroupCount}组/${selectedResponsibleCount}人`;
+});
+
+const activeResponsibleOwnerGroup = computed(
+  () =>
+    dashboardOperationGroups.value.find(
+      (group) => String(group.id) === activeResponsibleOwnerGroupId.value,
+    ) ?? dashboardOperationGroups.value[0],
+);
+
+const activeResponsibleOwnerMembers = computed(
+  () => activeResponsibleOwnerGroup.value?.memberNames ?? [],
+);
+
+function syncResponsibleOwnerDraft() {
+  responsibleOwnerDraftGroups.value = query.operationGroupIds.map(String);
+  responsibleOwnerDraftResponsibles.value = [...query.responsibles];
+}
+
+function handleResponsibleOwnerOpenChange(open: boolean) {
+  responsibleOwnerDropdownOpen.value = open;
+  if (!open) return;
+  syncResponsibleOwnerDraft();
+  activeResponsibleOwnerGroupId.value = String(
+    dashboardOperationGroups.value[0]?.id ?? '',
+  );
+}
+
+function isResponsibleOwnerGroupChecked(group: AnalyticsOperationGroup) {
+  return responsibleOwnerDraftGroups.value.includes(String(group.id));
+}
+
+function isResponsibleOwnerChecked(name: string) {
+  return responsibleOwnerDraftResponsibles.value.includes(name);
+}
+
+function toggleResponsibleOwnerGroup(group: AnalyticsOperationGroup) {
+  const groupId = String(group.id);
+  const checked = isResponsibleOwnerGroupChecked(group);
+  responsibleOwnerDraftGroups.value = checked
+    ? responsibleOwnerDraftGroups.value.filter((item) => item !== groupId)
+    : [...responsibleOwnerDraftGroups.value, groupId];
+  const members = new Set(group.memberNames);
+  responsibleOwnerDraftResponsibles.value = checked
+    ? responsibleOwnerDraftResponsibles.value.filter(
+        (name) => !members.has(name),
+      )
+    : [
+        ...new Set([
+          ...responsibleOwnerDraftResponsibles.value,
+          ...group.memberNames,
+        ]),
+      ];
+}
+
+function toggleResponsibleOwner(name: string) {
+  responsibleOwnerDraftResponsibles.value = isResponsibleOwnerChecked(name)
+    ? responsibleOwnerDraftResponsibles.value.filter((item) => item !== name)
+    : [...responsibleOwnerDraftResponsibles.value, name];
+}
+
+function isResponsibleOwnerDraftAllSelected() {
+  const allGroups = dashboardOperationGroups.value.map((group) =>
+    String(group.id),
+  );
+  const allResponsibles = responsibleOptions.value.map(
+    (option) => option.value,
+  );
+  return (
+    allGroups.length > 0 &&
+    allGroups.every((id) => responsibleOwnerDraftGroups.value.includes(id)) &&
+    allResponsibles.every((name) =>
+      responsibleOwnerDraftResponsibles.value.includes(name),
+    )
+  );
+}
+
+function toggleResponsibleOwnerDraftAll() {
+  if (isResponsibleOwnerDraftAllSelected()) {
+    responsibleOwnerDraftGroups.value = [];
+    responsibleOwnerDraftResponsibles.value = [];
+    return;
+  }
+  responsibleOwnerDraftGroups.value = dashboardOperationGroups.value.map(
+    (group) => String(group.id),
+  );
+  responsibleOwnerDraftResponsibles.value = responsibleOptions.value.map(
+    (option) => option.value,
+  );
+}
+
+function applyResponsibleOwnerFilter() {
+  query.operationGroupIds = isResponsibleOwnerDraftAllSelected()
+    ? []
+    : responsibleOwnerDraftGroups.value
+        .map(Number)
+        .filter((value) => Number.isFinite(value));
+  query.responsibles = isResponsibleOwnerDraftAllSelected()
+    ? []
+    : [...responsibleOwnerDraftResponsibles.value];
+  responsibleOwnerDropdownOpen.value = false;
+}
+
+function cancelResponsibleOwnerFilter() {
+  syncResponsibleOwnerDraft();
+  responsibleOwnerDropdownOpen.value = false;
+}
+
+function ownerDropdownPopupContainer() {
+  return document.body;
 }
 
 function reportFilterValues(key: ReportFilterKey) {
@@ -1321,44 +1478,18 @@ function turnover(value?: null | number) {
   return Number(value).toFixed(2);
 }
 
-function buildGroupCard(
-  group: AnalyticsOperationGroup,
-  rows: ResponsibleCard[],
-) {
-  const names = new Set(group.memberNames);
-  const members = rows.filter((row) => names.has(row.name));
-  let salesQty = 0;
-  let dailyTargetUnits = 0;
-  let grossProfit = 0;
-  let dailyTargetProfit = 0;
-  for (const row of members) {
-    salesQty += row.salesQty;
-    dailyTargetUnits += row.dailyTargetUnits;
-    grossProfit += row.grossProfit;
-    dailyTargetProfit += row.dailyTargetProfit;
-  }
-  return {
-    completionRate: ratio(salesQty, dailyTargetUnits),
-    dailyTargetProfit,
-    dailyTargetUnits,
-    grossProfit,
-    memberCount: group.memberNames.length,
-    name: group.name,
-    profitCompletionRate: ratio(grossProfit, dailyTargetProfit),
-    salesQty,
-  };
+function groupAccent(index: number) {
+  return ['#facc15', '#0f5fb8', '#60a5fa'][index % 3] ?? '#60a5fa';
 }
 
-function completionColor(value: number) {
-  if (value >= 1) return 'success';
+function groupGap(current: number, target: number) {
+  return current - target;
+}
+
+function completionTextClass(value: number) {
+  if (value >= 1) return 'good';
   if (value >= 0.8) return 'warning';
-  return 'error';
-}
-
-function completionClass(value: number) {
-  if (value >= 1) return 'completion-good';
-  if (value >= 0.8) return 'completion-warning';
-  return 'completion-error';
+  return 'bad';
 }
 
 function reportColumnAlign(
@@ -1778,6 +1909,16 @@ onBeforeUnmount(() => {
             value-format="YYYY-MM-DD"
           />
         </div>
+        <label>部门</label>
+        <Select
+          v-model:value="query.departments"
+          :options="departmentOptions"
+          allow-clear
+          mode="multiple"
+          placeholder="全部"
+          size="small"
+          style="min-width: 130px"
+        />
         <label>国家</label>
         <Dropdown
           v-model:open="dashboardCountryDropdownOpen"
@@ -1820,23 +1961,17 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </Dropdown>
-        <label>部门</label>
-        <Select
-          v-model:value="query.departments"
-          :options="departmentOptions"
-          allow-clear
-          mode="multiple"
-          placeholder="全部"
-          size="small"
-          style="min-width: 130px"
-        />
+
         <label>运营</label>
         <Dropdown
           v-model:open="dashboardOwnerDropdownOpen"
           :trigger="['click']"
           @open-change="handleDashboardOwnerOpenChange"
         >
-          <Button class="toolbar-filter-trigger toolbar-filter-trigger-wide" size="small">
+          <Button
+            class="toolbar-filter-trigger toolbar-filter-trigger-wide"
+            size="small"
+          >
             {{ dashboardOwnerButtonText }}
           </Button>
           <template #overlay>
@@ -1906,7 +2041,6 @@ onBeforeUnmount(() => {
           <div class="white-panel gauge-panel">
             <div class="panel-heading">
               <h2>销量完成率</h2>
-              <span>{{ targetHint }}</span>
             </div>
             <div class="gauge-visual">
               <VChart
@@ -1928,7 +2062,6 @@ onBeforeUnmount(() => {
           <div class="white-panel gauge-panel">
             <div class="panel-heading">
               <h2>销售额完成率</h2>
-              <span>{{ targetHint }}</span>
             </div>
             <div class="gauge-visual">
               <VChart
@@ -1951,12 +2084,19 @@ onBeforeUnmount(() => {
         <main class="sales-column">
           <div class="yellow-grid">
             <div class="metric-stack yellow-stack">
-              <div class="hero-card yellow-card">
-                <span>{{ metricPrefix }}销量</span>
-                <strong>{{ formatInteger(latest?.salesQty) }}</strong>
-                <em>SALES VOLUME · 最新快照</em>
+              <div class="hero-card yellow-card yellow-kpi-card">
+                <div class="yellow-kpi-glass">
+                  <span class="yellow-kpi-dot" aria-hidden="true"></span>
+                  <div class="yellow-kpi-heading">
+                    <span>{{ metricPrefix }}销量</span>
+                    <em>SALES VOLUME</em>
+                  </div>
+                  <strong>{{ formatInteger(latest?.salesQty) }}</strong>
+                </div>
               </div>
-              <div class="comparison-card metric-comparison-card yellow-detail">
+              <div
+                class="comparison-card metric-comparison-card yellow-detail yellow-comparison-card"
+              >
                 <div>
                   <span>{{ previousLabel }}销量</span>
                   <strong>{{ formatInteger(previous?.salesQty) }}</strong>
@@ -2021,12 +2161,19 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="metric-stack yellow-stack">
-              <div class="hero-card yellow-card">
-                <span>{{ metricPrefix }}销售额</span>
-                <strong>{{ formatSalesMoney(latest?.salesAmount) }}</strong>
-                <em>SALES REVENUE · 最新快照</em>
+              <div class="hero-card yellow-card yellow-kpi-card">
+                <div class="yellow-kpi-glass">
+                  <span class="yellow-kpi-dot" aria-hidden="true"></span>
+                  <div class="yellow-kpi-heading">
+                    <span>{{ metricPrefix }}销售额</span>
+                    <em>SALES REVENUE</em>
+                  </div>
+                  <strong>{{ formatSalesMoney(latest?.salesAmount) }}</strong>
+                </div>
               </div>
-              <div class="comparison-card metric-comparison-card yellow-detail">
+              <div
+                class="comparison-card metric-comparison-card yellow-detail yellow-comparison-card"
+              >
                 <div>
                   <span>{{ previousLabel }}销售额</span>
                   <strong>{{ formatSalesMoney(previous?.salesAmount) }}</strong>
@@ -2113,46 +2260,119 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="white-panel group-panel">
-            <div class="panel-heading">
-              <h2>{{ metricPrefix }}销量完成率 - 运营组维度</h2>
-              <span>{{ targetHint }}</span>
-            </div>
-            <div
-              v-if="groupCards.length > 0"
-              class="group-placeholder group-scroll"
-            >
-              <div
-                v-for="item in groupCards"
-                :key="item.name"
-                class="group-completion-card"
-                :class="completionClass(item.completionRate)"
-              >
-                <b>{{ item.name }}</b>
-                <Tag
-                  class="group-completion-tag"
-                  :color="completionColor(item.completionRate)"
-                >
-                  {{ formatPercent(item.completionRate) }}
-                </Tag>
-                <span>
-                  销量 {{ formatInteger(item.salesQty) }} / {{ targetLabel }}
-                  {{ formatInteger(item.dailyTargetUnits) }}
-                </span>
+            <section class="group-track-section">
+              <div class="panel-heading track-heading">
+                <h2>{{ metricPrefix }}销量完成率 - 部门维度</h2>
               </div>
-            </div>
-            <p v-else class="pending-text">请先在配置中心维护运营组</p>
+              <div v-if="departmentCards.length > 0" class="group-track-grid">
+                <article
+                  v-for="(item, index) in departmentCards"
+                  :key="item.name"
+                  class="group-track-card"
+                >
+                  <div
+                    class="group-track-icon"
+                    :style="{ '--track-accent': groupAccent(index) }"
+                  >
+                    {{ index + 1 }}
+                  </div>
+                  <div class="group-track-body">
+                    <button type="button">{{ item.name }} &gt;</button>
+                    <strong>{{ formatPercent(item.completionRate) }}</strong>
+                    <p>
+                      目标销量
+                      <b
+                        :class="
+                          comparisonClass(item.salesQty, item.dailyTargetUnits)
+                        "
+                        :title="
+                          formatSignedInteger(
+                            groupGap(item.salesQty, item.dailyTargetUnits),
+                          )
+                        "
+                      >
+                        {{
+                          formatSignedInteger(
+                            groupGap(item.salesQty, item.dailyTargetUnits),
+                          )
+                        }}
+                      </b>
+                    </p>
+                  </div>
+                </article>
+              </div>
+              <p v-else class="pending-text">请先在配置中心维护用户部门</p>
+            </section>
+
+            <section class="group-track-section">
+              <div class="panel-heading track-heading">
+                <h2>{{ metricPrefix }}销售额完成率 - 部门维度</h2>
+              </div>
+              <div v-if="departmentCards.length > 0" class="group-track-grid">
+                <article
+                  v-for="(item, index) in departmentCards"
+                  :key="`${item.name}-sales`"
+                  class="group-track-card"
+                >
+                  <div
+                    class="group-track-icon"
+                    :style="{ '--track-accent': groupAccent(index) }"
+                  >
+                    {{ index + 1 }}
+                  </div>
+                  <div class="group-track-body">
+                    <button type="button">{{ item.name }} &gt;</button>
+                    <strong>{{
+                      formatPercent(item.salesCompletionRate)
+                    }}</strong>
+                    <p>
+                      目标销售额
+                      <b
+                        :class="
+                          comparisonClass(
+                            item.salesAmount,
+                            item.dailyTargetSales,
+                          )
+                        "
+                        :title="
+                          formatSignedSalesMoney(
+                            groupGap(item.salesAmount, item.dailyTargetSales),
+                          )
+                        "
+                      >
+                        {{
+                          formatSignedSalesMoney(
+                            groupGap(item.salesAmount, item.dailyTargetSales),
+                          )
+                        }}
+                      </b>
+                    </p>
+                  </div>
+                </article>
+              </div>
+              <p v-else class="pending-text">请先在配置中心维护用户部门</p>
+            </section>
           </div>
         </main>
 
         <aside class="tracking-column">
           <div class="blue-grid">
             <div class="metric-stack">
-              <div class="hero-card blue-card">
-                <span>推广费用占比</span>
-                <strong>{{ formatPercent(promotionRate) }}</strong>
-                <em>{{ currentPeriodLabel }} 内广告花费绝对值 / 总销售额</em>
+              <div
+                class="hero-card blue-card blue-kpi-card"
+                :title="`${currentPeriodLabel} 内广告花费绝对值 / 总销售额`"
+              >
+                <div class="blue-kpi-glass">
+                  <span class="blue-kpi-dot" aria-hidden="true"></span>
+                  <div class="blue-kpi-heading">
+                    <span>推广费用占比</span>
+                  </div>
+                  <strong>{{ formatPercent(promotionRate) }}</strong>
+                </div>
               </div>
-              <div class="comparison-card blue-detail blue-detail-six">
+              <div
+                class="comparison-card blue-detail blue-detail-six blue-comparison-card"
+              >
                 <div>
                   <span>广告费</span>
                   <strong>{{
@@ -2205,12 +2425,22 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="metric-stack">
-              <div class="hero-card blue-card">
-                <span>周转周期(月)</span>
-                <strong>{{ turnover(latest?.turnoverMonths) }}</strong>
-                <em>{{ currentPeriodLabel }} 内周转库存 / 销售速度 / 30</em>
+              <div
+                class="hero-card blue-card blue-kpi-card"
+                :title="`${currentPeriodLabel} 内周转库存 / 销售速度 / 30`"
+              >
+                <div class="blue-kpi-glass">
+                  <span class="blue-kpi-dot" aria-hidden="true"></span>
+                  <div class="blue-kpi-heading">
+                    <span>周转周期(月)</span>
+                  </div>
+                  <strong>
+                    {{ turnover(latest?.turnoverMonths) }}
+                    <i class="blue-kpi-status" aria-hidden="true"></i>
+                  </strong>
+                </div>
               </div>
-              <div class="comparison-card blue-detail">
+              <div class="comparison-card blue-detail blue-comparison-card">
                 <div>
                   <span>{{ previousCompareLabel }}周转</span>
                   <strong>{{ turnover(previous?.turnoverMonths) }}</strong>
@@ -2264,50 +2494,154 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="white-panel responsible-panel">
-            <div class="panel-heading">
+            <div class="panel-heading responsible-heading">
               <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度</h2>
-              <span>
-                展示 {{ responsibleCards.length }} 人， 有销量
-                {{ activeResponsibleCount }} 人
-              </span>
+              <div class="responsible-heading-actions">
+                <span>
+                  展示 {{ responsibleCards.length }} 人， 有销量
+                  {{ activeResponsibleCount }} 人
+                </span>
+                <Dropdown
+                  v-model:open="responsibleOwnerDropdownOpen"
+                  :get-popup-container="ownerDropdownPopupContainer"
+                  :trigger="['click']"
+                  @open-change="handleResponsibleOwnerOpenChange"
+                >
+                  <Button class="responsible-owner-trigger" size="small">
+                    {{ responsibleOwnerButtonText }}
+                  </Button>
+                  <template #overlay>
+                    <div
+                      class="dashboard-owner-menu responsible-owner-menu"
+                      @click.stop
+                    >
+                      <div class="cascade-filter-header">
+                        <Checkbox
+                          :checked="isResponsibleOwnerDraftAllSelected()"
+                          @change="toggleResponsibleOwnerDraftAll"
+                        >
+                          全部运营组 / 负责人
+                        </Checkbox>
+                      </div>
+                      <div class="dashboard-owner-cascade">
+                        <div class="dashboard-owner-groups">
+                          <button
+                            v-for="group in dashboardOperationGroups"
+                            :key="group.id"
+                            class="cascade-filter-row owner-group-row"
+                            :class="{
+                              active:
+                                activeResponsibleOwnerGroupId ===
+                                String(group.id),
+                            }"
+                            type="button"
+                            @mouseenter="
+                              activeResponsibleOwnerGroupId = String(group.id)
+                            "
+                            @click="
+                              activeResponsibleOwnerGroupId = String(group.id)
+                            "
+                          >
+                            <Checkbox
+                              :checked="isResponsibleOwnerGroupChecked(group)"
+                              @click.stop
+                              @change="toggleResponsibleOwnerGroup(group)"
+                            />
+                            <span class="cascade-name">{{ group.name }}</span>
+                            <span class="cascade-count">
+                              {{ group.memberNames.length }}
+                            </span>
+                          </button>
+                        </div>
+                        <div class="dashboard-owner-members">
+                          <Checkbox
+                            v-for="name in activeResponsibleOwnerMembers"
+                            :key="name"
+                            :checked="isResponsibleOwnerChecked(name)"
+                            @change="toggleResponsibleOwner(name)"
+                          >
+                            {{ name }}
+                          </Checkbox>
+                        </div>
+                      </div>
+                      <div class="report-filter-footer">
+                        <Button
+                          size="small"
+                          @click="cancelResponsibleOwnerFilter"
+                        >
+                          取消
+                        </Button>
+                        <Button
+                          size="small"
+                          type="primary"
+                          @click="applyResponsibleOwnerFilter"
+                        >
+                          确定
+                        </Button>
+                      </div>
+                    </div>
+                  </template>
+                </Dropdown>
+              </div>
             </div>
             <div v-if="responsibleCards.length > 0" class="responsible-grid">
               <article v-for="item in responsibleCards" :key="item.name">
-                <div>
-                  <strong>{{ item.name }}</strong>
-                  <Tag :color="completionColor(item.completionRate)">
+                <button
+                  class="responsible-card-name"
+                  :title="item.name"
+                  type="button"
+                >
+                  {{ item.name }} &gt;
+                </button>
+                <p>
+                  销售额完成率
+                  <b
+                    :class="
+                      completionTextClass(
+                        ratio(item.salesAmount, item.dailyTargetSales),
+                      )
+                    "
+                  >
+                    {{
+                      formatPercent(
+                        ratio(item.salesAmount, item.dailyTargetSales),
+                      )
+                    }}
+                  </b>
+                </p>
+                <p>
+                  目标销售额
+                  <b :title="formatSalesMoney(item.dailyTargetSales)">
+                    {{ formatSalesMoney(item.dailyTargetSales) }}
+                  </b>
+                </p>
+                <p>
+                  销量完成率
+                  <b :class="completionTextClass(item.completionRate)">
                     {{ formatPercent(item.completionRate) }}
-                  </Tag>
-                </div>
-                <p>
-                  {{ metricPrefix }}销量
-                  <b>{{ formatInteger(item.salesQty) }}</b>
+                  </b>
                 </p>
                 <p>
-                  {{ targetLabel }}销量
-                  <b>{{ formatInteger(item.dailyTargetUnits) }}</b>
+                  目标销量
+                  <b :title="formatInteger(item.dailyTargetUnits)">
+                    {{ formatInteger(item.dailyTargetUnits) }}
+                  </b>
                 </p>
                 <p>
-                  {{ targetLabel }}毛利
-                  <b>{{ formatMoney(item.dailyTargetProfit) }}</b>
+                  周转周期(FBA可售)
+                  <b>{{ turnover(item.turnoverFbaAvailableMonths) }}</b>
                 </p>
                 <p>
-                  {{ targetLabel }}销售额
-                  <b>{{ formatSalesMoney(item.dailyTargetSales) }}</b>
+                  周转周期(月)
+                  <b>{{ turnover(item.turnoverMonths) }}</b>
                 </p>
                 <p>
-                  {{ metricPrefix }}毛利
-                  <b>{{ formatMoney(item.grossProfit) }}</b>
+                  广告ACoAS
+                  <b>{{ formatPercent(item.adAcoas) }}</b>
                 </p>
                 <p>
-                  {{ metricPrefix }}销售额
-                  <b>{{ formatSalesMoney(item.salesAmount) }}</b>
-                </p>
-                <p>
-                  库存周转(月) <b>{{ turnover(item.turnoverMonths) }}</b>
-                </p>
-                <p>
-                  库存数量 <b>{{ formatInteger(item.inventoryQty) }}</b>
+                  推广费占比
+                  <b>{{ formatPercent(item.promotionRate) }}</b>
                 </p>
               </article>
             </div>
@@ -2315,6 +2649,11 @@ onBeforeUnmount(() => {
           </div>
         </aside>
       </section>
+
+      <ProductDetailTable
+        :base-params="productDetailBaseParams"
+        :responsible-options="overview?.filters.responsibles ?? []"
+      />
 
       <section class="white-panel report-panel">
         <div class="report-heading">
@@ -2846,11 +3185,6 @@ onBeforeUnmount(() => {
         </Table>
       </section>
 
-      <ProductDetailTable
-        :base-params="productDetailBaseParams"
-        :responsible-options="overview?.filters.responsibles ?? []"
-      />
-
       <Modal
         v-model:open="reportColumnConfigOpen"
         :footer="null"
@@ -2980,9 +3314,6 @@ onBeforeUnmount(() => {
   --analytics-sparkline-bg: linear-gradient(180deg, #f8fafc, #fff);
   --analytics-note-border: #cbd5e1;
   --analytics-accent-label: #1d4ed8;
-  --analytics-yellow-detail-bg: linear-gradient(135deg, #fef3c7, #fde68a);
-  --analytics-yellow-detail-border: #fde68a;
-  --analytics-yellow-detail-text: #a16207;
 
   min-height: calc(100vh - 92px);
   padding: 10px;
@@ -3006,16 +3337,12 @@ onBeforeUnmount(() => {
   --analytics-sparkline-bg: linear-gradient(180deg, #111827, #0f172a);
   --analytics-note-border: #334155;
   --analytics-accent-label: #93c5fd;
-  --analytics-yellow-detail-bg: linear-gradient(135deg, #422006, #713f12);
-  --analytics-yellow-detail-border: #854d0e;
-  --analytics-yellow-detail-text: #fde68a;
 }
 
 .screen-toolbar,
 .top-board,
 .yellow-grid,
 .blue-grid,
-.group-placeholder,
 .responsible-grid {
   display: grid;
   gap: 8px;
@@ -3146,6 +3473,7 @@ onBeforeUnmount(() => {
 }
 
 .owner-group-row {
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   padding-top: 4px;
   padding-bottom: 4px;
 }
@@ -3176,8 +3504,8 @@ onBeforeUnmount(() => {
 }
 
 .top-board {
-  grid-template-rows: minmax(252px, auto) repeat(2, minmax(158px, 1fr));
-  grid-template-columns: 226px minmax(390px, 0.56fr) minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(252px, auto) repeat(2, minmax(184px, 1fr));
+  grid-template-columns: 226px minmax(380px, 0.72fr) minmax(0, 0.94fr) 500px;
   align-items: stretch;
 }
 
@@ -3192,6 +3520,10 @@ onBeforeUnmount(() => {
   grid-template-rows: repeat(2, minmax(0, 1fr));
   grid-row: 1 / 4;
   height: 100%;
+}
+
+.gauge-column p {
+  font-size: 22px;
 }
 
 .sales-column,
@@ -3249,7 +3581,6 @@ h2 {
 .hero-card span,
 .hero-card em,
 .comparison-card span,
-.group-placeholder span,
 .screen-note {
   font-size: 11px;
   font-style: normal;
@@ -3324,16 +3655,16 @@ h2 {
 
 .yellow-grid > .metric-stack,
 .blue-grid > .metric-stack {
-  grid-template-rows: minmax(112px, 1fr) minmax(118px, auto);
+  grid-template-rows: minmax(120px, 1fr) minmax(118px, auto);
   min-height: 0;
 }
 
 .yellow-grid > .metric-stack {
-  grid-template-rows: 90px minmax(0, 1fr);
+  grid-template-rows: 138px minmax(0, 1fr);
 }
 
 .blue-grid > .metric-stack {
-  grid-template-rows: 96px minmax(0, 1fr);
+  grid-template-rows: 138px minmax(0, 1fr);
 }
 
 .hero-card {
@@ -3369,18 +3700,142 @@ h2 {
 }
 
 .yellow-card {
-  background: linear-gradient(135deg, #f59e0b, #facc15);
+  background:
+    radial-gradient(
+      circle at 84% -18%,
+      rgb(255 255 255 / 46%),
+      transparent 32%
+    ),
+    linear-gradient(142deg, #f97316 0%, #f59e0b 42%, #facc15 100%);
+  border-color: rgb(251 191 36 / 70%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 38%),
+    0 12px 24px rgb(180 83 9 / 16%);
 }
 
 .yellow-grid .hero-card {
   min-height: 0;
-  padding: 8px 16px;
+  padding: 12px 16px;
 }
 
-.yellow-grid .hero-card strong {
-  margin: 3px 0 2px;
-  font-size: 30px;
+.yellow-kpi-card::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background:
+    repeating-linear-gradient(
+      -24deg,
+      rgb(255 255 255 / 0%) 0,
+      rgb(255 255 255 / 0%) 18px,
+      rgb(255 255 255 / 12%) 19px,
+      rgb(255 255 255 / 12%) 21px
+    ),
+    radial-gradient(ellipse at 18% 0, rgb(255 255 255 / 22%), transparent 48%);
+  opacity: 0.42;
+}
+
+.yellow-kpi-card::after {
+  right: -42px;
+  bottom: -76px;
+  width: 178px;
+  height: 178px;
+  border-color: rgb(255 255 255 / 14%);
+  border-width: 22px;
+}
+
+.yellow-kpi-glass {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+  align-content: center;
+  width: min(82%, 340px);
+  height: 100%;
+  min-height: 108px;
+  padding: 14px 18px 12px;
+  margin: 0 auto;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 30%), rgb(255 255 255 / 9%)),
+    linear-gradient(180deg, rgb(255 214 102 / 28%), rgb(249 115 22 / 12%));
+  border: 1px solid rgb(255 255 255 / 38%);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 34%),
+    0 10px 22px rgb(146 64 14 / 18%);
+  backdrop-filter: blur(6px);
+}
+
+.yellow-kpi-glass::after {
+  position: absolute;
+  right: -28px;
+  bottom: -34px;
+  width: 92px;
+  height: 92px;
+  content: '';
+  border: 12px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+}
+
+.yellow-kpi-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.yellow-kpi-heading span,
+.yellow-kpi-heading em {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.yellow-kpi-heading span {
+  justify-self: center;
+  padding-left: 18px;
+  font-size: 15px;
+  font-weight: 850;
+}
+
+.yellow-kpi-heading em {
+  font-size: 10px;
+  font-weight: 800;
+  color: rgb(255 255 255 / 72%);
+}
+
+.yellow-kpi-dot {
+  position: absolute;
+  top: 13px;
+  left: 13px;
+  width: 15px;
+  height: 15px;
+  background-image: radial-gradient(
+    circle,
+    rgb(255 255 255 / 78%) 1.3px,
+    transparent 1.7px
+  );
+  background-size: 5px 5px;
+}
+
+.yellow-grid .yellow-kpi-glass strong {
+  position: relative;
+  z-index: 1;
+  place-self: center;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 40px;
+  font-weight: 900;
   line-height: 1;
+  color: #fff;
+  white-space: nowrap;
+  text-shadow: 0 2px 10px rgb(146 64 14 / 22%);
 }
 
 .yellow-grid .hero-card span,
@@ -3389,30 +3844,159 @@ h2 {
 }
 
 .blue-card {
-  background: linear-gradient(135deg, #3730a3, #2563eb);
+  background:
+    radial-gradient(circle at 104% 0, rgb(255 255 255 / 30%), transparent 24%),
+    linear-gradient(146deg, #2638f0 0%, #4b45f5 48%, #2368f4 100%);
+  border-color: rgb(96 165 250 / 78%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 12px 24px rgb(37 99 235 / 18%);
 }
 
-.blue-card strong {
-  color: #fde047;
+.blue-kpi-card::before {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background:
+    radial-gradient(
+      circle at 5px 5px,
+      rgb(255 255 255 / 48%) 1px,
+      transparent 1.6px
+    ),
+    linear-gradient(
+      108deg,
+      rgb(15 23 42 / 0%) 0 38%,
+      rgb(30 64 175 / 28%) 39% 59%,
+      rgb(15 23 42 / 0%) 60%
+    );
+  background-size:
+    6px 6px,
+    100% 100%;
+  opacity: 0.38;
+  mask-image: linear-gradient(90deg, transparent 0 8%, #000 78% 100%);
+}
+
+.blue-kpi-card::after {
+  right: -46px;
+  bottom: -78px;
+  width: 184px;
+  height: 184px;
+  border-color: rgb(255 255 255 / 11%);
+  border-width: 22px;
 }
 
 .blue-grid .hero-card {
   min-height: 0;
-  padding: 10px 14px;
+  padding: 12px 16px;
 }
 
-.blue-grid .hero-card strong {
-  margin: 3px 0 2px;
-  font-size: 28px;
-  line-height: 1;
-}
-
-.blue-grid .hero-card em {
-  display: -webkit-box;
+.blue-kpi-glass {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  align-content: center;
+  width: min(86%, 236px);
+  height: 100%;
+  min-height: 108px;
+  padding: 14px 18px 12px;
+  margin: 0 auto;
   overflow: hidden;
-  line-height: 1.25;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 28%), rgb(255 255 255 / 8%)),
+    linear-gradient(180deg, rgb(96 165 250 / 22%), rgb(49 46 129 / 14%));
+  border: 1px solid rgb(255 255 255 / 32%);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 26%),
+    0 10px 22px rgb(30 64 175 / 24%);
+  backdrop-filter: blur(6px);
+}
+
+.blue-kpi-glass::after {
+  position: absolute;
+  right: -30px;
+  bottom: -36px;
+  width: 92px;
+  height: 92px;
+  content: '';
+  border: 12px solid rgb(255 255 255 / 8%);
+  border-radius: 999px;
+}
+
+.blue-kpi-heading {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 20px;
+}
+
+.blue-kpi-heading span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.15;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.blue-kpi-dot {
+  position: absolute;
+  top: 17px;
+  left: 18px;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  background-image: radial-gradient(
+    circle,
+    rgb(255 255 255 / 78%) 1.2px,
+    transparent 1.7px
+  );
+  background-size: 5px 5px;
+}
+
+.blue-grid .blue-kpi-glass strong {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fde047;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px rgb(15 23 42 / 24%);
+}
+
+.blue-kpi-status {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  background: #22c55e;
+  border-radius: 999px;
+  box-shadow: 0 0 0 5px rgb(34 197 94 / 18%);
+}
+
+.blue-kpi-status::before {
+  position: absolute;
+  width: 8px;
+  height: 5px;
+  content: '';
+  border-bottom: 2px solid #2563eb;
+  border-left: 2px solid #2563eb;
+  transform: translate(7px, 7px) rotate(-45deg);
 }
 
 .blue-grid .comparison-card {
@@ -3488,40 +4072,197 @@ h2 {
 
 .yellow-detail {
   align-content: center;
-  background: var(--analytics-yellow-detail-bg);
-  border-color: var(--analytics-yellow-detail-border);
+  color: #fff;
+  background:
+    radial-gradient(
+      circle at 88% -12%,
+      rgb(255 255 255 / 32%),
+      transparent 30%
+    ),
+    linear-gradient(
+      142deg,
+      rgb(249 115 22 / 96%) 0%,
+      rgb(245 158 11 / 94%) 46%,
+      rgb(250 204 21 / 92%) 100%
+    );
+  border-color: rgb(251 191 36 / 62%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 28%),
+    0 10px 20px rgb(180 83 9 / 12%);
+}
+
+.yellow-comparison-card {
+  position: relative;
+}
+
+.yellow-comparison-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 16%), rgb(255 255 255 / 0%) 42%),
+    repeating-linear-gradient(
+      -24deg,
+      rgb(255 255 255 / 0%) 0,
+      rgb(255 255 255 / 0%) 22px,
+      rgb(255 255 255 / 10%) 23px,
+      rgb(255 255 255 / 10%) 24px
+    );
+  opacity: 0.34;
 }
 
 .yellow-detail div {
-  display: flex;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
   min-height: 62px;
-  flex-direction: column;
-  justify-content: center;
-  padding: 9px 14px;
+  padding: 10px 12px;
+  text-align: center;
 }
 
 .yellow-detail span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 13px;
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0.2px;
-  color: var(--analytics-yellow-detail-text);
+  font-weight: 760;
+  line-height: 1.35;
+  color: rgb(17 24 39 / 82%);
+  white-space: nowrap;
 }
 
 .yellow-detail strong {
-  margin-top: 7px;
-  font-size: 15px;
+  max-width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 850;
   line-height: 1.25;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.yellow-detail strong.good {
+  color: #047857 !important;
+}
+
+.yellow-detail strong.good::after {
+  margin-left: 4px;
+  font-size: 10px;
+  content: '▲';
+}
+
+.yellow-detail strong.bad {
+  color: #b91c1c !important;
+}
+
+.yellow-detail strong.bad::after {
+  margin-left: 4px;
+  font-size: 10px;
+  content: '▼';
+}
+
+.yellow-detail strong.neutral {
+  color: rgb(17 24 39 / 88%) !important;
 }
 
 .blue-detail {
+  position: relative;
   color: #fff;
-  background: linear-gradient(135deg, #3730a3, #2563eb);
-  border-color: #4f46e5;
+  background:
+    radial-gradient(circle at 104% 0, rgb(255 255 255 / 22%), transparent 24%),
+    linear-gradient(146deg, #2638f0 0%, #4b45f5 48%, #2368f4 100%);
+  border-color: rgb(96 165 250 / 72%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 20%),
+    0 10px 20px rgb(37 99 235 / 13%);
+}
+
+.blue-comparison-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background:
+    radial-gradient(
+      circle at 5px 5px,
+      rgb(255 255 255 / 35%) 1px,
+      transparent 1.5px
+    ),
+    linear-gradient(
+      108deg,
+      rgb(15 23 42 / 0%) 0 36%,
+      rgb(30 64 175 / 26%) 37% 58%,
+      rgb(15 23 42 / 0%) 59%
+    );
+  background-size:
+    6px 6px,
+    100% 100%;
+  opacity: 0.2;
+}
+
+.blue-detail div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-height: 58px;
+  text-align: center;
 }
 
 .blue-detail span {
-  color: #bfdbfe;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.25;
+  color: rgb(255 255 255 / 82%);
+  white-space: nowrap;
+}
+
+.blue-detail strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.15;
+  color: #fde047;
+  white-space: nowrap;
+}
+
+.blue-detail small {
+  color: rgb(255 255 255 / 70%);
+}
+
+.blue-detail strong.good {
+  color: #22c55e !important;
+}
+
+.blue-detail strong.good::after {
+  margin-left: 4px;
+  font-size: 9px;
+  content: '▼';
+}
+
+.blue-detail strong.bad {
+  color: #ff4d6d !important;
+}
+
+.blue-detail strong.bad::after {
+  margin-left: 4px;
+  font-size: 9px;
+  content: '▲';
+}
+
+.blue-detail strong.neutral {
+  color: #fde047 !important;
 }
 
 .blue-detail-six div:nth-child(-n + 4) {
@@ -3529,117 +4270,300 @@ h2 {
 }
 
 .group-panel {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   min-height: 0;
 }
 
-.group-placeholder {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 7px;
+.group-track-section {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
 }
 
-.sales-column > .group-panel .group-placeholder {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.track-heading {
+  min-height: 24px;
 }
 
-.group-scroll {
-  max-height: 132px;
-  padding-right: 4px;
-  overflow-y: auto;
+.group-track-grid {
+  display: grid;
+  grid-auto-columns: minmax(166px, 1fr);
+  grid-auto-flow: column;
+  min-height: 0;
+  padding: 2px 2px 6px;
+  margin-top: 8px;
+  overflow: auto hidden;
   scrollbar-gutter: stable;
+  background: transparent;
 }
 
-.sales-column > .group-panel .group-scroll {
-  max-height: 284px;
+.group-track-card {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  min-width: 166px;
+  min-height: 82px;
+  padding: 10px 11px;
+  background: var(--analytics-panel);
+  border: 1px solid var(--analytics-border);
+  border-radius: 5px;
 }
 
-.group-placeholder div {
-  min-height: 58px;
-  padding: 8px;
-  background: var(--analytics-panel-muted);
-  border-left: 4px solid var(--analytics-border-strong);
+.group-track-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  font-weight: 850;
+  color: #fff;
+  background: var(--track-accent);
+  border-radius: 999px;
 }
 
-.group-placeholder .group-completion-card {
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+.group-track-body {
+  min-width: 0;
 }
 
-.group-completion-card.completion-good {
-  background: rgb(22 163 74 / 8%);
-  border-left-color: #16a34a;
-}
-
-.group-completion-card.completion-warning {
-  background: rgb(245 158 11 / 10%);
-  border-left-color: #f59e0b;
-}
-
-.group-completion-card.completion-error {
-  background: rgb(239 68 68 / 8%);
-  border-left-color: #ef4444;
-}
-
-.group-placeholder b,
-.group-placeholder strong,
-.group-placeholder span {
+.group-track-body button,
+.responsible-grid article > button {
   display: block;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.25;
+  color: var(--analytics-heading);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
 }
 
-.group-completion-tag {
-  width: fit-content;
-  margin: 4px 0;
-  font-weight: 600;
+.group-track-body strong {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.05;
+  color: #0b63ce;
+  white-space: nowrap;
 }
 
-.group-placeholder strong {
-  margin: 3px 0;
-  font-size: 20px;
-  color: var(--analytics-muted);
+.group-track-body p {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  margin: 7px 0 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--analytics-subtle);
+  white-space: nowrap;
+}
+
+.group-track-body b {
+  min-width: 0;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 850;
 }
 
 .responsible-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
 }
 
+.responsible-heading {
+  min-height: 24px;
+}
+
+.responsible-heading-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.responsible-heading-actions span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.responsible-owner-menu {
+  width: 438px;
+}
+
+.responsible-owner-trigger {
+  min-width: 96px;
+  max-width: 138px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  white-space: nowrap;
+}
+
+:global(.responsible-owner-menu) {
+  position: relative;
+  z-index: 1500;
+  width: min(520px, calc(100vw - 32px));
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #d8e1ee;
+  border-radius: 6px;
+  box-shadow: 0 18px 42px rgb(15 23 42 / 28%);
+  opacity: 1;
+}
+
+:global(.dark .responsible-owner-menu) {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+:global(.responsible-owner-menu .dashboard-owner-cascade) {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.95fr) minmax(180px, 1fr);
+  max-height: 320px;
+  overflow: hidden;
+  background: inherit;
+}
+
+:global(.responsible-owner-menu .dashboard-owner-groups) {
+  max-height: 320px;
+  overflow-y: auto;
+  background: inherit;
+  border-right: 1px solid #d8e1ee;
+}
+
+:global(.dark .responsible-owner-menu .dashboard-owner-groups) {
+  border-right-color: #334155;
+}
+
+:global(.responsible-owner-menu .dashboard-owner-members) {
+  max-height: 320px;
+  overflow-y: auto;
+  background: inherit;
+}
+
+:global(
+  .responsible-owner-menu .dashboard-owner-members .ant-checkbox-wrapper
+) {
+  display: flex;
+  min-height: 30px;
+  padding: 6px 12px;
+  margin-inline-start: 0;
+  color: #334155;
+  background: transparent;
+}
+
+:global(
+  .dark .responsible-owner-menu .dashboard-owner-members .ant-checkbox-wrapper
+) {
+  color: #cbd5e1;
+}
+
+:global(.responsible-owner-menu .cascade-filter-header),
+:global(.responsible-owner-menu .report-filter-footer) {
+  background: #f8fafc;
+}
+
+:global(.dark .responsible-owner-menu .cascade-filter-header),
+:global(.dark .responsible-owner-menu .report-filter-footer) {
+  background: #111827;
+}
+
 .responsible-grid {
-  grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
-  max-height: 284px;
+  grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
+  gap: 8px;
+  max-height: 348px;
   padding-right: 4px;
-  margin-top: 7px;
+  margin-top: 8px;
   overflow-y: auto;
 }
 
 .responsible-grid article {
-  min-height: 0;
-  padding: 8px;
+  display: grid;
+  align-content: start;
+  min-height: 195px;
+  padding: 10px 12px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);
+  border-radius: 5px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
 }
 
-.responsible-grid article > div {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 5px;
+.responsible-grid article > button {
+  margin: 0 0 7px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.responsible-grid .responsible-card-name {
+  width: 100%;
+  min-height: 24px;
+  padding-bottom: 7px;
+  margin-bottom: 7px;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.2;
+  color: var(--analytics-heading);
+  text-align: center;
+  border-bottom: 1px solid var(--analytics-border);
 }
 
 .responsible-grid p {
   display: flex;
+  gap: 6px;
+  align-items: center;
   justify-content: space-between;
-  margin: 2px 0;
-  font-size: 10px;
+  min-height: 17px;
+  padding: 1px 3px;
+  margin: 1px 0;
+  overflow: hidden;
+  font-size: 11px;
   line-height: 1.25;
   color: var(--analytics-subtle);
+  white-space: nowrap;
+  border-radius: 3px;
+}
+
+.responsible-grid p:nth-child(2n) {
+  background: var(--analytics-panel-muted);
 }
 
 .responsible-grid b {
-  color: var(--analytics-heading);
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 850;
+  color: #0b63ce;
+  text-align: right;
+}
+
+.group-track-body b:hover,
+.responsible-grid b:hover {
+  overflow: visible;
 }
 
 .good {
   color: #16a34a !important;
+}
+
+.warning {
+  color: #f59e0b !important;
 }
 
 .bad {
@@ -4108,11 +5032,19 @@ h2 {
 
 @media (width <= 1420px) {
   .top-board {
-    grid-template-columns: 210px minmax(330px, 0.58fr) minmax(0, 1fr) 320px;
+    grid-template-columns: 210px minmax(350px, 0.7fr) minmax(0, 0.94fr) 470px;
+  }
+
+  .yellow-kpi-glass {
+    width: min(88%, 320px);
+  }
+
+  .yellow-grid .yellow-kpi-glass strong {
+    font-size: 34px;
   }
 
   .responsible-grid {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: repeat(3, minmax(168px, 1fr));
   }
 }
 
@@ -4147,14 +5079,31 @@ h2 {
     display: flex;
     flex-wrap: wrap;
   }
+
+  .group-track-grid {
+    overflow-x: auto;
+  }
+
+  .responsible-grid {
+    grid-template-columns: repeat(2, minmax(176px, 1fr));
+  }
 }
 
 @media (width <= 640px) {
   .yellow-grid,
   .blue-grid,
   .gauge-column,
-  .responsible-grid {
+  .responsible-grid,
+  .group-track-grid {
     grid-template-columns: 1fr;
+  }
+
+  .yellow-kpi-glass {
+    width: min(94%, 360px);
+  }
+
+  .yellow-grid .yellow-kpi-glass strong {
+    font-size: 32px;
   }
 }
 </style>

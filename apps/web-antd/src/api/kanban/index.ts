@@ -12,7 +12,9 @@ import type {
   KanbanDailyMetric,
   KanbanFilters,
   KanbanOverview,
+  KanbanProductDetailMeta,
   KanbanProductDetailOverview,
+  KanbanProductDetailRows,
   LoginLogRow,
   OperationGroupPayload,
   OperationGroupRow,
@@ -32,8 +34,10 @@ export type {
   KanbanDailyMetric,
   KanbanOverview,
   KanbanProductDetailColumn,
+  KanbanProductDetailMeta,
   KanbanProductDetailOverview,
   KanbanProductDetailRow,
+  KanbanProductDetailRows,
   KanbanSpuRow,
   SpuManagerRow,
 } from './types';
@@ -83,6 +87,11 @@ export interface KanbanProductDetailParams extends KanbanOverviewParams {
   endDate?: string;
   startDate?: string;
   year?: number;
+}
+
+export interface KanbanProductDetailRowsParams extends KanbanProductDetailParams {
+  page?: number;
+  pageSize?: number;
 }
 
 export interface Asin360OverviewParams {
@@ -142,6 +151,18 @@ export async function fetchKanbanProductDetail(
   params: KanbanProductDetailParams = {},
 ): Promise<KanbanProductDetailOverview> {
   return requestClient.get('/kanban/monitor/product-detail', { params });
+}
+
+export async function fetchKanbanProductDetailMeta(
+  params: KanbanProductDetailParams = {},
+): Promise<KanbanProductDetailMeta> {
+  return requestClient.get('/kanban/monitor/product-detail/meta', { params });
+}
+
+export async function fetchKanbanProductDetailRows(
+  params: KanbanProductDetailRowsParams = {},
+): Promise<KanbanProductDetailRows> {
+  return requestClient.get('/kanban/monitor/product-detail/rows', { params });
 }
 
 export async function fetchSpuDailyMetrics(params: {

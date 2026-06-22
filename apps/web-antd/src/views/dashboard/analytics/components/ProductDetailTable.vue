@@ -5,9 +5,17 @@ import type {
   AlertLevel,
   KanbanProductDetailColumn,
   KanbanProductDetailOverview,
+  KanbanProductDetailRow,
 } from '#/api/kanban';
 
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import {
   Button,
@@ -23,13 +31,16 @@ import {
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { fetchKanbanProductDetail } from '#/api/kanban';
+import {
+  fetchKanbanProductDetailMeta,
+  fetchKanbanProductDetailRows,
+} from '#/api/kanban';
 
 type ProductDetailDateRangeType =
   | 'currentMonth'
   | 'custom'
-  | 'last30'
   | 'last7'
+  | 'last30'
   | 'lastMonth'
   | 'today'
   | 'year'
@@ -55,7 +66,9 @@ const props = withDefaults(
 );
 
 const productDetail = ref<KanbanProductDetailOverview | null>(null);
+const productDetailPageRows = ref<KanbanProductDetailRow[]>([]);
 const productDetailLoading = ref(false);
+const productDetailRowsLoading = ref(false);
 const selectedProductCountries = ref<string[]>([]);
 const selectedProductColumns = ref<string[]>([]);
 const productColumnsInitialized = ref(false);
@@ -66,12 +79,18 @@ const productColumnDraft = ref<string[]>([]);
 const productColumnSearch = ref('');
 const pinnedProductColumnKeys = ref<string[]>([]);
 const draggingProductColumnKey = ref('');
+const productColumnWidths = reactive<Record<string, number>>({});
+const resizingProductColumn = ref<null | {
+  key: string;
+  startWidth: number;
+  startX: number;
+}>(null);
 const PRODUCT_DETAIL_SORTABLE_LABELS = new Set([
   '上线天数',
-  '销量',
   '目标销量',
-  '销量完成率',
   '销售额',
+  '销量',
+  '销量完成率',
 ]);
 
 const productDetailPagination = reactive<TablePaginationConfig>({
@@ -83,10 +102,12 @@ const productDetailPagination = reactive<TablePaginationConfig>({
   onChange: (page, pageSize) => {
     productDetailPagination.current = page;
     productDetailPagination.pageSize = pageSize;
+    void loadProductDetailRows();
   },
   onShowSizeChange: (_current, size) => {
     productDetailPagination.current = 1;
     productDetailPagination.pageSize = size;
+    void loadProductDetailRows();
   },
 });
 
@@ -121,13 +142,14 @@ const productDetailQuery = reactive({
   startDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
 });
 
-const productDetailRows = computed(() => productDetail.value?.rows ?? []);
+const productDetailRows = computed(() => productDetailPageRows.value);
 const productDetailColumnDefs = computed(
   () => productDetail.value?.columns ?? [],
 );
 const productCountryOptions = computed(() => {
   const values = new Set<string>(selectedProductCountries.value);
-  for (const country of productDetail.value?.countries ?? []) values.add(country);
+  for (const country of productDetail.value?.countries ?? [])
+    values.add(country);
   return [...values].filter(Boolean).map((value) => ({ label: value, value }));
 });
 const productCountryFilterLabel = computed(() => {
@@ -138,7 +160,8 @@ const productCountryFilterLabel = computed(() => {
 });
 const productColumnMap = computed(() => {
   const map = new Map<string, KanbanProductDetailColumn>();
-  for (const column of productDetailColumnDefs.value) map.set(column.key, column);
+  for (const column of productDetailColumnDefs.value)
+    map.set(column.key, column);
   return map;
 });
 const productVisibleColumns = computed(() => {
@@ -153,7 +176,7 @@ const selectedProductColumnDraftMetas = computed<KanbanProductDetailColumn[]>(
   () =>
     productColumnDraft.value
       .map((key) => productColumnMap.value.get(key))
-      .filter((column): column is KanbanProductDetailColumn => Boolean(column)),
+      .filter(Boolean),
 );
 const productColumnGroups = computed(() => {
   const groups: Array<{
@@ -162,10 +185,10 @@ const productColumnGroups = computed(() => {
     title: string;
   }> = [
     { columns: [], key: 'base', title: '基础信息' },
-    { columns: [], key: 'sales', title: '销售数据' },
-    { columns: [], key: 'ad', title: '广告数据' },
-    { columns: [], key: 'inventory', title: '库存价格' },
-    { columns: [], key: 'profit', title: '利润退款' },
+    { columns: [], key: 'sales', title: '销售' },
+    { columns: [], key: 'ad', title: '广告' },
+    { columns: [], key: 'performance', title: '表现' },
+    { columns: [], key: 'inventory', title: '库存' },
     { columns: [], key: 'other', title: '其他字段' },
   ];
   const groupMap = new Map(groups.map((group) => [group.key, group]));
@@ -184,39 +207,94 @@ const productColumnGroups = computed(() => {
   }
   return groups.filter((group) => group.columns.length > 0);
 });
+const productColumnGroupTitles: Record<string, string> = {
+  ad: '广告',
+  base: '基础信息',
+  inventory: '库存',
+  performance: '表现',
+  sales: '销售',
+};
+const productColumnTableGroupOrder = [
+  'base',
+  'sales',
+  'ad',
+  'performance',
+  'inventory',
+  'other',
+] as const;
+const productBasicInfoLabels = new Set([
+  'FBA可售',
+  'SPU',
+  '一级类目',
+  '上线天数',
+  '主图',
+  '二级分类',
+  '广告直接订单',
+  '广告直接订单占比',
+  '广告订单',
+  '广告订单占比',
+  '店铺',
+  '总库存',
+  '父ASIN',
+  '目标销量',
+  '等级',
+  '自然订单',
+  '运营负责人',
+  '销售额',
+  '销量',
+  '销量完成率',
+]);
 const productHiddenColumnCount = computed(() =>
   Math.max(
     productDetailColumnDefs.value.length - selectedProductColumns.value.length,
     0,
   ),
 );
+const productDisplayColumns = computed(() =>
+  sortProductColumnsByTableGroup(productVisibleColumns.value),
+);
+const productVisibleColumnsTotalWidth = computed(() => {
+  let total = 0;
+  for (const column of productDisplayColumns.value) {
+    total += productColumnDisplayWidth(column);
+  }
+  return total;
+});
 const productDetailColumns = computed<TableColumnsType<Record<string, any>>>(
   () => {
     const fixedKeys = new Set(pinnedProductColumnKeys.value);
-    return [
-      {
-        align: 'center',
-        className: 'product-no-column',
-        dataIndex: '__no__',
-        fixed: 'left',
-        title: 'No.',
-        width: 52,
-      },
-      ...productVisibleColumns.value.map((column) =>
-        buildProductDetailColumn(column, fixedKeys.has(column.key)),
-      ),
-    ];
+    const groups: Array<{
+      children: TableColumnsType<Record<string, any>>;
+      key: string;
+      title: string;
+    }> = [];
+    for (const column of productDisplayColumns.value) {
+      const groupKey = productColumnTableGroupKey(column);
+      const title = productColumnGroupTitles[groupKey] ?? '其他';
+      const current = groups.at(-1);
+      if (current?.key === groupKey) {
+        current.children.push(
+          buildProductDetailColumn(column, fixedKeys.has(column.key)),
+        );
+        continue;
+      }
+      groups.push({
+        children: [buildProductDetailColumn(column, fixedKeys.has(column.key))],
+        key: groupKey,
+        title,
+      });
+    }
+    return groups.map((group, index) => ({
+      align: 'center',
+      children: group.children,
+      className: `product-detail-group product-detail-group-${group.key}`,
+      key: `group-${group.key}-${index}`,
+      title: group.title,
+    }));
   },
 );
 const productDetailScrollX = computed(() =>
-  Math.max(
-    1320,
-    52 +
-      productVisibleColumns.value.reduce(
-        (total, column) => total + productColumnWidth(column),
-        0,
-      ),
-  ),
+  Math.max(1320, productVisibleColumnsTotalWidth.value),
 );
 const productDetailDateRangeValue = computed({
   get(): [string, string] {
@@ -266,12 +344,16 @@ function applyProductDetailDateRangeType(value: ProductDetailDateRangeType) {
   }
   if (value === 'last7') {
     productDetailQuery.endDate = yesterday.format('YYYY-MM-DD');
-    productDetailQuery.startDate = yesterday.subtract(6, 'day').format('YYYY-MM-DD');
+    productDetailQuery.startDate = yesterday
+      .subtract(6, 'day')
+      .format('YYYY-MM-DD');
     return;
   }
   if (value === 'last30') {
     productDetailQuery.endDate = yesterday.format('YYYY-MM-DD');
-    productDetailQuery.startDate = yesterday.subtract(29, 'day').format('YYYY-MM-DD');
+    productDetailQuery.startDate = yesterday
+      .subtract(29, 'day')
+      .format('YYYY-MM-DD');
     return;
   }
   if (value === 'currentMonth') {
@@ -281,7 +363,9 @@ function applyProductDetailDateRangeType(value: ProductDetailDateRangeType) {
   }
   if (value === 'lastMonth') {
     const lastMonth = today.subtract(1, 'month');
-    productDetailQuery.startDate = lastMonth.startOf('month').format('YYYY-MM-DD');
+    productDetailQuery.startDate = lastMonth
+      .startOf('month')
+      .format('YYYY-MM-DD');
     productDetailQuery.endDate = lastMonth.endOf('month').format('YYYY-MM-DD');
     return;
   }
@@ -292,20 +376,27 @@ function applyProductDetailDateRangeType(value: ProductDetailDateRangeType) {
 async function loadProductDetailData() {
   productDetailLoading.value = true;
   try {
-    const detailResult = await fetchKanbanProductDetail({
+    const detailMeta = await fetchKanbanProductDetailMeta({
       ...props.baseParams,
       countries: selectedProductCountries.value,
       dateRangeType: productDetailQuery.dateRangeType,
       endDate: productDetailQuery.endDate,
-      responsibles: productDetailQuery.responsibles.length
-        ? productDetailQuery.responsibles
-        : props.baseParams.responsibles,
+      responsibles:
+        productDetailQuery.responsibles.length > 0
+          ? productDetailQuery.responsibles
+          : props.baseParams.responsibles,
       startDate: productDetailQuery.startDate,
     });
-    productDetail.value = detailResult;
-    ensureProductColumnsInitialized(detailResult);
+    productDetailPagination.total = detailMeta.totalRows;
+    productDetail.value = {
+      ...detailMeta,
+      page: productDetailPagination.current ?? 1,
+      pageSize: productDetailPagination.pageSize ?? 15,
+      rows: [],
+    };
+    ensureProductColumnsInitialized(productDetail.value);
     const availableKeys = new Set(
-      detailResult.columns.map((column) => column.key),
+      detailMeta.columns.map((column) => column.key),
     );
     selectedProductColumns.value = selectedProductColumns.value.filter((key) =>
       availableKeys.has(key),
@@ -314,8 +405,50 @@ async function loadProductDetailData() {
       (key) =>
         availableKeys.has(key) && selectedProductColumns.value.includes(key),
     );
+    await loadProductDetailRows();
   } finally {
     productDetailLoading.value = false;
+  }
+}
+
+function productDetailRequestParams() {
+  return {
+    ...props.baseParams,
+    countries: selectedProductCountries.value,
+    dateRangeType: productDetailQuery.dateRangeType,
+    endDate: productDetailQuery.endDate,
+    responsibles:
+      productDetailQuery.responsibles.length > 0
+        ? productDetailQuery.responsibles
+        : props.baseParams.responsibles,
+    startDate: productDetailQuery.startDate,
+  };
+}
+
+async function loadProductDetailRows() {
+  productDetailRowsLoading.value = true;
+  try {
+    const rowsResult = await fetchKanbanProductDetailRows({
+      ...productDetailRequestParams(),
+      page: productDetailPagination.current ?? 1,
+      pageSize: productDetailPagination.pageSize ?? 15,
+    });
+    productDetailPageRows.value = rowsResult.rows;
+    productDetailPagination.current = rowsResult.page;
+    productDetailPagination.pageSize = rowsResult.pageSize;
+    productDetailPagination.total = rowsResult.totalRows;
+    if (productDetail.value) {
+      productDetail.value = {
+        ...productDetail.value,
+        page: rowsResult.page,
+        pageSize: rowsResult.pageSize,
+        query: rowsResult.query,
+        rows: rowsResult.rows,
+        totalRows: rowsResult.totalRows,
+      };
+    }
+  } finally {
+    productDetailRowsLoading.value = false;
   }
 }
 
@@ -491,6 +624,7 @@ function applyProductColumnConfig() {
   );
   productColumnConfigOpen.value = false;
   resetProductDetailPagination();
+  if (productDetail.value) void loadProductDetailRows();
 }
 
 function resetProductColumns() {
@@ -502,21 +636,26 @@ function resetProductColumns() {
     productColumnDraft.value = [...selectedProductColumns.value];
   }
   resetProductDetailPagination();
+  if (productDetail.value) void loadProductDetailRows();
 }
 
-function buildProductDetailColumn(column: KanbanProductDetailColumn, fixed: boolean) {
+function buildProductDetailColumn(
+  column: KanbanProductDetailColumn,
+  fixed: boolean,
+) {
   return {
     align: column.kind === 'text' ? ('left' as const) : ('right' as const),
     className: `product-detail-column product-detail-column-${column.kind}`,
     dataIndex: column.key,
     ellipsis: column.kind !== 'image',
     fixed: fixed ? ('left' as const) : undefined,
+    key: column.key,
     sorter: isProductDetailSortableColumn(column)
       ? (left: Record<string, any>, right: Record<string, any>) =>
           compareProductDetailSortableValue(left[column.key], right[column.key])
       : undefined,
     title: column.label,
-    width: productColumnWidth(column),
+    width: productColumnDisplayWidth(column),
   };
 }
 
@@ -538,11 +677,76 @@ function productColumnWidth(column: KanbanProductDetailColumn) {
   if (column.label === 'SPU') return 136;
   if (column.label === '运营负责人') return 104;
   if (column.label.includes('ASIN')) return 126;
-  if (column.label.includes('类目') || column.label.includes('分类')) return 112;
+  if (column.label.includes('类目') || column.label.includes('分类'))
+    return 112;
   if (column.label.includes('库存')) return 96;
-  if (column.label.includes('占比') || column.label.includes('完成率')) return 126;
+  if (column.label.includes('占比') || column.label.includes('完成率'))
+    return 126;
   if (column.label.length <= 3) return 88;
   return Math.max(98, Math.min(column.label.length * 15 + 36, 156));
+}
+
+function normalizeProductColumnWidth(value: number | string | undefined) {
+  const width = Number(value || 0);
+  if (!Number.isFinite(width) || width <= 0) return 98;
+  return Math.min(Math.max(Math.round(width), 56), 360);
+}
+
+function productColumnDisplayWidth(column: KanbanProductDetailColumn) {
+  return normalizeProductColumnWidth(
+    productColumnWidths[column.key] ?? productColumnWidth(column),
+  );
+}
+
+function productColumnResizeKey(column: unknown) {
+  if (!column || typeof column !== 'object') return '';
+  const item = column as {
+    children?: unknown;
+    dataIndex?: unknown;
+    key?: unknown;
+  };
+  if (Array.isArray(item.children)) return '';
+  const key = item.dataIndex ?? item.key;
+  return key ? String(key) : '';
+}
+
+function isProductNumberColumn(column: unknown) {
+  const key = productColumnResizeKey(column);
+  if (!key) return false;
+  const kind = productColumnKind(key);
+  return kind !== 'image' && kind !== 'text';
+}
+
+function startProductColumnResize(key: string, event: MouseEvent) {
+  if (!key) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const column = productColumnMap.value.get(key);
+  resizingProductColumn.value = {
+    key,
+    startWidth: normalizeProductColumnWidth(
+      productColumnWidths[key] ?? (column ? productColumnWidth(column) : 98),
+    ),
+    startX: event.clientX,
+  };
+  document.body.classList.add('product-column-resizing');
+  window.addEventListener('mousemove', handleProductColumnResizeMove);
+  window.addEventListener('mouseup', stopProductColumnResize);
+}
+
+function handleProductColumnResizeMove(event: MouseEvent) {
+  const state = resizingProductColumn.value;
+  if (!state) return;
+  productColumnWidths[state.key] = normalizeProductColumnWidth(
+    state.startWidth + event.clientX - state.startX,
+  );
+}
+
+function stopProductColumnResize() {
+  resizingProductColumn.value = null;
+  document.body.classList.remove('product-column-resizing');
+  window.removeEventListener('mousemove', handleProductColumnResizeMove);
+  window.removeEventListener('mouseup', stopProductColumnResize);
 }
 
 function productDetailRowKey(row: Record<string, any>) {
@@ -615,6 +819,7 @@ function amazonParentAsinUrl(row: Record<string, any>, value: any) {
 function productColumnGroupKey(column: KanbanProductDetailColumn) {
   const label = column.label;
   const source = column.source.toLowerCase();
+  if (productBasicInfoLabels.has(label.trim())) return 'base';
   if (
     [
       'SPU',
@@ -627,10 +832,16 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
       '二级分类',
       '国家',
       '站点',
-      '上线天数',
     ].some((flag) => label.includes(flag))
   ) {
     return 'base';
+  }
+  if (
+    ['上线天数', '评分', '评论', '星级', '访客', '浏览', '会话', '转化'].some(
+      (flag) => label.includes(flag),
+    )
+  ) {
+    return 'performance';
   }
   if (
     [
@@ -653,16 +864,42 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
   ) {
     return 'ad';
   }
-  if (['库存', 'FBA', '评分', '评论', '价格', '均价'].some((flag) => label.includes(flag))) {
+  if (['库存', 'FBA', '价格', '均价'].some((flag) => label.includes(flag))) {
     return 'inventory';
   }
-  if (['利润', '毛利', '退款', '退货', '结算'].some((flag) => label.includes(flag))) {
+  if (
+    ['利润', '毛利', '退款', '退货', '结算'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
     return 'profit';
   }
-  if (['销量', '销售', '订单', '目标', '完成率', '自然'].some((flag) => label.includes(flag))) {
+  if (
+    ['销量', '销售', '订单', '目标', '完成率', '自然'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
     return 'sales';
   }
   return 'other';
+}
+
+function productColumnTableGroupKey(column: KanbanProductDetailColumn) {
+  const groupKey = productColumnGroupKey(column);
+  if (groupKey === 'profit') return 'sales';
+  if (groupKey === 'other') return 'performance';
+  return groupKey;
+}
+
+function sortProductColumnsByTableGroup(columns: KanbanProductDetailColumn[]) {
+  const order = new Map(
+    productColumnTableGroupOrder.map((groupKey, index) => [groupKey, index]),
+  );
+  return [...columns].toSorted((left, right) => {
+    const leftOrder = order.get(productColumnTableGroupKey(left)) ?? 999;
+    const rightOrder = order.get(productColumnTableGroupKey(right)) ?? 999;
+    return leftOrder - rightOrder;
+  });
 }
 
 function isProductMetricKind(kind: string) {
@@ -676,20 +913,20 @@ function isProductMetricColumn(key: string) {
 function isProductMetricCell(value: any) {
   return Boolean(
     value &&
-      typeof value === 'object' &&
-      !Array.isArray(value) &&
-      Object.prototype.hasOwnProperty.call(value, 'value'),
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.prototype.hasOwnProperty.call(value, 'value'),
   );
+}
+
+interface ProductMetricFillInfo {
+  full: boolean;
+  tone: 'blue' | 'green' | 'orange' | 'red';
+  width: string;
 }
 
 function productMetricRawValue(value: any) {
   return isProductMetricCell(value) ? value.value : value;
-}
-
-function productMetricProgress(value: any) {
-  if (!isProductMetricCell(value)) return null;
-  const progress = Number(value.progress);
-  return Number.isFinite(progress) ? progress : null;
 }
 
 function productMetricNumber(value: any) {
@@ -697,7 +934,24 @@ function productMetricNumber(value: any) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function findProductRowValue(
+function productMetricDeltaClass(value: any) {
+  if (!isProductMetricCell(value)) return '';
+  const delta = Number(value.delta || 0);
+  if (delta > 0) return 'delta-up';
+  if (delta < 0) return 'delta-down';
+  return 'delta-flat';
+}
+
+function isLaunchDaysColumn(key: string) {
+  return productColumnLabel(key).includes('上线天数');
+}
+
+function launchDaysDotSize(value: any) {
+  const days = Math.max(0, Number(productMetricRawValue(value) || 0));
+  return `${Math.min(16, Math.max(6, 6 + days / 12))}px`;
+}
+
+function findProductRowNumber(
   record: Record<string, any>,
   matcher: (label: string) => boolean,
 ) {
@@ -709,137 +963,138 @@ function findProductRowValue(
   return null;
 }
 
-function productRowValueByLabels(record: Record<string, any>, labels: string[]) {
-  return findProductRowValue(record, (label) => labels.includes(label));
-}
-
-function productRowValueByIncludes(
+function productRowNumberByLabels(
   record: Record<string, any>,
-  includes: string[],
-  excludes: string[] = [],
+  labels: string[],
 ) {
-  return findProductRowValue(
-    record,
-    (label) =>
-      includes.every((flag) => label.includes(flag)) &&
-      excludes.every((flag) => !label.includes(flag)),
-  );
+  return findProductRowNumber(record, (label) => labels.includes(label));
 }
 
-function productPositiveRatio(numerator: number | null, denominator: number | null) {
-  if (numerator === null || denominator === null || denominator <= 0) return null;
+function productPositiveRatio(
+  numerator: null | number,
+  denominator: null | number,
+) {
+  if (numerator === null || denominator === null || denominator <= 0)
+    return null;
   return Math.max(0, numerator / denominator);
 }
 
-function productMetricRatio(key: string, record: Record<string, any>, value: any) {
-  const label = productColumnLabel(key);
+function productMetricFillInfo(
+  key: string,
+  record: Record<string, any>,
+  value: any,
+): null | ProductMetricFillInfo {
+  const label = productColumnLabel(key).trim();
   const numeric = productMetricNumber(value);
-  const progress = productMetricProgress(value);
+  if (numeric === null) return null;
 
-  if (label.includes('目标销量') || label.includes('完成率')) {
-    return progress ?? numeric;
-  }
-  if (
-    label.includes('占比') ||
-    label.includes('率') ||
-    label.includes('ACOS') ||
-    label.includes('ACOAS') ||
-    label.includes('TACOS') ||
-    label.includes('CTR') ||
-    label.includes('CVR') ||
-    label.includes('ROAS') ||
-    label.includes('ROI')
-  ) {
-    return numeric;
+  if (label === '销量完成率') {
+    let tone: 'blue' | 'green' | 'orange' | 'red' = 'red';
+
+    if (numeric > 1.2) {
+      tone = 'blue';
+    } else if (numeric > 1) {
+      tone = 'green';
+    } else if (numeric > 0.8) {
+      tone = 'orange';
+    }
+    return { full: true, tone, width: '100%' };
   }
 
-  const totalOrders =
-    productRowValueByLabels(record, ['订单量', '总订单', '总订单量']) ??
-    productRowValueByIncludes(record, ['订单'], ['广告', '自然', '直接', 'B2B', '促销']);
-  const totalSales =
-    productRowValueByLabels(record, ['销售额', '总销售额']) ??
-    productRowValueByIncludes(record, ['销售额'], ['广告', '直接', '自然', 'B2B', '促销']);
-  const totalUnits =
-    productRowValueByLabels(record, ['销量', '总销量']) ??
-    productRowValueByIncludes(record, ['销量'], ['目标', '完成率', '广告', '自然', 'B2B']);
-  const impressions = productRowValueByIncludes(record, ['展示']);
-  const clicks = productRowValueByIncludes(record, ['点击']);
+  const salesQty = productRowNumberByLabels(record, ['销量', '总销量']);
+  const targetUnits = productRowNumberByLabels(record, ['目标销量']);
+  if (label === '销量' || label === '目标销量') {
+    const ratio = productPositiveRatio(salesQty, targetUnits);
+    if (ratio === null) return null;
+    return {
+      full: false,
+      tone: label === '目标销量' ? 'blue' : 'green',
+      width: productMetricFillWidth(ratio),
+    };
+  }
 
-  if (label.includes('订单')) return productPositiveRatio(numeric, totalOrders);
-  if (label.includes('广告销售额') || label.includes('直接成交销售额')) {
-    return productPositiveRatio(numeric, totalSales);
+  if (['广告直接订单', '广告订单', '自然订单'].includes(label)) {
+    const ratio = productPositiveRatio(numeric, salesQty);
+    if (ratio === null) return null;
+    return { full: false, tone: 'green', width: productMetricFillWidth(ratio) };
   }
-  if (
-    label.includes('B2B销售额') ||
-    label.includes('B2B 销售额') ||
-    label.includes('促销销售额') ||
-    label.includes('自然销售额')
-  ) {
-    return productPositiveRatio(numeric, totalSales);
+
+  if (['广告直接订单占比', '广告订单占比'].includes(label)) {
+    return { full: false, tone: 'red', width: productMetricFillWidth(numeric) };
   }
-  if (label.includes('广告花费')) return productPositiveRatio(numeric, totalSales);
-  if (label.includes('退款金额')) return productPositiveRatio(numeric, totalSales);
-  if (label.includes('退货') || label.includes('退款量')) {
-    return productPositiveRatio(numeric, totalOrders ?? totalUnits);
+
+  if (isProductMoneyColumn(key)) {
+    const salesAmount = productRowNumberByLabels(record, [
+      '销售额',
+      '总销售额',
+    ]);
+    const ratio = productPositiveRatio(Math.abs(numeric), salesAmount);
+    if (ratio === null) return null;
+    return {
+      full: false,
+      tone: productMoneyFillTone(label, numeric),
+      width: productMetricFillWidth(ratio),
+    };
   }
-  if (label.includes('点击')) return productPositiveRatio(numeric, impressions);
-  if (label.includes('购买') || label.includes('转化')) {
-    return productPositiveRatio(numeric, clicks);
-  }
+
   return null;
 }
 
-function hasProductMetricBar(key: string, record: Record<string, any>, value: any) {
-  return productMetricRatio(key, record, value) !== null;
-}
-
-function productMetricBarWidth(key: string, record: Record<string, any>, value: any) {
-  const ratio = productMetricRatio(key, record, value);
-  if (ratio === null || !Number.isFinite(ratio)) return '0%';
+function productMetricFillWidth(ratio: number) {
   return `${Math.min(100, Math.max(0, ratio * 100))}%`;
 }
 
-function productMetricTone(key: string, record: Record<string, any>, value: any) {
-  const label = productColumnLabel(key);
-  const numeric = Number(productMetricRawValue(value) || 0);
-  const ratio = productMetricRatio(key, record, value);
-  if (ratio !== null) {
-    if (label.includes('目标销量') || label.includes('完成率')) {
-      if (ratio >= 1) return 'metric-good';
-      if (ratio >= 0.5) return 'metric-warn';
-      return 'metric-risk';
-    }
-    if (
-      label.includes('ACOS') ||
-      label.includes('ACOAS') ||
-      label.includes('TACOS') ||
-      label.includes('花费') ||
-      label.includes('退款') ||
-      label.includes('退货')
-    ) {
-      return 'metric-risk';
-    }
-    return 'metric-good';
+function productMoneyFillTone(label: string, value: number) {
+  if (
+    value < 0 ||
+    ['花费', '退款', '退货', '运费', '差异分摊'].some((flag) =>
+      label.includes(flag),
+    )
+  ) {
+    return 'red';
   }
-  if (isProductMetricCell(value) && Number(value.delta || 0) !== 0) {
-    return Number(value.delta || 0) > 0 ? 'metric-good' : 'metric-risk';
-  }
-  return numeric < 0 ? 'metric-risk' : 'metric-plain';
+  return 'green';
 }
 
-function productMetricDeltaClass(value: any) {
-  if (!isProductMetricCell(value)) return '';
-  const delta = Number(value.delta || 0);
-  if (delta > 0) return 'delta-up';
-  if (delta < 0) return 'delta-down';
-  return 'delta-flat';
+function productMetricFillCellClass(
+  key: string,
+  record: Record<string, any>,
+  value: any,
+) {
+  const info = productMetricFillInfo(key, record, value);
+  if (!info) return '';
+  return info.full ? 'has-metric-fill metric-fill-full' : 'has-metric-fill';
+}
+
+function productMetricFillStyle(
+  key: string,
+  record: Record<string, any>,
+  value: any,
+) {
+  const info = productMetricFillInfo(key, record, value);
+  return { width: info?.width ?? '0%' };
+}
+
+function productMetricFillToneClass(
+  key: string,
+  record: Record<string, any>,
+  value: any,
+) {
+  const info = productMetricFillInfo(key, record, value);
+  return info ? `metric-fill-${info.tone}` : '';
 }
 
 function productMetricDeltaText(value: any, kind: string) {
-  if (!isProductMetricCell(value) || value.delta === null || value.delta === undefined) return '';
+  if (
+    !isProductMetricCell(value) ||
+    value.delta === null ||
+    value.delta === undefined
+  )
+    return '';
   const delta = Number(value.delta || 0);
   if (!Number.isFinite(delta) || delta === 0) return '';
-  if (kind === 'percent') return `${delta > 0 ? '+' : ''}${(delta * 100).toFixed(2)}pp`;
+  if (kind === 'percent')
+    return `${delta > 0 ? '+' : ''}${formatCompactNumber(delta * 100)}pp`;
   const rate = Number(value.deltaRate);
   const deltaText = formatSignedMetricDelta(delta);
   if (Number.isFinite(rate) && Math.abs(rate) > 0) {
@@ -850,9 +1105,7 @@ function productMetricDeltaText(value: any, kind: string) {
 
 function formatSignedMetricDelta(value: number) {
   const sign = value > 0 ? '+' : '';
-  return `${sign}${Number(value || 0).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  })}`;
+  return `${sign}${formatCompactNumber(value)}`;
 }
 
 function productTextClass(key: string) {
@@ -862,36 +1115,41 @@ function productTextClass(key: string) {
 
 function isProductMoneyColumn(key: string) {
   const label = productColumnLabel(key);
-  return ['金额', '毛利', '利润', '花费', '退款', '运费', '销售额', '净销售额'].some(
-    (flag) => label.includes(flag),
-  );
+  return [
+    '金额',
+    '毛利',
+    '利润',
+    '花费',
+    '退款',
+    '运费',
+    '销售额',
+    '净销售额',
+  ].some((flag) => label.includes(flag));
 }
 
 function formatProductDetailValue(value: any, kind: string, key = '') {
   const rawValue = productMetricRawValue(value);
-  if (rawValue === null || rawValue === undefined || rawValue === '') return '-';
+  if (rawValue === null || rawValue === undefined || rawValue === '')
+    return '-';
   if (isProductMoneyColumn(key)) {
-    return Number(rawValue || 0).toLocaleString(undefined, {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-    });
+    return formatCompactNumber(rawValue);
   }
   if (kind === 'percent') return formatPercent(Number(rawValue || 0));
-  if (kind === 'decimal') {
-    return Number(rawValue || 0).toLocaleString(undefined, {
-      maximumFractionDigits: 4,
-    });
-  }
-  if (kind === 'number') {
-    return Number(rawValue || 0).toLocaleString(undefined, {
-      maximumFractionDigits: 2,
-    });
-  }
+  if (kind === 'decimal') return formatCompactNumber(rawValue);
+  if (kind === 'number') return formatCompactNumber(rawValue);
   return String(rawValue);
 }
 
+function formatCompactNumber(value: any) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return '-';
+  return numeric.toLocaleString(undefined, {
+    maximumFractionDigits: 2,
+  });
+}
+
 function formatPercent(value: number) {
-  return `${(Number(value || 0) * 100).toFixed(2)}%`;
+  return `${formatCompactNumber(Number(value || 0) * 100)}%`;
 }
 
 watch(selectedProductColumns, () => {
@@ -911,6 +1169,10 @@ watch(
 onMounted(() => {
   void loadProductDetailData();
 });
+
+onBeforeUnmount(() => {
+  stopProductColumnResize();
+});
 </script>
 
 <template>
@@ -923,13 +1185,13 @@ onMounted(() => {
         </div>
         <Space class="product-detail-controls" wrap>
           <span class="product-detail-meta">
-            {{ productDetailDateRangeLabel(productDetail?.query.dateRangeType) }}：{{
-              productDetail?.query.startDate
-            }}
-            ~ {{ productDetail?.query.endDate }}
+            {{
+              productDetailDateRangeLabel(productDetail?.query.dateRangeType)
+            }}：{{ productDetail?.query.startDate }} ~
+            {{ productDetail?.query.endDate }}
           </span>
           <span class="product-detail-meta">
-            共 {{ productDetailRows.length }} 条
+            共 {{ productDetail?.totalRows ?? productDetailRows.length }} 条
           </span>
           <span class="product-detail-meta">
             过滤({{ selectedProductCountries.length }})
@@ -948,7 +1210,9 @@ onMounted(() => {
             style="width: 104px"
             @change="
               () => {
-                applyProductDetailDateRangeType(productDetailQuery.dateRangeType);
+                applyProductDetailDateRangeType(
+                  productDetailQuery.dateRangeType,
+                );
                 applyProductDetailFilters();
               }
             "
@@ -1004,7 +1268,11 @@ onMounted(() => {
                   <Button size="small" @click="cancelProductCountryFilter">
                     取消
                   </Button>
-                  <Button size="small" type="primary" @click="applyProductCountryFilter">
+                  <Button
+                    size="small"
+                    type="primary"
+                    @click="applyProductCountryFilter"
+                  >
                     确定
                   </Button>
                 </div>
@@ -1017,7 +1285,7 @@ onMounted(() => {
           <Button @click="resetProductColumns">默认列</Button>
           <Button
             type="primary"
-            :loading="productDetailLoading"
+            :loading="productDetailLoading || productDetailRowsLoading"
             @click="applyProductDetailFilters"
           >
             应用
@@ -1030,18 +1298,36 @@ onMounted(() => {
       :columns="productDetailColumns"
       :data-source="productDetailRows"
       :bordered="true"
-      :loading="productDetailLoading"
+      :loading="productDetailLoading || productDetailRowsLoading"
       :pagination="productDetailPagination"
       :row-key="productDetailRowKey"
       :scroll="{ x: productDetailScrollX, y: 560 }"
       size="small"
       sticky
     >
-      <template #bodyCell="{ column, index, record, text }">
-        <template v-if="String(column.dataIndex) === '__no__'">
-          <span class="product-row-no">{{ index + 1 }}</span>
-        </template>
-        <template v-else-if="productColumnKind(String(column.dataIndex)) === 'image'">
+      <template #headerCell="{ column }">
+        <div
+          class="product-resizable-header"
+          :class="{ numeric: isProductNumberColumn(column) }"
+        >
+          <span>{{ column.title }}</span>
+          <button
+            v-if="productColumnResizeKey(column)"
+            aria-label="Resize column"
+            class="product-column-resize-handle"
+            type="button"
+            @click.stop
+            @mousedown="
+              (event) =>
+                startProductColumnResize(productColumnResizeKey(column), event)
+            "
+          ></button>
+        </div>
+      </template>
+      <template #bodyCell="{ column, record, text }">
+        <template
+          v-if="productColumnKind(String(column.dataIndex)) === 'image'"
+        >
           <img
             v-if="text"
             :src="String(text)"
@@ -1052,15 +1338,45 @@ onMounted(() => {
         </template>
         <template v-else-if="isProductMetricColumn(String(column.dataIndex))">
           <div
+            v-if="isLaunchDaysColumn(String(column.dataIndex))"
+            class="product-launch-days"
+          >
+            <b>
+              {{
+                formatProductDetailValue(
+                  text,
+                  productColumnKind(String(column.dataIndex)),
+                  String(column.dataIndex),
+                )
+              }}
+            </b>
+            <span
+              class="product-launch-dot"
+              :style="{ '--launch-dot-size': launchDaysDotSize(text) }"
+            ></span>
+          </div>
+          <div
+            v-else
             class="product-metric-cell"
-            :class="productMetricTone(String(column.dataIndex), record, text)"
+            :class="
+              productMetricFillCellClass(String(column.dataIndex), record, text)
+            "
           >
             <span
-              v-if="hasProductMetricBar(String(column.dataIndex), record, text)"
-              class="product-metric-bar"
-              :style="{
-                width: productMetricBarWidth(String(column.dataIndex), record, text),
-              }"
+              v-if="
+                productMetricFillInfo(String(column.dataIndex), record, text)
+              "
+              class="product-metric-fill"
+              :class="
+                productMetricFillToneClass(
+                  String(column.dataIndex),
+                  record,
+                  text,
+                )
+              "
+              :style="
+                productMetricFillStyle(String(column.dataIndex), record, text)
+              "
             ></span>
             <span class="product-metric-content">
               <span class="product-metric-value">
@@ -1144,7 +1460,10 @@ onMounted(() => {
           >
             <header>
               <span>{{ group.title }}</span>
-              <button type="button" @click="toggleProductColumnGroup(group.columns)">
+              <button
+                type="button"
+                @click="toggleProductColumnGroup(group.columns)"
+              >
                 {{
                   isProductColumnGroupAllSelected(group.columns)
                     ? '取消全选'
@@ -1204,7 +1523,10 @@ onMounted(() => {
               >
                 固定
               </button>
-              <button type="button" @click="removeProductColumnDraft(column.key)">
+              <button
+                type="button"
+                @click="removeProductColumnDraft(column.key)"
+              >
                 移除
               </button>
             </div>
@@ -1503,6 +1825,54 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.product-resizable-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 100%;
+  padding-right: 8px;
+}
+
+.product-resizable-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-column-resize-handle {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  bottom: -8px;
+  z-index: 6;
+  width: 10px;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+}
+
+.product-column-resize-handle::after {
+  position: absolute;
+  top: 8px;
+  right: 4px;
+  bottom: 8px;
+  width: 2px;
+  content: '';
+  background: transparent;
+}
+
+.product-column-resize-handle:hover::after {
+  background: #2563eb;
+}
+
+:global(.product-column-resizing) {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
 .product-detail-card :deep(.ant-table) {
   font-size: 12px;
   color: var(--product-text);
@@ -1529,8 +1899,15 @@ onMounted(() => {
   border-color: var(--product-border-strong) !important;
 }
 
-.product-detail-card :deep(.product-basic-group) {
+.product-detail-card :deep(.product-detail-group) {
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 850;
   text-align: center;
+  letter-spacing: 0;
+  background: var(--product-panel-muted) !important;
+  border-top: 1px solid var(--product-border-strong) !important;
+  border-bottom: 1px solid var(--product-border-strong) !important;
 }
 
 .product-detail-card :deep(.ant-table-tbody > tr > td) {
@@ -1572,11 +1949,6 @@ onMounted(() => {
   box-shadow: inset 8px 0 8px -8px rgb(15 23 42 / 18%);
 }
 
-.product-row-no {
-  font-size: 12px;
-  color: var(--product-muted);
-}
-
 .product-thumb {
   width: 42px;
   height: 42px;
@@ -1607,12 +1979,40 @@ onMounted(() => {
   border-radius: 4px;
 }
 
-.product-metric-bar {
+.product-metric-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  top: 3px;
+  left: 6px;
   z-index: 0;
-  min-width: 2px;
+  height: 1.45em;
+  border-radius: 4px;
   opacity: 0.22;
+  transform: none;
+}
+
+.metric-fill-full .product-metric-fill {
+  inset: 0;
+  width: 100% !important;
+  height: auto;
+  border-radius: 4px;
+  opacity: 0.18;
+  transform: none;
+}
+
+.metric-fill-blue {
+  background: #2563eb;
+}
+
+.metric-fill-green {
+  background: #16a34a;
+}
+
+.metric-fill-orange {
+  background: #f59e0b;
+}
+
+.metric-fill-red {
+  background: #ef4444;
 }
 
 .product-metric-content {
@@ -1628,43 +2028,37 @@ onMounted(() => {
 }
 
 .product-metric-delta {
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
-.metric-good {
-  background: rgb(34 197 94 / 12%);
+.product-launch-days {
+  display: inline-grid;
+  grid-template-columns: auto 18px;
+  gap: 6px;
+  align-items: center;
+  justify-content: end;
+  width: 100%;
+  font-weight: 760;
+  color: var(--product-heading);
 }
 
-.metric-good .product-metric-bar {
-  background: #22c55e;
-}
-
-.metric-warn {
-  background: rgb(245 158 11 / 14%);
-}
-
-.metric-warn .product-metric-bar {
-  background: #f59e0b;
-}
-
-.metric-risk {
-  background: rgb(239 68 68 / 12%);
-}
-
-.metric-risk .product-metric-bar {
+.product-launch-dot {
+  place-self: center;
+  width: var(--launch-dot-size);
+  height: var(--launch-dot-size);
   background: #ef4444;
-}
-
-.metric-plain {
-  background: transparent;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgb(239 68 68 / 12%);
 }
 
 .delta-up {
-  color: #16a34a;
+  color: #047857;
 }
 
 .delta-down {
-  color: #ef4444;
+  color: #b91c1c;
 }
 
 .delta-flat {
@@ -1673,8 +2067,8 @@ onMounted(() => {
 
 @media (max-width: 1280px) {
   .product-detail-toolbar {
-    align-items: flex-start;
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .product-detail-controls {

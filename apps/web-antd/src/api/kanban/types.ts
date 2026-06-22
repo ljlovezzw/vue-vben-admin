@@ -165,6 +165,8 @@ export interface KanbanProductDetailRow {
 export interface KanbanProductDetailOverview {
   columns: KanbanProductDetailColumn[];
   countries: string[];
+  page: number;
+  pageSize: number;
   query: {
     countries: string[];
     dateRangeType: string;
@@ -177,6 +179,22 @@ export interface KanbanProductDetailOverview {
     startDate: string;
   };
   rows: KanbanProductDetailRow[];
+  totalRows: number;
+}
+
+export interface KanbanProductDetailMeta {
+  columns: KanbanProductDetailColumn[];
+  countries: string[];
+  query: KanbanProductDetailOverview['query'];
+  totalRows: number;
+}
+
+export interface KanbanProductDetailRows {
+  page: number;
+  pageSize: number;
+  query: KanbanProductDetailOverview['query'];
+  rows: KanbanProductDetailRow[];
+  totalRows: number;
 }
 
 export interface SpuManagerFilters {
@@ -367,22 +385,31 @@ export interface AnalyticsOperationGroup {
 }
 
 export interface AnalyticsOperationMetric {
+  adAcoas: number;
   adSales: number;
   adSpend: number;
   date: string;
   dailyTargetProfit?: number;
   dailyTargetSales?: number;
   dailyTargetUnits?: number;
+  fbaAvailableQty: number;
   grossProfit: number;
   inventoryQty: number;
   inventoryRiskCount: number;
+  promotionRate: number;
   salesAmount: number;
   salesQty: number;
+  turnoverFbaAvailableMonths: number;
   turnoverMonths: number;
 }
 
 export interface AnalyticsResponsibleOperationRow extends AnalyticsOperationMetric {
+  department: string;
   responsible: string;
+}
+
+export interface AnalyticsDepartmentOperationRow extends AnalyticsOperationMetric {
+  department: string;
 }
 
 export interface AnalyticsOverview {
@@ -394,6 +421,7 @@ export interface AnalyticsOverview {
   };
   filters: AnalyticsFilters;
   operations: {
+    departmentRows: AnalyticsDepartmentOperationRow[];
     inventorySnapshotDate: string;
     latest: AnalyticsOperationMetric;
     latestDate: string;
