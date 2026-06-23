@@ -10,6 +10,7 @@ import type {
 
 import {
   computed,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   reactive,
@@ -49,8 +50,12 @@ type ProductDetailDateRangeType =
 interface BaseProductDetailParams {
   alertLevels?: AlertLevel[];
   categories?: string[];
+  countries?: string[];
+  dateRangeType?: ProductDetailDateRangeType | string;
+  endDate?: string;
   responsibles?: string[];
   sites?: string[];
+  startDate?: string;
   statuses?: string[];
 }
 
@@ -67,6 +72,7 @@ const props = withDefaults(
 
 const productDetail = ref<KanbanProductDetailOverview | null>(null);
 const productDetailPageRows = ref<KanbanProductDetailRow[]>([]);
+const productDetailSummary = ref<Record<string, any>>({});
 const productDetailLoading = ref(false);
 const productDetailRowsLoading = ref(false);
 const selectedProductCountries = ref<string[]>([]);
@@ -85,14 +91,25 @@ const resizingProductColumn = ref<null | {
   startWidth: number;
   startX: number;
 }>(null);
-const PRODUCT_DETAIL_SORTABLE_LABELS = new Set([
-  '上线天数',
-  '目标销量',
-  '销售额',
-  '销量',
-  '销量完成率',
-]);
-
+const productDetailTableRef = ref<any>(null);
+const productSummaryScrollRef = ref<HTMLElement | null>(null);
+const productDetailMetaInFlight = ref('');
+const productDetailRowsInFlight = ref('');
+let productTableBodyScrollElement: HTMLElement | null = null;
+let productSummaryScrollElement: HTMLElement | null = null;
+let productHeaderEventRoot: HTMLElement | null = null;
+let productResizeHoverCell: HTMLElement | null = null;
+let productScrollSyncing = false;
+let productResizeSuppressClickUntil = 0;
+let productResizeSuppressSortUntil = 0;
+let productResizeMoved = false;
+const productDetailSort = reactive<{
+  field: string;
+  order: '' | 'ascend' | 'descend';
+}>({
+  field: '',
+  order: '',
+});
 const productDetailPagination = reactive<TablePaginationConfig>({
   current: 1,
   pageSize: 15,
@@ -143,6 +160,27 @@ const productDetailQuery = reactive({
 });
 
 const productDetailRows = computed(() => productDetailPageRows.value);
+const effectiveProductCountries = computed(() => {
+  const baseCountries = [...(props.baseParams.countries ?? [])].filter(Boolean);
+  if (baseCountries.length === 0) return selectedProductCountries.value;
+  if (selectedProductCountries.value.length === 0) return baseCountries;
+  const allowed = new Set(baseCountries);
+  return selectedProductCountries.value.filter((country) =>
+    allowed.has(country),
+  );
+});
+const effectiveProductResponsibles = computed(() => {
+  const baseResponsibles = [...(props.baseParams.responsibles ?? [])].filter(
+    Boolean,
+  );
+  const selectedResponsibles = productDetailQuery.responsibles.filter(Boolean);
+  if (baseResponsibles.length === 0) return selectedResponsibles;
+  if (baseResponsibles.includes('__NO_ACCESS__')) return ['__NO_ACCESS__'];
+  if (selectedResponsibles.length === 0) return baseResponsibles;
+  const allowed = new Set(baseResponsibles);
+  const narrowed = selectedResponsibles.filter((name) => allowed.has(name));
+  return narrowed.length > 0 ? narrowed : ['__NO_ACCESS__'];
+});
 const productDetailColumnDefs = computed(
   () => productDetail.value?.columns ?? [],
 );
@@ -176,7 +214,7 @@ const selectedProductColumnDraftMetas = computed<KanbanProductDetailColumn[]>(
   () =>
     productColumnDraft.value
       .map((key) => productColumnMap.value.get(key))
-      .filter(Boolean),
+      .filter((column): column is KanbanProductDetailColumn => column !== undefined),
 );
 const productColumnGroups = computed(() => {
   const groups: Array<{
@@ -186,6 +224,7 @@ const productColumnGroups = computed(() => {
   }> = [
     { columns: [], key: 'base', title: '基础信息' },
     { columns: [], key: 'sales', title: '销售' },
+    { columns: [], key: 'profit', title: '利润费用' },
     { columns: [], key: 'ad', title: '广告' },
     { columns: [], key: 'performance', title: '表现' },
     { columns: [], key: 'inventory', title: '库存' },
@@ -212,37 +251,31 @@ const productColumnGroupTitles: Record<string, string> = {
   base: '基础信息',
   inventory: '库存',
   performance: '表现',
+  profit: '利润费用',
   sales: '销售',
 };
 const productColumnTableGroupOrder = [
   'base',
   'sales',
+  'profit',
   'ad',
   'performance',
   'inventory',
   'other',
 ] as const;
 const productBasicInfoLabels = new Set([
-  'FBA可售',
   'SPU',
   '一级类目',
   '上线天数',
+  '创建时间',
   '主图',
   '二级分类',
-  '广告直接订单',
-  '广告直接订单占比',
-  '广告订单',
-  '广告订单占比',
   '店铺',
-  '总库存',
+  '开售时间',
   '父ASIN',
-  '目标销量',
   '等级',
-  '自然订单',
   '运营负责人',
-  '销售额',
-  '销量',
-  '销量完成率',
+  '销售均价',
 ]);
 const productHiddenColumnCount = computed(() =>
   Math.max(
@@ -310,9 +343,51 @@ const productDetailDateRangeValue = computed({
 const productDetailResponsibleOptions = computed(() =>
   props.responsibleOptions.map((value) => ({ label: value, value })),
 );
+const productDetailBaseParamsSignature = computed(() =>
+  productDetailParamsSignature(props.baseParams),
+);
 
 function resetProductDetailPagination() {
   productDetailPagination.current = 1;
+}
+
+function normalizeProductParamValues(values?: string[]) {
+  return [...(values ?? [])].filter(Boolean).sort();
+}
+
+function productDetailParamsSignature(params?: BaseProductDetailParams) {
+  return JSON.stringify({
+    alertLevels: normalizeProductParamValues(params?.alertLevels),
+    categories: normalizeProductParamValues(params?.categories),
+    countries: normalizeProductParamValues(params?.countries),
+    dateRangeType: params?.dateRangeType ?? '',
+    endDate: params?.endDate ?? '',
+    responsibles: normalizeProductParamValues(params?.responsibles),
+    sites: normalizeProductParamValues(params?.sites),
+    startDate: params?.startDate ?? '',
+    statuses: normalizeProductParamValues(params?.statuses),
+  });
+}
+
+function syncProductDetailDateFromBaseParams() {
+  const startDate = props.baseParams.startDate;
+  const endDate = props.baseParams.endDate;
+  if (!startDate || !endDate) return;
+  productDetailQuery.dateRangeType =
+    (props.baseParams.dateRangeType as ProductDetailDateRangeType) || 'custom';
+  productDetailQuery.startDate = startDate;
+  productDetailQuery.endDate = endDate;
+}
+
+function syncProductDetailResponsiblesWithOptions() {
+  const allowed = new Set(props.responsibleOptions);
+  if (allowed.size === 0) {
+    productDetailQuery.responsibles = [];
+    return;
+  }
+  productDetailQuery.responsibles = productDetailQuery.responsibles.filter(
+    (name) => allowed.has(name),
+  );
 }
 
 function productDetailDateRangeLabel(value: unknown) {
@@ -374,17 +449,19 @@ function applyProductDetailDateRangeType(value: ProductDetailDateRangeType) {
 }
 
 async function loadProductDetailData() {
+  const metaRequestKey = JSON.stringify(productDetailRequestParams());
+  if (productDetailMetaInFlight.value === metaRequestKey) {
+    return;
+  }
+  productDetailMetaInFlight.value = metaRequestKey;
   productDetailLoading.value = true;
   try {
     const detailMeta = await fetchKanbanProductDetailMeta({
       ...props.baseParams,
-      countries: selectedProductCountries.value,
+      countries: effectiveProductCountries.value,
       dateRangeType: productDetailQuery.dateRangeType,
       endDate: productDetailQuery.endDate,
-      responsibles:
-        productDetailQuery.responsibles.length > 0
-          ? productDetailQuery.responsibles
-          : props.baseParams.responsibles,
+      responsibles: effectiveProductResponsibles.value,
       startDate: productDetailQuery.startDate,
     });
     productDetailPagination.total = detailMeta.totalRows;
@@ -393,6 +470,7 @@ async function loadProductDetailData() {
       page: productDetailPagination.current ?? 1,
       pageSize: productDetailPagination.pageSize ?? 15,
       rows: [],
+      summary: productDetailSummary.value,
     };
     ensureProductColumnsInitialized(productDetail.value);
     const availableKeys = new Set(
@@ -407,6 +485,8 @@ async function loadProductDetailData() {
     );
     await loadProductDetailRows();
   } finally {
+    if (productDetailMetaInFlight.value === metaRequestKey)
+      productDetailMetaInFlight.value = '';
     productDetailLoading.value = false;
   }
 }
@@ -414,26 +494,39 @@ async function loadProductDetailData() {
 function productDetailRequestParams() {
   return {
     ...props.baseParams,
-    countries: selectedProductCountries.value,
+    countries: effectiveProductCountries.value,
     dateRangeType: productDetailQuery.dateRangeType,
     endDate: productDetailQuery.endDate,
-    responsibles:
-      productDetailQuery.responsibles.length > 0
-        ? productDetailQuery.responsibles
-        : props.baseParams.responsibles,
+    responsibles: effectiveProductResponsibles.value,
     startDate: productDetailQuery.startDate,
   };
 }
 
 async function loadProductDetailRows() {
+  const rowsRequestKey = JSON.stringify({
+    ...productDetailRequestParams(),
+    page: productDetailPagination.current ?? 1,
+    pageSize: productDetailPagination.pageSize ?? 15,
+    sortField: productDetailSort.field || undefined,
+    sortOrder: productDetailSort.order || undefined,
+  });
+  if (
+    productDetailRowsInFlight.value === rowsRequestKey
+  ) {
+    return;
+  }
+  productDetailRowsInFlight.value = rowsRequestKey;
   productDetailRowsLoading.value = true;
   try {
     const rowsResult = await fetchKanbanProductDetailRows({
       ...productDetailRequestParams(),
       page: productDetailPagination.current ?? 1,
       pageSize: productDetailPagination.pageSize ?? 15,
+      sortField: productDetailSort.field || undefined,
+      sortOrder: productDetailSort.order || undefined,
     });
     productDetailPageRows.value = rowsResult.rows;
+    productDetailSummary.value = rowsResult.summary ?? {};
     productDetailPagination.current = rowsResult.page;
     productDetailPagination.pageSize = rowsResult.pageSize;
     productDetailPagination.total = rowsResult.totalRows;
@@ -444,10 +537,14 @@ async function loadProductDetailRows() {
         pageSize: rowsResult.pageSize,
         query: rowsResult.query,
         rows: rowsResult.rows,
+        summary: rowsResult.summary ?? {},
         totalRows: rowsResult.totalRows,
       };
     }
+    void refreshProductScrollSync();
   } finally {
+    if (productDetailRowsInFlight.value === rowsRequestKey)
+      productDetailRowsInFlight.value = '';
     productDetailRowsLoading.value = false;
   }
 }
@@ -644,32 +741,47 @@ function buildProductDetailColumn(
   fixed: boolean,
 ) {
   return {
-    align: column.kind === 'text' ? ('left' as const) : ('right' as const),
+    align: 'center' as const,
     className: `product-detail-column product-detail-column-${column.kind}`,
     dataIndex: column.key,
     ellipsis: column.kind !== 'image',
     fixed: fixed ? ('left' as const) : undefined,
     key: column.key,
-    sorter: isProductDetailSortableColumn(column)
-      ? (left: Record<string, any>, right: Record<string, any>) =>
-          compareProductDetailSortableValue(left[column.key], right[column.key])
-      : undefined,
+    sorter: true,
+    sortOrder:
+      productDetailSort.field === column.key && productDetailSort.order
+        ? productDetailSort.order
+        : undefined,
     title: column.label,
     width: productColumnDisplayWidth(column),
   };
 }
 
-function isProductDetailSortableColumn(column: KanbanProductDetailColumn) {
-  return PRODUCT_DETAIL_SORTABLE_LABELS.has(column.label.trim());
-}
-
-function compareProductDetailSortableValue(left: any, right: any) {
-  const leftNumber = productMetricNumber(left);
-  const rightNumber = productMetricNumber(right);
-  if (leftNumber === null && rightNumber === null) return 0;
-  if (leftNumber === null) return 1;
-  if (rightNumber === null) return -1;
-  return leftNumber - rightNumber;
+function handleProductDetailTableChange(
+  _pagination: unknown,
+  _filters: unknown,
+  sorter: unknown,
+) {
+  if (Date.now() <= productResizeSuppressSortUntil) return;
+  const activeSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+  const item = (activeSorter ?? {}) as {
+    columnKey?: string;
+    field?: string;
+    order?: 'ascend' | 'descend' | null;
+  };
+  const nextOrder =
+    item.order === 'ascend' || item.order === 'descend' ? item.order : '';
+  const nextField = nextOrder ? String(item.field ?? item.columnKey ?? '') : '';
+  if (
+    productDetailSort.field === nextField &&
+    productDetailSort.order === nextOrder
+  ) {
+    return;
+  }
+  productDetailSort.field = nextField;
+  productDetailSort.order = nextOrder;
+  resetProductDetailPagination();
+  void loadProductDetailRows();
 }
 
 function productColumnWidth(column: KanbanProductDetailColumn) {
@@ -729,24 +841,245 @@ function startProductColumnResize(key: string, event: MouseEvent) {
     ),
     startX: event.clientX,
   };
+  productResizeMoved = false;
+  productResizeSuppressClickUntil = Date.now() + 500;
+  productResizeSuppressSortUntil = Date.now() + 500;
   document.body.classList.add('product-column-resizing');
   window.addEventListener('mousemove', handleProductColumnResizeMove);
   window.addEventListener('mouseup', stopProductColumnResize);
 }
 
+function productResizableHeaderCells(row: HTMLElement | null) {
+  return Array.from(
+    row?.querySelectorAll<HTMLTableCellElement>(
+      'th:not([colspan]), th[colspan="1"]',
+    ) ?? [],
+  ).filter((item) => item.querySelector('.product-resizable-header'));
+}
+
+function productColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
+  const handle = th.querySelector<HTMLElement>('.product-column-resize-handle');
+  const handleKey = handle?.dataset.columnKey;
+  if (handleKey) return handleKey;
+  const leafHeaders = productResizableHeaderCells(th.parentElement);
+  const index = leafHeaders.indexOf(th);
+  return productDisplayColumns.value[index]?.key ?? '';
+}
+
+function productResizeHit(event: MouseEvent) {
+  const target = event.target as HTMLElement | null;
+  const th = target?.closest<HTMLTableCellElement>('th');
+  if (!th || !productDetailTableRoot()?.contains(th)) return;
+  if (!th.querySelector('.product-resizable-header')) return;
+  const rect = th.getBoundingClientRect();
+  const resizeHotZone = 8;
+  if (Math.abs(rect.right - event.clientX) <= resizeHotZone) {
+    const key = productColumnKeyFromHeaderCell(th);
+    return key ? { hoverTh: th, key, resizeTh: th } : undefined;
+  }
+  if (Math.abs(event.clientX - rect.left) <= resizeHotZone) {
+    const leafHeaders = productResizableHeaderCells(th.parentElement);
+    const index = leafHeaders.indexOf(th);
+    const previous = index > 0 ? leafHeaders[index - 1] : null;
+    if (previous) {
+      const key = productColumnKeyFromHeaderCell(previous);
+      return key ? { hoverTh: th, key, resizeTh: previous } : undefined;
+    }
+  }
+}
+
+function setProductResizeHoverCell(th: HTMLElement | null) {
+  if (productResizeHoverCell === th) return;
+  productResizeHoverCell?.classList.remove('product-header-resize-hover');
+  productResizeHoverCell = th;
+  productResizeHoverCell?.classList.add('product-header-resize-hover');
+}
+
+function handleProductHeaderMouseMove(event: MouseEvent) {
+  const hit = productResizeHit(event);
+  setProductResizeHoverCell(hit?.hoverTh ?? null);
+}
+
+function handleProductHeaderMouseLeave() {
+  setProductResizeHoverCell(null);
+}
+
+function handleProductHeaderMouseDownCapture(event: MouseEvent) {
+  if (event.button !== 0) return;
+  const hit = productResizeHit(event);
+  if (!hit) return;
+  const key = hit.key;
+  if (!key) return;
+  startProductColumnResize(key, event);
+}
+
+function handleProductHeaderClickCapture(event: MouseEvent) {
+  if (Date.now() > productResizeSuppressClickUntil) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function handleProductColumnResizeMove(event: MouseEvent) {
   const state = resizingProductColumn.value;
   if (!state) return;
+  if (Math.abs(event.clientX - state.startX) >= 3) {
+    productResizeMoved = true;
+    productResizeSuppressClickUntil = Date.now() + 1000;
+    productResizeSuppressSortUntil = Date.now() + 1000;
+  }
   productColumnWidths[state.key] = normalizeProductColumnWidth(
     state.startWidth + event.clientX - state.startX,
   );
 }
 
 function stopProductColumnResize() {
+  if (productResizeMoved) {
+    productResizeSuppressClickUntil = Date.now() + 1000;
+    productResizeSuppressSortUntil = Date.now() + 1000;
+  }
   resizingProductColumn.value = null;
+  productResizeMoved = false;
   document.body.classList.remove('product-column-resizing');
   window.removeEventListener('mousemove', handleProductColumnResizeMove);
   window.removeEventListener('mouseup', stopProductColumnResize);
+}
+
+function productDetailTableRoot() {
+  const table = productDetailTableRef.value;
+  const root = table?.$el ?? table;
+  return root instanceof HTMLElement ? root : null;
+}
+
+function productDetailTableBodyScroll() {
+  return productDetailTableRoot()?.querySelector(
+    '.ant-table-body',
+  ) as HTMLElement | null;
+}
+
+function syncProductScrollLeft(source: HTMLElement, target: HTMLElement | null) {
+  if (!target || Math.abs(target.scrollLeft - source.scrollLeft) < 1) return;
+  productScrollSyncing = true;
+  target.scrollLeft = source.scrollLeft;
+  window.requestAnimationFrame(() => {
+    productScrollSyncing = false;
+  });
+}
+
+function handleProductTableBodyScroll(event: Event) {
+  if (productScrollSyncing) return;
+  syncProductScrollLeft(
+    event.currentTarget as HTMLElement,
+    productSummaryScrollElement,
+  );
+}
+
+function handleProductSummaryScroll(event: Event) {
+  if (productScrollSyncing) return;
+  syncProductScrollLeft(
+    event.currentTarget as HTMLElement,
+    productTableBodyScrollElement,
+  );
+}
+
+function bindProductScrollSync() {
+  const tableBody = productDetailTableBodyScroll();
+  const summaryScroll = productSummaryScrollRef.value;
+
+  if (productTableBodyScrollElement !== tableBody) {
+    productTableBodyScrollElement?.removeEventListener(
+      'scroll',
+      handleProductTableBodyScroll,
+    );
+    productTableBodyScrollElement = tableBody;
+    productTableBodyScrollElement?.addEventListener(
+      'scroll',
+      handleProductTableBodyScroll,
+      { passive: true },
+    );
+  }
+
+  if (productSummaryScrollElement !== summaryScroll) {
+    productSummaryScrollElement?.removeEventListener(
+      'scroll',
+      handleProductSummaryScroll,
+    );
+    productSummaryScrollElement = summaryScroll;
+    productSummaryScrollElement?.addEventListener(
+      'scroll',
+      handleProductSummaryScroll,
+      { passive: true },
+    );
+  }
+
+  if (productTableBodyScrollElement && productSummaryScrollElement) {
+    productSummaryScrollElement.scrollLeft =
+      productTableBodyScrollElement.scrollLeft;
+  }
+}
+
+function unbindProductScrollSync() {
+  productTableBodyScrollElement?.removeEventListener(
+    'scroll',
+    handleProductTableBodyScroll,
+  );
+  productSummaryScrollElement?.removeEventListener(
+    'scroll',
+    handleProductSummaryScroll,
+  );
+  productHeaderEventRoot?.removeEventListener(
+    'mousemove',
+    handleProductHeaderMouseMove,
+    true,
+  );
+  productHeaderEventRoot?.removeEventListener(
+    'mouseleave',
+    handleProductHeaderMouseLeave,
+    true,
+  );
+  productHeaderEventRoot?.removeEventListener(
+    'mousedown',
+    handleProductHeaderMouseDownCapture,
+    true,
+  );
+  productHeaderEventRoot?.removeEventListener(
+    'click',
+    handleProductHeaderClickCapture,
+    true,
+  );
+  setProductResizeHoverCell(null);
+  productTableBodyScrollElement = null;
+  productSummaryScrollElement = null;
+  productHeaderEventRoot = null;
+}
+
+async function refreshProductScrollSync() {
+  await nextTick();
+  bindProductScrollSync();
+  const root = productDetailTableRoot();
+  if (productHeaderEventRoot === root) return;
+  unbindProductScrollSync();
+  bindProductScrollSync();
+  productHeaderEventRoot = root;
+  productHeaderEventRoot?.addEventListener(
+    'mousemove',
+    handleProductHeaderMouseMove,
+    true,
+  );
+  productHeaderEventRoot?.addEventListener(
+    'mouseleave',
+    handleProductHeaderMouseLeave,
+    true,
+  );
+  productHeaderEventRoot?.addEventListener(
+    'mousedown',
+    handleProductHeaderMouseDownCapture,
+    true,
+  );
+  productHeaderEventRoot?.addEventListener(
+    'click',
+    handleProductHeaderClickCapture,
+    true,
+  );
 }
 
 function productDetailRowKey(row: Record<string, any>) {
@@ -864,7 +1197,7 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
   ) {
     return 'ad';
   }
-  if (['库存', 'FBA', '价格', '均价'].some((flag) => label.includes(flag))) {
+  if (['库存', 'FBA', '价格'].some((flag) => label.includes(flag))) {
     return 'inventory';
   }
   if (
@@ -886,7 +1219,6 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
 
 function productColumnTableGroupKey(column: KanbanProductDetailColumn) {
   const groupKey = productColumnGroupKey(column);
-  if (groupKey === 'profit') return 'sales';
   if (groupKey === 'other') return 'performance';
   return groupKey;
 }
@@ -1084,7 +1416,19 @@ function productMetricFillToneClass(
   return info ? `metric-fill-${info.tone}` : '';
 }
 
-function productMetricDeltaText(value: any, kind: string) {
+function productCurrencySymbol(record?: Record<string, any>) {
+  const code = String(record?.currencyCode || '').trim().toUpperCase();
+  const symbol = String(record?.currencySymbol || '').trim();
+  if (code === 'AED' || /[\u0600-\u06FF]/.test(symbol)) return 'AED ';
+  return symbol || code;
+}
+
+function productMetricDeltaText(
+  value: any,
+  kind: string,
+  key = '',
+  record?: Record<string, any>,
+) {
   if (
     !isProductMetricCell(value) ||
     value.delta === null ||
@@ -1096,16 +1440,19 @@ function productMetricDeltaText(value: any, kind: string) {
   if (kind === 'percent')
     return `${delta > 0 ? '+' : ''}${formatCompactNumber(delta * 100)}pp`;
   const rate = Number(value.deltaRate);
-  const deltaText = formatSignedMetricDelta(delta);
+  const deltaText = formatSignedMetricDelta(
+    delta,
+    isProductMoneyColumn(key) ? productCurrencySymbol(record) : '',
+  );
   if (Number.isFinite(rate) && Math.abs(rate) > 0) {
     return `${deltaText} / ${formatPercent(rate)}`;
   }
   return deltaText;
 }
 
-function formatSignedMetricDelta(value: number) {
-  const sign = value > 0 ? '+' : '';
-  return `${sign}${formatCompactNumber(value)}`;
+function formatSignedMetricDelta(value: number, symbol = '') {
+  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  return `${sign}${symbol}${formatCompactNumber(Math.abs(value))}`;
 }
 
 function productTextClass(key: string) {
@@ -1117,6 +1464,7 @@ function isProductMoneyColumn(key: string) {
   const label = productColumnLabel(key);
   return [
     '金额',
+    '均价',
     '毛利',
     '利润',
     '花费',
@@ -1127,51 +1475,126 @@ function isProductMoneyColumn(key: string) {
   ].some((flag) => label.includes(flag));
 }
 
-function formatProductDetailValue(value: any, kind: string, key = '') {
+function formatProductDetailValue(
+  value: any,
+  kind: string,
+  key = '',
+  record?: Record<string, any>,
+) {
   const rawValue = productMetricRawValue(value);
   if (rawValue === null || rawValue === undefined || rawValue === '')
     return '-';
   if (isProductMoneyColumn(key)) {
-    return formatCompactNumber(rawValue);
+    return formatProductMoney(
+      rawValue,
+      productMoneyFractionDigits(key),
+      productCurrencySymbol(record),
+    );
   }
-  if (kind === 'percent') return formatPercent(Number(rawValue || 0));
-  if (kind === 'decimal') return formatCompactNumber(rawValue);
-  if (kind === 'number') return formatCompactNumber(rawValue);
+  if (kind === 'percent') return formatPercent(Number(rawValue || 0), 0);
+  if (kind === 'decimal') return formatCompactNumber(rawValue, 2);
+  if (kind === 'number') return formatCompactNumber(rawValue, 0);
   return String(rawValue);
 }
 
-function formatCompactNumber(value: any) {
+function productMoneyFractionDigits(key: string) {
+  const label = productColumnLabel(key);
+  return label === 'CPC' || label.includes('均价') ? 2 : 0;
+}
+
+function formatProductMoney(value: any, fractionDigits = 0, symbol = '') {
+  const numeric = parseProductNumber(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return `${symbol}${numeric.toLocaleString('zh-CN', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
+  })}`;
+}
+
+function parseProductNumber(value: any) {
+  const rawValue = productMetricRawValue(value);
+  if (typeof rawValue === 'number') return rawValue;
+  if (rawValue === null || rawValue === undefined || rawValue === '') return 0;
+  const normalized = String(rawValue)
+    .replace(/[,\s]/g, '')
+    .replace(/[^\d.+-]/g, '');
+  return Number(normalized || 0);
+}
+
+function productDetailSummaryValue(
+  column: KanbanProductDetailColumn,
+  index: number,
+) {
+  if (index === 0) return '合计';
+  if (
+    !productDetailSummary.value ||
+    Object.keys(productDetailSummary.value).length === 0
+  )
+    return '';
+  return formatProductDetailValue(
+    productDetailSummary.value[column.key],
+    column.kind,
+    column.key,
+    productDetailSummary.value,
+  );
+}
+
+function productDetailSummaryCellClass(
+  column: KanbanProductDetailColumn,
+  index: number,
+) {
+  return {
+    'product-summary-label': index === 0,
+    'product-summary-number': column.kind !== 'text' && column.kind !== 'image',
+  };
+}
+
+function formatCompactNumber(value: any, fractionDigits = 2) {
   const numeric = Number(value || 0);
   if (!Number.isFinite(numeric)) return '-';
-  return numeric.toLocaleString(undefined, {
-    maximumFractionDigits: 2,
+  return numeric.toLocaleString('zh-CN', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: 0,
   });
 }
 
-function formatPercent(value: number) {
-  return `${formatCompactNumber(Number(value || 0) * 100)}%`;
+function formatPercent(value: number, fractionDigits = 1) {
+  return `${formatCompactNumber(Number(value || 0) * 100, fractionDigits)}%`;
 }
 
 watch(selectedProductColumns, () => {
   resetProductDetailPagination();
+  void refreshProductScrollSync();
 });
 
 watch(
-  () => props.baseParams,
+  productDetailBaseParamsSignature,
   () => {
+    syncProductDetailDateFromBaseParams();
+    syncProductDetailResponsiblesWithOptions();
     selectedProductCountries.value = [];
     productCountryDraft.value = [];
     void applyProductDetailFilters();
   },
-  { deep: true },
+);
+
+watch(
+  () => props.responsibleOptions.join('|'),
+  () => {
+    syncProductDetailResponsiblesWithOptions();
+  },
 );
 
 onMounted(() => {
+  syncProductDetailDateFromBaseParams();
+  syncProductDetailResponsiblesWithOptions();
   void loadProductDetailData();
+  void refreshProductScrollSync();
 });
 
 onBeforeUnmount(() => {
   stopProductColumnResize();
+  unbindProductScrollSync();
 });
 </script>
 
@@ -1181,7 +1604,7 @@ onBeforeUnmount(() => {
       <div class="product-detail-toolbar">
         <div class="product-detail-heading">
           <span class="product-title-dot"></span>
-          <strong>新品详情表</strong>
+          <strong>2026年新品详情表</strong>
         </div>
         <Space class="product-detail-controls" wrap>
           <span class="product-detail-meta">
@@ -1295,6 +1718,7 @@ onBeforeUnmount(() => {
     </template>
 
     <Table
+      ref="productDetailTableRef"
       :columns="productDetailColumns"
       :data-source="productDetailRows"
       :bordered="true"
@@ -1304,6 +1728,7 @@ onBeforeUnmount(() => {
       :scroll="{ x: productDetailScrollX, y: 560 }"
       size="small"
       sticky
+      @change="handleProductDetailTableChange"
     >
       <template #headerCell="{ column }">
         <div
@@ -1315,8 +1740,10 @@ onBeforeUnmount(() => {
             v-if="productColumnResizeKey(column)"
             aria-label="Resize column"
             class="product-column-resize-handle"
+            :data-column-key="productColumnResizeKey(column)"
             type="button"
             @click.stop
+            @pointerdown.stop
             @mousedown="
               (event) =>
                 startProductColumnResize(productColumnResizeKey(column), event)
@@ -1347,6 +1774,7 @@ onBeforeUnmount(() => {
                   text,
                   productColumnKind(String(column.dataIndex)),
                   String(column.dataIndex),
+                  record,
                 )
               }}
             </b>
@@ -1385,6 +1813,7 @@ onBeforeUnmount(() => {
                     text,
                     productColumnKind(String(column.dataIndex)),
                     String(column.dataIndex),
+                    record,
                   )
                 }}
               </span>
@@ -1393,6 +1822,8 @@ onBeforeUnmount(() => {
                   productMetricDeltaText(
                     text,
                     productColumnKind(String(column.dataIndex)),
+                    String(column.dataIndex),
+                    record,
                   )
                 "
                 class="product-metric-delta"
@@ -1402,6 +1833,8 @@ onBeforeUnmount(() => {
                   productMetricDeltaText(
                     text,
                     productColumnKind(String(column.dataIndex)),
+                    String(column.dataIndex),
+                    record,
                   )
                 }}
               </span>
@@ -1427,10 +1860,29 @@ onBeforeUnmount(() => {
                 text,
                 productColumnKind(String(column.dataIndex)),
                 String(column.dataIndex),
+                record,
               )
             }}
           </span>
         </template>
+      </template>
+      <template #footer>
+        <div ref="productSummaryScrollRef" class="product-summary-scroll">
+          <div
+            class="product-summary-grid"
+            :style="{ minWidth: `${productDetailScrollX}px` }"
+          >
+            <div
+              v-for="(column, index) in productDisplayColumns"
+              :key="column.key"
+              :class="productDetailSummaryCellClass(column, index)"
+              :style="{ width: `${productColumnDisplayWidth(column)}px` }"
+              :title="productDetailSummaryValue(column, index)"
+            >
+              {{ productDetailSummaryValue(column, index) }}
+            </div>
+          </div>
+        </div>
       </template>
     </Table>
   </Card>
@@ -1822,7 +2274,51 @@ onBeforeUnmount(() => {
 }
 
 .product-detail-card :deep(.ant-table-cell) {
+  text-align: center !important;
   white-space: nowrap;
+}
+
+.product-detail-card :deep(.ant-table-footer) {
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.product-summary-scroll {
+  overflow-x: auto;
+  border-top: 1px solid var(--product-border);
+}
+
+.product-summary-grid {
+  display: flex;
+  min-height: 34px;
+  background: var(--product-header-bg);
+}
+
+.product-summary-grid > div {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--product-text);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-right: 1px solid var(--product-border);
+}
+
+.product-summary-grid > div:first-child {
+  text-align: center;
+}
+
+.product-summary-label {
+  color: var(--product-title);
+}
+
+.product-summary-number {
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
 }
 
 .product-resizable-header {
@@ -1842,22 +2338,28 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.product-detail-card :deep(th.product-header-resize-hover),
+.product-detail-card :deep(th.product-header-resize-hover *) {
+  cursor: col-resize !important;
+}
+
 .product-column-resize-handle {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  bottom: -8px;
-  z-index: 6;
-  width: 10px;
+  top: -10px;
+  right: -12px;
+  bottom: -10px;
+  z-index: 30;
+  width: 18px;
   cursor: col-resize;
   background: transparent;
   border: 0;
+  pointer-events: auto;
 }
 
 .product-column-resize-handle::after {
   position: absolute;
   top: 8px;
-  right: 4px;
+  right: 8px;
   bottom: 8px;
   width: 2px;
   content: '';
@@ -1975,7 +2477,7 @@ onBeforeUnmount(() => {
   min-height: 34px;
   padding: 3px 6px;
   overflow: hidden;
-  text-align: right;
+  text-align: center;
   border-radius: 4px;
 }
 
@@ -1986,7 +2488,7 @@ onBeforeUnmount(() => {
   z-index: 0;
   height: 1.45em;
   border-radius: 4px;
-  opacity: 0.22;
+  opacity: 1;
   transform: none;
 }
 
@@ -1995,24 +2497,28 @@ onBeforeUnmount(() => {
   width: 100% !important;
   height: auto;
   border-radius: 4px;
-  opacity: 0.18;
+  opacity: 1;
   transform: none;
 }
 
 .metric-fill-blue {
-  background: #2563eb;
+  background: #1a7dff;
+  box-shadow: inset 0 0 0 1px rgb(26 125 255 / 26%);
 }
 
 .metric-fill-green {
-  background: #16a34a;
+  background: #32c97e;
+  box-shadow: inset 0 0 0 1px rgb(50 201 126 / 26%);
 }
 
 .metric-fill-orange {
-  background: #f59e0b;
+  background: #ffaf0f;
+  box-shadow: inset 0 0 0 1px rgb(255 175 15 / 28%);
 }
 
 .metric-fill-red {
-  background: #ef4444;
+  background: #fc4756;
+  box-shadow: inset 0 0 0 1px rgb(252 71 86 / 28%);
 }
 
 .product-metric-content {
@@ -2020,11 +2526,14 @@ onBeforeUnmount(() => {
   z-index: 1;
   display: grid;
   gap: 2px;
+  justify-items: center;
 }
 
 .product-metric-value {
+  direction: ltr;
   font-weight: 700;
   color: var(--product-heading);
+  unicode-bidi: isolate;
 }
 
 .product-metric-delta {
@@ -2038,7 +2547,7 @@ onBeforeUnmount(() => {
   grid-template-columns: auto 18px;
   gap: 6px;
   align-items: center;
-  justify-content: end;
+  justify-content: center;
   width: 100%;
   font-weight: 760;
   color: var(--product-heading);

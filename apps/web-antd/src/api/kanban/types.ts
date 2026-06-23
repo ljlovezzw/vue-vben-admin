@@ -179,6 +179,7 @@ export interface KanbanProductDetailOverview {
     startDate: string;
   };
   rows: KanbanProductDetailRow[];
+  summary: Record<string, any>;
   totalRows: number;
 }
 
@@ -194,6 +195,7 @@ export interface KanbanProductDetailRows {
   pageSize: number;
   query: KanbanProductDetailOverview['query'];
   rows: KanbanProductDetailRow[];
+  summary: Record<string, any>;
   totalRows: number;
 }
 
@@ -394,11 +396,14 @@ export interface AnalyticsOperationMetric {
   dailyTargetUnits?: number;
   fbaAvailableQty: number;
   grossProfit: number;
+  grossMarginCompletionRate?: number;
+  grossMarginRate?: number;
   inventoryQty: number;
   inventoryRiskCount: number;
   promotionRate: number;
   salesAmount: number;
   salesQty: number;
+  targetGrossMarginRate?: number;
   turnoverFbaAvailableMonths: number;
   turnoverMonths: number;
 }
@@ -453,7 +458,9 @@ export interface AnalyticsOverview {
   targets: {
     dailyTargetProfit: number;
     dailyTargetSales: number;
+    dailyTargetSalesCny?: number;
     dailyTargetUnits: number;
+    targetGrossMarginRate?: number;
   };
   source: {
     message: string;
@@ -499,6 +506,8 @@ export interface AnalyticsReportRow {
   category2: string;
   clicks: number;
   country: string;
+  currencyCode?: string;
+  currencySymbol?: string;
   cpc: null | number;
   cpo: null | number;
   ctr: null | number;
@@ -768,6 +777,7 @@ export interface ConfigUserRow {
   loginCount: number;
   managedUserIds: number[];
   permissions: string[];
+  countryScope: string[];
   role: string;
   status: 'active' | 'disabled';
   username: string;
@@ -777,6 +787,7 @@ export interface ConfigUserAuthPayload {
   department?: null | string;
   managedUserIds: number[];
   permissions: string[];
+  countryScope: string[];
   role: string;
   status: 'active' | 'disabled';
 }

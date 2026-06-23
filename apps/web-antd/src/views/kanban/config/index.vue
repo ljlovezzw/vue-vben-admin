@@ -133,6 +133,20 @@ const permissionOptions = [
   { label: '配置中心', value: 'kanban:config' },
 ];
 
+const countryScopeOptions = [
+  { label: '泛欧', value: '泛欧' },
+  { label: '美国', value: '美国' },
+  { label: '英国', value: '英国' },
+  { label: '加拿大', value: '加拿大' },
+  { label: '墨西哥', value: '墨西哥' },
+  { label: '巴西', value: '巴西' },
+  { label: '澳洲', value: '澳洲' },
+  { label: '阿联酋', value: '阿联酋' },
+  { label: '印度', value: '印度' },
+  { label: '日本', value: '日本' },
+  { label: '新加坡', value: '新加坡' },
+];
+
 const categoryColumns: TableColumnsType<EditableCategoryConfig> = [
   { dataIndex: 'category', fixed: 'left', title: '类目', width: 160 },
   { dataIndex: 'planNewItems2026', title: '2026上新计划', width: 130 },
@@ -154,6 +168,7 @@ const userColumns: TableColumnsType<ConfigUserRow> = [
   { dataIndex: 'managedUserIds', title: '组员范围', width: 300 },
   { dataIndex: 'status', title: '状态', width: 100 },
   { dataIndex: 'permissions', title: '权限', width: 320 },
+  { dataIndex: 'countryScope', title: '国家范围', width: 260 },
   { dataIndex: 'loginCount', title: '登录次数', width: 90 },
   { dataIndex: 'lastLoginAt', title: '最近登录', width: 170 },
   { dataIndex: 'action', fixed: 'right', title: '操作', width: 90 },
@@ -431,6 +446,7 @@ async function saveUserAuth(row: ConfigUserRow) {
   try {
     const saved = await updateConfigUserAuth(row.id, {
       department: canEditAdminFields.value ? row.department.trim() : undefined,
+      countryScope: row.countryScope,
       managedUserIds: canEditMembers(row) ? row.managedUserIds : [],
       permissions: row.permissions,
       role: row.role,
@@ -789,7 +805,7 @@ onMounted(loadData);
                   :data-source="filteredUsers"
                   :pagination="userPagination"
                   row-key="id"
-                  :scroll="{ x: 1720 }"
+                  :scroll="{ x: 1980 }"
                   size="small"
                 >
                   <template #bodyCell="{ column, record, text }">
@@ -849,6 +865,17 @@ onMounted(loadData);
                         :options="permissionOptions"
                         mode="multiple"
                         placeholder="选择可访问模块"
+                        size="small"
+                      />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'countryScope'">
+                      <Select
+                        v-model:value="(record as ConfigUserRow).countryScope"
+                        :disabled="!canEditAdminFields"
+                        :max-tag-count="2"
+                        :options="countryScopeOptions"
+                        mode="multiple"
+                        placeholder="不选则不限制国家"
                         size="small"
                       />
                     </template>

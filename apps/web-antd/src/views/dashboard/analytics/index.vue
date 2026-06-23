@@ -57,12 +57,16 @@ interface ResponsibleCard {
   dailyTargetUnits: number;
   department: string;
   fbaAvailableQty: number;
+  grossMarginCompletionRate: number;
+  grossMarginRate: number;
   grossProfit: number;
+  grossProfitCompletionRate: number;
   inventoryQty: number;
   name: string;
   promotionRate: number;
   salesAmount: number;
   salesQty: number;
+  targetGrossMarginRate: number;
   turnoverFbaAvailableMonths: number;
   turnoverMonths: number;
 }
@@ -155,6 +159,7 @@ const responsibleOwnerDraftResponsibles = ref<string[]>([]);
 const activeResponsibleOwnerGroupId = ref('');
 let reportBodyScrollElement: HTMLElement | null = null;
 let reportScrollSyncing = false;
+let reportResizeSuppressClickUntil = 0;
 let dashboardAutoReloadReady = false;
 let dashboardAutoReloadTimer: null | ReturnType<typeof setTimeout> = null;
 let syncingDashboardQuery = false;
@@ -299,6 +304,7 @@ const dashboardCountryOptionDefs = [
   { label: '墨西哥', sites: ['MX'], value: 'MX' },
   { label: '巴西', sites: ['BR'], value: 'BR' },
   { label: '澳洲', sites: ['AU'], value: 'AU' },
+  { label: '阿联酋', sites: ['AE'], value: 'AE' },
 ];
 const dashboardCountryOptions = computed(() =>
   dashboardCountryOptionDefs
@@ -359,10 +365,18 @@ const reportProductTypeOptions = computed(() => [
   { label: '新品', value: 'new' },
   { label: '老品', value: 'old' },
 ]);
+const dashboardResponsibleOptionsForChildren = computed(() => {
+  const scopedNames = dashboardResponsibleScopeForTables().filter(
+    (name) => name !== '__NO_ACCESS__',
+  );
+  if (dashboardResponsibleScopeActive()) return scopedNames;
+  return overview.value?.filters.responsibles ?? [];
+});
 const reportResponsibleOptions = computed(() => {
-  const values =
-    report.value?.filters.responsibles ??
-    responsibleOptions.value.map((item) => item.value);
+  const values = dashboardResponsibleScopeActive()
+    ? dashboardResponsibleOptionsForChildren.value
+    : (report.value?.filters.responsibles ??
+      responsibleOptions.value.map((item) => item.value));
   return values.map((value) => ({ label: value, value }));
 });
 const reportSpuOptions = computed(() =>
@@ -478,7 +492,7 @@ const reportColumnGroups = computed(() => {
 const selectedReportColumnDraftMetas = computed<AnalyticsReportColumn[]>(() =>
   reportColumnDraft.value
     .map((key) => reportColumnMap.value.get(key))
-    .filter(Boolean),
+    .filter((column): column is AnalyticsReportColumn => column !== undefined),
 );
 const reportTableColumns = computed<TableColumnsType<AnalyticsReportRow>>(
   () => {
@@ -521,6 +535,9 @@ const qtyCompletion = computed(() =>
 const salesCompletion = computed(() =>
   nullableRatio(latest.value?.salesAmount, targets.value?.dailyTargetSales),
 );
+const grossProfitCompletion = computed(() =>
+  nullableRatio(latest.value?.grossProfit, targets.value?.dailyTargetProfit),
+);
 const promotionRate = computed(() =>
   ratio(
     advertising.value?.summary.totalSpend,
@@ -551,12 +568,21 @@ const allResponsibleCards = computed<ResponsibleCard[]>(() => {
       dailyTargetUnits: row.dailyTargetUnits ?? 0,
       department: row.department || '未配置部门',
       fbaAvailableQty: row.fbaAvailableQty ?? 0,
+      grossMarginCompletionRate:
+        row.grossMarginCompletionRate ??
+        ratio(row.grossMarginRate ?? 0, row.targetGrossMarginRate ?? 0),
+      grossMarginRate: row.grossMarginRate ?? 0,
+      grossProfitCompletionRate: ratio(
+        row.grossProfit,
+        row.dailyTargetProfit,
+      ),
       grossProfit: row.grossProfit,
       inventoryQty: row.inventoryQty,
       name: row.responsible,
       promotionRate: row.promotionRate ?? 0,
       salesAmount: row.salesAmount,
       salesQty: row.salesQty,
+      targetGrossMarginRate: row.targetGrossMarginRate ?? 0,
       turnoverFbaAvailableMonths: row.turnoverFbaAvailableMonths ?? 0,
       turnoverMonths: row.turnoverMonths,
     }))
@@ -586,27 +612,35 @@ const departmentCards = computed(() =>
       dailyTargetUnits: row.dailyTargetUnits ?? 0,
       fbaAvailableQty: row.fbaAvailableQty ?? 0,
       grossProfit: row.grossProfit,
+      grossMarginCompletionRate:
+        row.grossMarginCompletionRate ??
+        ratio(row.grossMarginRate ?? 0, row.targetGrossMarginRate ?? 0),
+      grossMarginRate: row.grossMarginRate ?? 0,
+      grossProfitCompletionRate: ratio(
+        row.grossProfit,
+        row.dailyTargetProfit,
+      ),
       inventoryQty: row.inventoryQty,
       name: row.department || '未配置部门',
       promotionRate: row.promotionRate ?? 0,
       salesAmount: row.salesAmount,
       salesCompletionRate: ratio(row.salesAmount, row.dailyTargetSales),
       salesQty: row.salesQty,
+      targetGrossMarginRate: row.targetGrossMarginRate ?? 0,
       turnoverFbaAvailableMonths: row.turnoverFbaAvailableMonths ?? 0,
       turnoverMonths: row.turnoverMonths,
     }))
     .toSorted((a, b) => b.salesQty - a.salesQty),
 );
 const productDetailBaseParams = computed(() => {
-  const responsibleNames = new Set(query.responsibles);
-  const selectedGroupIds = new Set(query.operationGroupIds.map(String));
-  for (const group of dashboardOperationGroups.value) {
-    if (!selectedGroupIds.has(String(group.id))) continue;
-    for (const name of group.memberNames) responsibleNames.add(name);
-  }
+  const dateRange = dashboardDateRangeForTables();
   return {
-    responsibles: [...responsibleNames],
+    countries: dashboardCountryLabelsFromSites(query.sites),
+    dateRangeType: 'custom',
+    endDate: dateRange.endDate,
+    responsibles: dashboardResponsibleScopeForTables(),
     sites: [...query.sites],
+    startDate: dateRange.startDate,
   };
 });
 
@@ -706,7 +740,9 @@ async function loadReportData() {
     reportQuery.operationGroupIds = data.query.operationGroupIds ?? [];
     reportQuery.pageSize = data.pagination.pageSize;
     reportQuery.productTypes = data.query.productTypes;
-    reportQuery.responsibles = data.query.responsibles;
+    reportQuery.responsibles = reportResponsiblesForDisplay(
+      data.query.responsibles,
+    );
     reportQuery.spus = data.query.spus ?? [];
     reportQuery.sortField = data.query.sortField || 'salesQty';
     reportQuery.sortOrder = (data.query.sortOrder ||
@@ -751,6 +787,32 @@ function dashboardCountryValuesFromSites(sites: string[]) {
   return dashboardCountryOptions.value
     .filter((option) => option.sites.every((site) => siteSet.has(site)))
     .map((option) => option.value);
+}
+
+function dashboardCountryLabelsFromSites(sites: string[]) {
+  if (sites.length === 0) return [];
+  const siteSet = new Set(sites.map((site) => site.toUpperCase()));
+  return dashboardCountryOptions.value
+    .filter((option) => option.sites.every((site) => siteSet.has(site)))
+    .map((option) => option.label);
+}
+
+function dashboardDateRangeForTables() {
+  if (isMonthMode.value) {
+    const month = dayjs(query.siteDate);
+    const today = dayjs();
+    const end = month.endOf('month').isAfter(today, 'day')
+      ? today
+      : month.endOf('month');
+    return {
+      endDate: end.format('YYYY-MM-DD'),
+      startDate: month.startOf('month').format('YYYY-MM-DD'),
+    };
+  }
+  return {
+    endDate: query.endDate,
+    startDate: query.startDate,
+  };
 }
 
 function dashboardSitesFromCountryValues(values: string[]) {
@@ -1420,6 +1482,24 @@ function formatSignedSalesMoney(value?: null | number) {
   return formatSignedMoney(value, isMonthMode.value ? 2 : 0);
 }
 
+function formatCny(value?: null | number) {
+  return `¥${Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: isMonthMode.value ? 2 : 0,
+    minimumFractionDigits: isMonthMode.value ? 2 : 0,
+  })}`;
+}
+
+function formatSignedCny(value?: null | number) {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+  const absolute = `¥${Math.abs(Number(value || 0)).toLocaleString('zh-CN', {
+    maximumFractionDigits: isMonthMode.value ? 2 : 0,
+    minimumFractionDigits: isMonthMode.value ? 2 : 0,
+  })}`;
+  return `${value >= 0 ? '+' : '-'}${absolute}`;
+}
+
 function formatUsd(value?: null | number) {
   return `$${Number(value || 0).toLocaleString('zh-CN', {
     maximumFractionDigits: 0,
@@ -1543,6 +1623,7 @@ function reportColumnDisplayWidth(key: string) {
 }
 
 function startReportColumnResize(key: string, event: MouseEvent) {
+  if (!key) return;
   event.preventDefault();
   event.stopPropagation();
   resizingReportColumn.value = {
@@ -1550,9 +1631,44 @@ function startReportColumnResize(key: string, event: MouseEvent) {
     startWidth: reportColumnDisplayWidth(key),
     startX: event.clientX,
   };
+  reportResizeSuppressClickUntil = Date.now() + 500;
   document.body.classList.add('report-column-resizing');
   window.addEventListener('mousemove', handleReportColumnResizeMove);
   window.addEventListener('mouseup', stopReportColumnResize);
+}
+
+function reportColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
+  const handle = th.querySelector<HTMLElement>('.report-column-resize-handle');
+  const handleKey = handle?.dataset.columnKey;
+  if (handleKey) return handleKey;
+  const leafHeaders = Array.from(
+    th.parentElement?.querySelectorAll<HTMLTableCellElement>(
+      'th:not([colspan]), th[colspan="1"]',
+    ) ?? [],
+  ).filter((item) => item.querySelector('.report-resizable-header'));
+  const index = leafHeaders.indexOf(th);
+  return selectedReportColumnMetas.value[index]?.key ?? '';
+}
+
+function handleReportHeaderMouseDownCapture(event: MouseEvent) {
+  if (event.button !== 0) return;
+  const target = event.target as HTMLElement | null;
+  const th = target?.closest<HTMLTableCellElement>('th');
+  const root = reportSummaryScroll.value?.closest('.report-panel');
+  if (!th || !root?.contains(th)) return;
+  if (!th.querySelector('.report-resizable-header')) return;
+  const rect = th.getBoundingClientRect();
+  const resizeHotZone = 14;
+  if (rect.right - event.clientX > resizeHotZone) return;
+  const key = reportColumnKeyFromHeaderCell(th);
+  if (!key) return;
+  startReportColumnResize(key, event);
+}
+
+function handleReportHeaderClickCapture(event: MouseEvent) {
+  if (Date.now() > reportResizeSuppressClickUntil) return;
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function handleReportColumnResizeMove(event: MouseEvent) {
@@ -1571,31 +1687,49 @@ function stopReportColumnResize() {
 }
 
 function reportOperationGroupIdsForRequest() {
-  if (
-    query.operationGroupIds.length > 0 &&
-    reportQuery.operationGroupIds.length > 0
-  ) {
-    const base = new Set(query.operationGroupIds);
-    return reportQuery.operationGroupIds.filter((item) => base.has(item));
-  }
-  return reportQuery.operationGroupIds.length > 0
-    ? reportQuery.operationGroupIds
-    : query.operationGroupIds;
+  return query.operationGroupIds;
 }
 
 function reportResponsiblesForRequest() {
-  if (query.responsibles.length > 0 && reportQuery.responsibles.length > 0) {
-    const base = new Set(query.responsibles);
-    return reportQuery.responsibles.filter((item) => base.has(item));
-  }
-  return reportQuery.responsibles.length > 0
-    ? reportQuery.responsibles
-    : query.responsibles;
+  const dashboardScope = dashboardResponsibleScopeForTables();
+  if (!dashboardResponsibleScopeActive()) return reportQuery.responsibles;
+  if (dashboardScope.includes('__NO_ACCESS__')) return ['__NO_ACCESS__'];
+  if (reportQuery.responsibles.length === 0) return dashboardScope;
+  const allowed = new Set(dashboardScope);
+  const narrowed = reportQuery.responsibles.filter((name) =>
+    allowed.has(name),
+  );
+  return narrowed.length > 0 ? narrowed : ['__NO_ACCESS__'];
+}
+
+function reportCountriesForRequest() {
+  const dashboardCountries = dashboardCountryLabelsFromSites(query.sites);
+  return dashboardCountries.length > 0
+    ? dashboardCountries
+    : reportQuery.countries;
+}
+
+function syncReportFiltersFromDashboard() {
+  const dateRange = dashboardDateRangeForTables();
+  const allowedResponsibles = new Set(
+    dashboardResponsibleOptionsForChildren.value,
+  );
+  reportQuery.operationGroupIds = [...query.operationGroupIds];
+  reportQuery.responsibles =
+    allowedResponsibles.size > 0
+      ? reportQuery.responsibles.filter((name) =>
+          allowedResponsibles.has(name),
+        )
+      : [];
+  reportQuery.countries = dashboardCountryLabelsFromSites(query.sites);
+  reportQuery.dateRangeType = 'custom';
+  reportQuery.startDate = dateRange.startDate;
+  reportQuery.endDate = dateRange.endDate;
 }
 
 function buildReportParams(overrides: Record<string, any> = {}) {
   return {
-    countries: reportQuery.countries,
+    countries: reportCountriesForRequest(),
     dateRangeType: reportQuery.dateRangeType,
     departments: query.departments,
     endDate: reportQuery.endDate,
@@ -1612,6 +1746,55 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     startDate: reportQuery.startDate,
     ...overrides,
   };
+}
+
+function dashboardResponsibleScopeActive() {
+  return (
+    query.departments.length > 0 ||
+    query.operationGroupIds.length > 0 ||
+    query.responsibles.length > 0
+  );
+}
+
+function dashboardOverviewOwnerScopeMatches() {
+  const overviewQuery = overview.value?.query;
+  if (!overviewQuery) return false;
+  return (
+    sameStringSet(overviewQuery.departments ?? [], query.departments) &&
+    sameNumberSet(overviewQuery.operationGroupIds ?? [], query.operationGroupIds)
+  );
+}
+
+function dashboardResponsibleScopeForTables() {
+  if (!dashboardResponsibleScopeActive()) return [];
+  const overviewResponsibles = overview.value?.query.responsibles ?? [];
+  if (overviewResponsibles.length > 0) return [...overviewResponsibles];
+  if (query.departments.length > 0 || query.operationGroupIds.length > 0) {
+    return dashboardOverviewOwnerScopeMatches() ? ['__NO_ACCESS__'] : [];
+  }
+  return [...query.responsibles];
+}
+
+function reportResponsiblesForDisplay(responsibles: string[] | undefined) {
+  const values = [...(responsibles ?? [])].filter(
+    (name) => name !== '__NO_ACCESS__',
+  );
+  if (!dashboardResponsibleScopeActive()) return values;
+  const scope = dashboardResponsibleOptionsForChildren.value;
+  if (scope.length === 0) return [];
+  return sameStringSet(values, scope) ? [] : values;
+}
+
+function sameStringSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  const values = new Set(left);
+  return right.every((value) => values.has(value));
+}
+
+function sameNumberSet(left: number[], right: number[]) {
+  if (left.length !== right.length) return false;
+  const values = new Set(left.map(Number));
+  return right.every((value) => values.has(Number(value)));
 }
 
 function normalizeReportDateRangeType(value: unknown): ReportDateRangeType {
@@ -1651,12 +1834,54 @@ function reportDateRangeLabel(value: unknown) {
   );
 }
 
-function formatReportValue(key: string, value: any) {
+function reportCurrencySymbol(record?: Record<string, any>) {
+  const code = String(record?.currencyCode || '').trim().toUpperCase();
+  const symbol = String(record?.currencySymbol || '').trim();
+  if (code === 'AED' || /[\u0600-\u06FF]/.test(symbol)) return 'AED ';
+  return symbol || code;
+}
+
+function reportSummaryCurrencySymbol() {
+  const symbols = new Set(
+    reportRows.value
+      .map((row) => reportCurrencySymbol(row))
+      .filter((value) => value),
+  );
+  return symbols.size === 1 ? [...symbols][0] : '';
+}
+
+function formatReportMoneyValue(
+  value: any,
+  fractionDigits = 0,
+  record?: Record<string, any>,
+) {
+  const symbol = record ? reportCurrencySymbol(record) : reportSummaryCurrencySymbol();
+  const numeric = parseReportNumber(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return `${symbol}${numeric.toLocaleString('zh-CN', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
+  })}`;
+}
+
+function parseReportNumber(value: any) {
+  if (typeof value === 'number') return value;
+  if (value === null || value === undefined || value === '') return 0;
+  const normalized = String(value)
+    .replace(/[,\s]/g, '')
+    .replace(/[^\d.+-]/g, '');
+  return Number(normalized || 0);
+}
+
+function formatReportValue(key: string, value: any, record?: Record<string, any>) {
   const column = reportColumnMap.value.get(key);
   if (!column) return value ?? '-';
   if (value === null || value === undefined || value === '') return '-';
   if (column.kind === 'percent') return formatPercent(Number(value));
-  if (column.kind === 'money') return formatMoney(Number(value), 2);
+  if (column.kind === 'money') {
+    const fractionDigits = ['cpc', 'cpo'].includes(key) ? 2 : 0;
+    return formatReportMoneyValue(value, fractionDigits, record);
+  }
   if (column.kind === 'decimal') {
     return Number(value).toLocaleString('zh-CN', {
       maximumFractionDigits: 2,
@@ -1848,12 +2073,18 @@ watch(
     query.responsibles.join('|'),
     query.sites.join('|'),
   ],
-  () => scheduleDashboardReload({ reloadReport: true }),
+  () => {
+    syncReportFiltersFromDashboard();
+    scheduleDashboardReload({ reloadReport: true });
+  },
 );
 
 watch(
   () => [query.endDate, query.granularity, query.siteDate, query.startDate],
-  () => scheduleDashboardReload(),
+  () => {
+    syncReportFiltersFromDashboard();
+    scheduleDashboardReload({ reloadReport: true });
+  },
 );
 
 onMounted(() => {
@@ -2079,6 +2310,27 @@ onBeforeUnmount(() => {
               {{ formatSalesMoney(targets?.dailyTargetSales) }}
             </p>
           </div>
+
+          <div class="white-panel gauge-panel">
+            <div class="panel-heading">
+              <h2>毛利润完成率</h2>
+            </div>
+            <div class="gauge-visual">
+              <VChart
+                autoresize
+                class="gauge-chart"
+                :option="gaugeOption(grossProfitCompletion, '#facc15')"
+              />
+              <div class="gauge-center">
+                <strong>{{ formatCny(latest?.grossProfit) }}</strong>
+                <span>{{ completionText(grossProfitCompletion) }}</span>
+              </div>
+            </div>
+            <p>
+              实际 {{ formatCny(latest?.grossProfit) }} / 目标
+              {{ formatCny(targets?.dailyTargetProfit) }}
+            </p>
+          </div>
         </aside>
 
         <main class="sales-column">
@@ -2091,7 +2343,9 @@ onBeforeUnmount(() => {
                     <span>{{ metricPrefix }}销量</span>
                     <em>SALES VOLUME</em>
                   </div>
-                  <strong>{{ formatInteger(latest?.salesQty) }}</strong>
+                  <strong :title="formatInteger(latest?.salesQty)">
+                    {{ formatInteger(latest?.salesQty) }}
+                  </strong>
                 </div>
               </div>
               <div
@@ -2168,7 +2422,9 @@ onBeforeUnmount(() => {
                     <span>{{ metricPrefix }}销售额</span>
                     <em>SALES REVENUE</em>
                   </div>
-                  <strong>{{ formatSalesMoney(latest?.salesAmount) }}</strong>
+                  <strong :title="formatSalesMoney(latest?.salesAmount)">
+                    {{ formatSalesMoney(latest?.salesAmount) }}
+                  </strong>
                 </div>
               </div>
               <div
@@ -2257,12 +2513,115 @@ onBeforeUnmount(() => {
                 </div>
               </div>
             </div>
+
+            <div class="metric-stack yellow-stack">
+              <div class="hero-card yellow-card yellow-kpi-card">
+                <div class="yellow-kpi-glass">
+                  <span class="yellow-kpi-dot" aria-hidden="true"></span>
+                  <div class="yellow-kpi-heading">
+                    <span>{{ metricPrefix }}毛利润</span>
+                    <em>GROSS PROFIT</em>
+                  </div>
+                  <strong :title="formatCny(latest?.grossProfit)">
+                    {{ formatCny(latest?.grossProfit) }}
+                  </strong>
+                  <!-- <small>
+                    完成率 {{ completionText(grossProfitCompletion) }}
+                  </small> -->
+                </div>
+              </div>
+              <div
+                class="comparison-card metric-comparison-card yellow-detail yellow-comparison-card"
+              >
+                <div>
+                  <span>{{ previousLabel }}毛利</span>
+                  <strong>{{ formatCny(previous?.grossProfit) }}</strong>
+                </div>
+                <div>
+                  <span>{{ previousLabel }}差值</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        latest?.grossProfit,
+                        previous?.grossProfit,
+                      )
+                    "
+                  >
+                    {{
+                      comparisonDeltaText(
+                        latest?.grossProfit,
+                        previous?.grossProfit,
+                        formatSignedCny,
+                      )
+                    }}
+                  </strong>
+                </div>
+                <div>
+                  <span>{{ previousLabel }}差异</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        latest?.grossProfit,
+                        previous?.grossProfit,
+                      )
+                    "
+                  >
+                    {{
+                      comparisonText(latest?.grossProfit, previous?.grossProfit)
+                    }}
+                  </strong>
+                </div>
+                <div>
+                  <span>{{ secondaryLabel }}</span>
+                  <strong>{{
+                    formatCny(weekBefore?.grossProfit)
+                  }}</strong>
+                </div>
+                <div>
+                  <span>{{ secondaryLabel }}差值</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        latest?.grossProfit,
+                        weekBefore?.grossProfit,
+                      )
+                    "
+                  >
+                    {{
+                      comparisonDeltaText(
+                        latest?.grossProfit,
+                        weekBefore?.grossProfit,
+                        formatSignedCny,
+                      )
+                    }}
+                  </strong>
+                </div>
+                <div>
+                  <span>{{ secondaryLabel }}差异</span>
+                  <strong
+                    :class="
+                      comparisonClass(
+                        latest?.grossProfit,
+                        weekBefore?.grossProfit,
+                      )
+                    "
+                  >
+                    {{
+                      comparisonText(
+                        latest?.grossProfit,
+                        weekBefore?.grossProfit,
+                      )
+                    }}
+                  </strong>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="white-panel group-panel">
             <section class="group-track-section">
               <div class="panel-heading track-heading">
-                <h2>{{ metricPrefix }}销量完成率 - 部门维度</h2>
+                <h2>{{ metricPrefix }}销量完成率 - 部门维度   --数据来自产品表现</h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
                 <article
@@ -2306,7 +2665,7 @@ onBeforeUnmount(() => {
 
             <section class="group-track-section">
               <div class="panel-heading track-heading">
-                <h2>{{ metricPrefix }}销售额完成率 - 部门维度</h2>
+                <h2>{{ metricPrefix }}销售额完成率 - 部门维度   --数据取自利润表</h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
                 <article
@@ -2343,6 +2702,61 @@ onBeforeUnmount(() => {
                         {{
                           formatSignedSalesMoney(
                             groupGap(item.salesAmount, item.dailyTargetSales),
+                          )
+                        }}
+                      </b>
+                    </p>
+                  </div>
+                </article>
+              </div>
+              <p v-else class="pending-text">请先在配置中心维护用户部门</p>
+            </section>
+
+            <section class="group-track-section">
+              <div class="panel-heading track-heading">
+                <h2>{{ metricPrefix }}毛利润完成率 - 部门维度  --数据取自利润表</h2>
+              </div>
+              <div v-if="departmentCards.length > 0" class="group-track-grid">
+                <article
+                  v-for="(item, index) in departmentCards"
+                  :key="`${item.name}-gross-profit`"
+                  class="group-track-card"
+                >
+                  <div
+                    class="group-track-icon"
+                    :style="{ '--track-accent': groupAccent(index) }"
+                  >
+                    {{ index + 1 }}
+                  </div>
+                  <div class="group-track-body">
+                    <button type="button">{{ item.name }} &gt;</button>
+                    <strong>{{
+                      formatPercent(item.grossProfitCompletionRate)
+                    }}</strong>
+                    <p>
+                      目标毛利
+                      <b
+                        :class="
+                          comparisonClass(
+                            item.grossProfit,
+                            item.dailyTargetProfit,
+                          )
+                        "
+                        :title="
+                          formatSignedCny(
+                            groupGap(
+                              item.grossProfit,
+                              item.dailyTargetProfit,
+                            ),
+                          )
+                        "
+                      >
+                        {{
+                          formatSignedCny(
+                            groupGap(
+                              item.grossProfit,
+                              item.dailyTargetProfit,
+                            ),
                           )
                         }}
                       </b>
@@ -2628,8 +3042,40 @@ onBeforeUnmount(() => {
                   </b>
                 </p>
                 <p>
-                  周转周期(FBA可售)
-                  <b>{{ turnover(item.turnoverFbaAvailableMonths) }}</b>
+                  毛利润
+                  <b :title="formatCny(item.grossProfit)">
+                    {{ formatCny(item.grossProfit) }}
+                  </b>
+                </p>
+                <p>
+                  目标毛利
+                  <b :title="formatCny(item.dailyTargetProfit)">
+                    {{ formatCny(item.dailyTargetProfit) }}
+                  </b>
+                </p>
+                <p>
+                  毛利完成率
+                  <b :class="completionTextClass(item.grossProfitCompletionRate)">
+                    {{ formatPercent(item.grossProfitCompletionRate) }}
+                  </b>
+                </p>
+                <p>
+                  毛利率
+                  <b>{{ formatPercent(item.grossMarginRate) }}</b>
+                </p>
+                <p>
+                  目标毛利率
+                  <b>{{ formatPercent(item.targetGrossMarginRate) }}</b>
+                </p>
+                <p>
+                  毛利率完成率
+                  <b :class="completionTextClass(item.grossMarginCompletionRate)">
+                    {{ formatPercent(item.grossMarginCompletionRate) }}
+                  </b>
+                </p>
+                <p>
+                  FBA可售
+                  <b>{{ formatInteger(item.fbaAvailableQty) }}</b>
                 </p>
                 <p>
                   周转周期(月)
@@ -2652,7 +3098,7 @@ onBeforeUnmount(() => {
 
       <ProductDetailTable
         :base-params="productDetailBaseParams"
-        :responsible-options="overview?.filters.responsibles ?? []"
+        :responsible-options="dashboardResponsibleOptionsForChildren"
       />
 
       <section class="white-panel report-panel">
@@ -3101,6 +3547,8 @@ onBeforeUnmount(() => {
           :scroll="{ x: reportScrollX, y: 520 }"
           size="small"
           @change="handleReportTableChange"
+          @click.capture="handleReportHeaderClickCapture"
+          @mousedown.capture="handleReportHeaderMouseDownCapture"
         >
           <template #headerCell="{ column }">
             <div class="report-resizable-header">
@@ -3108,8 +3556,10 @@ onBeforeUnmount(() => {
               <button
                 aria-label="Resize column"
                 class="report-column-resize-handle"
+                :data-column-key="reportColumnKey(column)"
                 type="button"
                 @click.stop
+                @pointerdown.stop
                 @mousedown="
                   (event) =>
                     startReportColumnResize(reportColumnKey(column), event)
@@ -3152,9 +3602,9 @@ onBeforeUnmount(() => {
             <template v-else>
               <span
                 :class="{ 'report-number': isReportNumberColumn(column) }"
-                :title="formatReportValue(reportColumnKey(column), text)"
+                :title="formatReportValue(reportColumnKey(column), text, record)"
               >
-                {{ formatReportValue(reportColumnKey(column), text) }}
+                {{ formatReportValue(reportColumnKey(column), text, record) }}
               </span>
             </template>
           </template>
@@ -3504,7 +3954,7 @@ onBeforeUnmount(() => {
 }
 
 .top-board {
-  grid-template-rows: minmax(252px, auto) repeat(2, minmax(184px, 1fr));
+  grid-template-rows: minmax(190px, auto) repeat(2, minmax(128px, 1fr));
   grid-template-columns: 226px minmax(380px, 0.72fr) minmax(0, 0.94fr) 500px;
   align-items: stretch;
 }
@@ -3512,18 +3962,18 @@ onBeforeUnmount(() => {
 .gauge-column,
 .metric-stack {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: stretch;
 }
 
 .gauge-column {
-  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
   grid-row: 1 / 4;
   height: 100%;
 }
 
 .gauge-column p {
-  font-size: 22px;
+  font-size: 13px;
 }
 
 .sales-column,
@@ -3560,7 +4010,7 @@ onBeforeUnmount(() => {
 }
 
 .white-panel {
-  padding: 10px;
+  padding: 8px;
 }
 
 .panel-heading {
@@ -3589,15 +4039,15 @@ h2 {
 
 .gauge-panel {
   display: grid;
-  grid-template-rows: auto minmax(178px, 1fr) auto;
-  gap: 4px;
+  grid-template-rows: auto minmax(88px, 1fr) auto;
+  gap: 2px;
   min-height: 0;
 }
 
 .gauge-visual {
   position: relative;
   align-self: stretch;
-  min-height: 178px;
+  min-height: 88px;
 }
 
 .gauge-chart {
@@ -3609,7 +4059,7 @@ h2 {
   top: 55%;
   left: 50%;
   display: grid;
-  gap: 3px;
+  gap: 1px;
   width: 150px;
   pointer-events: none;
   transform: translate(-50%, -50%);
@@ -3624,7 +4074,7 @@ h2 {
 .gauge-center strong {
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 850;
   line-height: 1.1;
   color: var(--analytics-strong);
@@ -3632,7 +4082,7 @@ h2 {
 }
 
 .gauge-center span {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   color: var(--analytics-subtle);
 }
@@ -3648,9 +4098,16 @@ h2 {
 
 .yellow-grid,
 .blue-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-self: stretch;
   height: 100%;
+}
+
+.yellow-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.blue-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .yellow-grid > .metric-stack,
@@ -3706,7 +4163,7 @@ h2 {
       rgb(255 255 255 / 46%),
       transparent 32%
     ),
-    linear-gradient(142deg, #f97316 0%, #f59e0b 42%, #facc15 100%);
+    linear-gradient(142deg, #ea580c 0%, #d97706 42%, #eab308 100%);
   border-color: rgb(251 191 36 / 70%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 38%),
@@ -3836,6 +4293,15 @@ h2 {
   color: #fff;
   white-space: nowrap;
   text-shadow: 0 2px 10px rgb(146 64 14 / 22%);
+}
+
+.yellow-grid .yellow-kpi-glass small {
+  position: relative;
+  z-index: 1;
+  place-self: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgb(255 255 255 / 82%);
 }
 
 .yellow-grid .hero-card span,
@@ -4093,6 +4559,7 @@ h2 {
 
 .yellow-comparison-card {
   position: relative;
+  overflow: visible;
 }
 
 .yellow-comparison-card::before {
@@ -4144,6 +4611,21 @@ h2 {
   line-height: 1.25;
   color: #fff;
   white-space: nowrap;
+}
+
+.yellow-detail strong:hover {
+  position: relative;
+  z-index: 8;
+  max-width: none;
+  min-width: max-content;
+  padding: 2px 8px;
+  margin-inline: -8px;
+  overflow: visible;
+  color: #111827;
+  cursor: default;
+  background: rgb(255 247 237 / 96%);
+  border-radius: 6px;
+  box-shadow: 0 8px 18px rgb(120 53 15 / 18%);
 }
 
 .yellow-detail strong.good {
@@ -4271,8 +4753,8 @@ h2 {
 
 .group-panel {
   display: grid;
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   min-height: 0;
 }
 
@@ -4283,16 +4765,16 @@ h2 {
 }
 
 .track-heading {
-  min-height: 24px;
+  min-height: 20px;
 }
 
 .group-track-grid {
   display: grid;
-  grid-auto-columns: minmax(166px, 1fr);
+  grid-auto-columns: minmax(150px, 1fr);
   grid-auto-flow: column;
   min-height: 0;
-  padding: 2px 2px 6px;
-  margin-top: 8px;
+  padding: 1px 1px 4px;
+  margin-top: 4px;
   overflow: auto hidden;
   scrollbar-gutter: stable;
   background: transparent;
@@ -4300,12 +4782,12 @@ h2 {
 
 .group-track-card {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  gap: 7px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 5px;
   align-items: center;
-  min-width: 166px;
-  min-height: 82px;
-  padding: 10px 11px;
+  min-width: 150px;
+  min-height: 52px;
+  padding: 6px 8px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);
   border-radius: 5px;
@@ -4314,9 +4796,9 @@ h2 {
 .group-track-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  font-size: 11px;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
   font-weight: 850;
   color: #fff;
   background: var(--track-accent);
@@ -4334,7 +4816,7 @@ h2 {
   padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 850;
   line-height: 1.25;
   color: var(--analytics-heading);
@@ -4347,10 +4829,10 @@ h2 {
 
 .group-track-body strong {
   display: block;
-  margin-top: 4px;
+  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 900;
   line-height: 1.05;
   color: #0b63ce;
@@ -4359,11 +4841,11 @@ h2 {
 
 .group-track-body p {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
-  margin: 7px 0 0;
+  margin: 4px 0 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.2;
   color: var(--analytics-subtle);
   white-space: nowrap;
@@ -4487,6 +4969,7 @@ h2 {
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
   gap: 8px;
   max-height: 348px;
+  min-height: 0;
   padding-right: 4px;
   margin-top: 8px;
   overflow-y: auto;
@@ -4495,7 +4978,8 @@ h2 {
 .responsible-grid article {
   display: grid;
   align-content: start;
-  min-height: 195px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 344px;
   padding: 10px 12px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);
@@ -4524,11 +5008,11 @@ h2 {
 
 .responsible-grid p {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
-  min-height: 17px;
-  padding: 1px 3px;
+  min-height: 19px;
+  padding: 2px 4px;
   margin: 1px 0;
   overflow: hidden;
   font-size: 11px;
@@ -4545,7 +5029,7 @@ h2 {
 .responsible-grid b {
   flex: 0 0 auto;
   min-width: 0;
-  max-width: 108px;
+  max-width: 128px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 850;
@@ -4906,19 +5390,21 @@ h2 {
 
 .report-column-resize-handle {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  bottom: -8px;
-  width: 10px;
+  top: -10px;
+  right: -12px;
+  bottom: -10px;
+  z-index: 30;
+  width: 18px;
   cursor: col-resize;
   background: transparent;
   border: 0;
+  pointer-events: auto;
 }
 
 .report-column-resize-handle::after {
   position: absolute;
   top: 8px;
-  right: 4px;
+  right: 8px;
   bottom: 8px;
   width: 2px;
   content: '';
@@ -4972,9 +5458,11 @@ h2 {
 }
 
 .report-number {
+  direction: ltr;
   display: block;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  unicode-bidi: isolate;
 }
 
 .report-sparkline {

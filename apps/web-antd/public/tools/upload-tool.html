@@ -1714,6 +1714,55 @@
       };
     }
 
+    function feishuTaskApiBaseUrl() {
+      return location.hostname === "localhost" || location.hostname === "127.0.0.1"
+        ? "/api/feishu/image-upload-tasks"
+        : "https://api.junlee.top/api/feishu/image-upload-tasks";
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async function readJsonResponse(response) {
+      const text = await response.text();
+      let payload;
+      try {
+        payload = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(`接口返回不是 JSON：${text.slice(0, 160)}`);
+      }
+      if (!response.ok) {
+        throw new Error(payload?.detail || payload?.message || payload?.msg || `HTTP ${response.status}`);
+      }
+      return payload;
+    }
+
+    async function pollFeishuUploadTask(taskId, token) {
+      const statusUrl = `${feishuTaskApiBaseUrl()}/${encodeURIComponent(taskId)}`;
+      for (let attempt = 1; attempt <= 360; attempt += 1) {
+        await sleep(attempt <= 3 ? 1500 : 3000);
+        const response = await fetch(statusUrl, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = await readJsonResponse(response);
+        const task = payload?.data || {};
+        if (task.status === "succeeded") {
+          const recordId = task.result?.recordId || "";
+          setFeishuTaskStatus(recordId ? `已上传到飞书任务：${recordId}` : "已上传到飞书任务。");
+          return task;
+        }
+        if (task.status === "failed") {
+          throw new Error(task.error || "飞书上传任务失败");
+        }
+        const label = task.status === "running" ? "正在上传到飞书并创建任务" : "等待上传任务开始";
+        setFeishuTaskStatus(`${label}，请稍候...`);
+      }
+      throw new Error("飞书上传任务等待超时，请稍后在飞书任务表确认是否已创建");
+    }
+
     async function uploadFeishuTask() {
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
@@ -1739,15 +1788,16 @@
       }
 
       els.uploadFeishuTask.disabled = true;
-      setFeishuTaskStatus("正在生成 ZIP 并上传到飞书任务...");
+      setFeishuTaskStatus("正在生成 ZIP...");
       try {
         const body = {
           metadata,
           aplusZip: await buildUploadZip(aPlusFiles, aPlusRoot()),
           brandZip: await buildUploadZip(brandFiles, brandRoot()),
+          asyncMode: true,
         };
-        const feishuTaskApiUrl = location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "/api/feishu/image-upload-tasks" : "https://api.junlee.top/api/feishu/image-upload-tasks";
-        const response = await fetch(feishuTaskApiUrl, {
+        setFeishuTaskStatus("ZIP 已生成，正在提交飞书上传任务...");
+        const response = await fetch(feishuTaskApiBaseUrl(), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1755,18 +1805,17 @@
           },
           body: JSON.stringify(body),
         });
-        const text = await response.text();
-        let payload;
-        try {
-          payload = text ? JSON.parse(text) : {};
-        } catch {
-          throw new Error(`接口返回不是 JSON：${text.slice(0, 160)}`);
-        }
-        if (!response.ok) {
-          throw new Error(payload?.detail || payload?.message || payload?.msg || `HTTP ${response.status}`);
-        }
+        const payload = await readJsonResponse(response);
+        const taskId = payload?.data?.taskId || "";
         const recordId = payload?.data?.recordId || "";
-        setFeishuTaskStatus(recordId ? `已上传到飞书任务：${recordId}` : "已上传到飞书任务。");
+        if (recordId) {
+          setFeishuTaskStatus(`已上传到飞书任务：${recordId}`);
+        } else if (taskId) {
+          setFeishuTaskStatus(`任务已提交，后台上传中：${taskId}`);
+          await pollFeishuUploadTask(taskId, token);
+        } else {
+          setFeishuTaskStatus("已提交飞书上传任务。");
+        }
       } catch (error) {
         setFeishuTaskStatus(`上传失败：${error.message}`, "warn");
       } finally {

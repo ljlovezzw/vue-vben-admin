@@ -92,6 +92,8 @@ export interface KanbanProductDetailParams extends KanbanOverviewParams {
 export interface KanbanProductDetailRowsParams extends KanbanProductDetailParams {
   page?: number;
   pageSize?: number;
+  sortField?: string;
+  sortOrder?: string;
 }
 
 export interface Asin360OverviewParams {
