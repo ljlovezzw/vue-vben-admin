@@ -15,6 +15,69 @@
     <title>%VITE_APP_TITLE%</title>
     <link rel="icon" href="/favicon.ico" />
     <script>
+      // 兼容旧版 Chromium/WebView/Safari 中缺失的新标准 API。
+      // 必须在模块脚本加载前执行，否则依赖包初始化时可能直接报错。
+      (function () {
+        if (typeof Object.hasOwn !== 'function') {
+          Object.defineProperty(Object, 'hasOwn', {
+            configurable: true,
+            value: function hasOwn(object, property) {
+              if (object == null) {
+                throw new TypeError('Cannot convert undefined or null to object');
+              }
+              return Object.prototype.hasOwnProperty.call(
+                Object(object),
+                property,
+              );
+            },
+            writable: true,
+          });
+        }
+
+        if (typeof Array.prototype.at !== 'function') {
+          Object.defineProperty(Array.prototype, 'at', {
+            configurable: true,
+            value: function at(index) {
+              var length = this == null ? 0 : this.length >>> 0;
+              var offset = Math.trunc(Number(index) || 0);
+              if (offset < 0) offset += length;
+              return offset < 0 || offset >= length ? undefined : this[offset];
+            },
+            writable: true,
+          });
+        }
+
+        if (typeof Array.prototype.toSorted !== 'function') {
+          Object.defineProperty(Array.prototype, 'toSorted', {
+            configurable: true,
+            value: function toSorted(compareFn) {
+              return Array.prototype.slice.call(this).sort(compareFn);
+            },
+            writable: true,
+          });
+        }
+
+        if (typeof String.prototype.replaceAll !== 'function') {
+          Object.defineProperty(String.prototype, 'replaceAll', {
+            configurable: true,
+            value: function replaceAll(searchValue, replaceValue) {
+              var text = String(this);
+              if (searchValue instanceof RegExp) {
+                if (!searchValue.global) {
+                  throw new TypeError(
+                    'String.prototype.replaceAll called with a non-global RegExp',
+                  );
+                }
+                return text.replace(searchValue, replaceValue);
+              }
+              return text.split(String(searchValue)).join(String(replaceValue));
+            },
+            writable: true,
+          });
+        }
+      })();
+    </script>
+    <script>
       // 生产环境下注入百度统计
       if (window._VBEN_ADMIN_PRO_APP_CONF_) {
         var _hmt = _hmt || [];

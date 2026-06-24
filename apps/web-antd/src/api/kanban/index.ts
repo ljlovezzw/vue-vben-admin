@@ -10,6 +10,7 @@ import type {
   ConfigUserAuthPayload,
   ConfigUserRow,
   KanbanDailyMetric,
+  KanbanFbaInventorySkuBreakdown,
   KanbanFilters,
   KanbanOverview,
   KanbanProductDetailMeta,
@@ -32,6 +33,8 @@ export type {
   AlertLevel,
   KanbanCoreKpi,
   KanbanDailyMetric,
+  KanbanFbaInventorySkuBreakdown,
+  KanbanFbaInventorySkuRow,
   KanbanOverview,
   KanbanProductDetailColumn,
   KanbanProductDetailMeta,
@@ -58,6 +61,7 @@ export interface AnalyticsReportParams {
   page?: number;
   pageSize?: number;
   productTypes?: string[];
+  projectTags?: string[];
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];
@@ -73,6 +77,7 @@ export interface AnalyticsOverviewParams {
   granularity?: 'day' | 'month';
   operationGroupIds?: number[];
   productExpressionRealtime?: boolean;
+  projectTags?: string[];
   responsibles?: string[];
   siteDate?: string;
   sites?: string[];
@@ -94,6 +99,11 @@ export interface KanbanProductDetailRowsParams extends KanbanProductDetailParams
   pageSize?: number;
   sortField?: string;
   sortOrder?: string;
+}
+
+export interface KanbanProductDetailFbaInventoryParams {
+  site: string;
+  spu: string;
 }
 
 export interface Asin360OverviewParams {
@@ -165,6 +175,14 @@ export async function fetchKanbanProductDetailRows(
   params: KanbanProductDetailRowsParams = {},
 ): Promise<KanbanProductDetailRows> {
   return requestClient.get('/kanban/monitor/product-detail/rows', { params });
+}
+
+export async function fetchKanbanProductDetailFbaInventory(
+  params: KanbanProductDetailFbaInventoryParams,
+): Promise<KanbanFbaInventorySkuBreakdown> {
+  return requestClient.get('/kanban/monitor/product-detail/fba-inventory', {
+    params,
+  });
 }
 
 export async function fetchSpuDailyMetrics(params: {

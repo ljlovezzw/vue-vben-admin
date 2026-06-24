@@ -3,6 +3,8 @@ import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
   AlertLevel,
+  KanbanFbaInventorySkuBreakdown,
+  KanbanFbaInventorySkuRow,
   KanbanProductDetailColumn,
   KanbanProductDetailOverview,
   KanbanProductDetailRow,
@@ -26,6 +28,7 @@ import {
   Dropdown,
   Input,
   Modal,
+  Popover,
   Select,
   Space,
   Table,
@@ -33,6 +36,7 @@ import {
 import dayjs from 'dayjs';
 
 import {
+  fetchKanbanProductDetailFbaInventory,
   fetchKanbanProductDetailMeta,
   fetchKanbanProductDetailRows,
 } from '#/api/kanban';
@@ -53,6 +57,7 @@ interface BaseProductDetailParams {
   countries?: string[];
   dateRangeType?: ProductDetailDateRangeType | string;
   endDate?: string;
+  projectTags?: string[];
   responsibles?: string[];
   sites?: string[];
   startDate?: string;
@@ -95,6 +100,10 @@ const productDetailTableRef = ref<any>(null);
 const productSummaryScrollRef = ref<HTMLElement | null>(null);
 const productDetailMetaInFlight = ref('');
 const productDetailRowsInFlight = ref('');
+const fbaInventoryCache = reactive<
+  Record<string, KanbanFbaInventorySkuBreakdown>
+>({});
+const fbaInventoryLoadingKey = ref('');
 let productTableBodyScrollElement: HTMLElement | null = null;
 let productSummaryScrollElement: HTMLElement | null = null;
 let productHeaderEventRoot: HTMLElement | null = null;
@@ -184,6 +193,7 @@ const effectiveProductResponsibles = computed(() => {
 const productDetailColumnDefs = computed(
   () => productDetail.value?.columns ?? [],
 );
+const defaultPinnedProductColumnCount = 4;
 const productCountryOptions = computed(() => {
   const values = new Set<string>(selectedProductCountries.value);
   for (const country of productDetail.value?.countries ?? [])
@@ -214,7 +224,9 @@ const selectedProductColumnDraftMetas = computed<KanbanProductDetailColumn[]>(
   () =>
     productColumnDraft.value
       .map((key) => productColumnMap.value.get(key))
-      .filter((column): column is KanbanProductDetailColumn => column !== undefined),
+      .filter(
+        (column): column is KanbanProductDetailColumn => column !== undefined,
+      ),
 );
 const productColumnGroups = computed(() => {
   const groups: Array<{
@@ -267,9 +279,9 @@ const productBasicInfoLabels = new Set([
   'SPU',
   '一级类目',
   '上线天数',
-  '创建时间',
   '主图',
   '二级分类',
+  '创建时间',
   '店铺',
   '开售时间',
   '父ASIN',
@@ -277,12 +289,6 @@ const productBasicInfoLabels = new Set([
   '运营负责人',
   '销售均价',
 ]);
-const productHiddenColumnCount = computed(() =>
-  Math.max(
-    productDetailColumnDefs.value.length - selectedProductColumns.value.length,
-    0,
-  ),
-);
 const productDisplayColumns = computed(() =>
   sortProductColumnsByTableGroup(productVisibleColumns.value),
 );
@@ -352,7 +358,7 @@ function resetProductDetailPagination() {
 }
 
 function normalizeProductParamValues(values?: string[]) {
-  return [...(values ?? [])].filter(Boolean).sort();
+  return [...(values ?? [])].filter(Boolean).toSorted();
 }
 
 function productDetailParamsSignature(params?: BaseProductDetailParams) {
@@ -362,6 +368,7 @@ function productDetailParamsSignature(params?: BaseProductDetailParams) {
     countries: normalizeProductParamValues(params?.countries),
     dateRangeType: params?.dateRangeType ?? '',
     endDate: params?.endDate ?? '',
+    projectTags: normalizeProductParamValues(params?.projectTags),
     responsibles: normalizeProductParamValues(params?.responsibles),
     sites: normalizeProductParamValues(params?.sites),
     startDate: params?.startDate ?? '',
@@ -510,9 +517,7 @@ async function loadProductDetailRows() {
     sortField: productDetailSort.field || undefined,
     sortOrder: productDetailSort.order || undefined,
   });
-  if (
-    productDetailRowsInFlight.value === rowsRequestKey
-  ) {
+  if (productDetailRowsInFlight.value === rowsRequestKey) {
     return;
   }
   productDetailRowsInFlight.value = rowsRequestKey;
@@ -559,7 +564,16 @@ function ensureProductColumnsInitialized(detail: KanbanProductDetailOverview) {
   selectedProductColumns.value = detail.columns
     .filter((column) => column.defaultVisible)
     .map((column) => column.key);
+  pinnedProductColumnKeys.value = defaultPinnedProductColumnKeys(
+    selectedProductColumns.value,
+  );
   productColumnsInitialized.value = true;
+}
+
+function defaultPinnedProductColumnKeys(keys: string[]) {
+  return keys
+    .filter((key) => productColumnMap.value.has(key))
+    .slice(0, defaultPinnedProductColumnCount);
 }
 
 function handleProductCountryDropdownOpen(open: boolean) {
@@ -728,7 +742,9 @@ function resetProductColumns() {
   selectedProductColumns.value = productDetailColumnDefs.value
     .filter((column) => column.defaultVisible)
     .map((column) => column.key);
-  pinnedProductColumnKeys.value = [];
+  pinnedProductColumnKeys.value = defaultPinnedProductColumnKeys(
+    selectedProductColumns.value,
+  );
   if (productColumnConfigOpen.value) {
     productColumnDraft.value = [...selectedProductColumns.value];
   }
@@ -850,11 +866,9 @@ function startProductColumnResize(key: string, event: MouseEvent) {
 }
 
 function productResizableHeaderCells(row: HTMLElement | null) {
-  return Array.from(
-    row?.querySelectorAll<HTMLTableCellElement>(
+  return [...row?.querySelectorAll<HTMLTableCellElement>(
       'th:not([colspan]), th[colspan="1"]',
-    ) ?? [],
-  ).filter((item) => item.querySelector('.product-resizable-header'));
+    ) ?? []].filter((item) => item.querySelector('.product-resizable-header'));
 }
 
 function productColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
@@ -956,7 +970,10 @@ function productDetailTableBodyScroll() {
   ) as HTMLElement | null;
 }
 
-function syncProductScrollLeft(source: HTMLElement, target: HTMLElement | null) {
+function syncProductScrollLeft(
+  source: HTMLElement,
+  target: HTMLElement | null,
+) {
   if (!target || Math.abs(target.scrollLeft - source.scrollLeft) < 1) return;
   productScrollSyncing = true;
   target.scrollLeft = source.scrollLeft;
@@ -1242,6 +1259,103 @@ function isProductMetricColumn(key: string) {
   return isProductMetricKind(productColumnKind(key));
 }
 
+const fbaInventoryColumnLabels = new Set([
+  '总库存',
+  'FBA库存',
+  'FBA可售',
+  'FBA在途',
+  'FBA调仓中',
+]);
+
+function isFbaInventoryColumn(key: string) {
+  const label = productColumnLabel(key).trim();
+  return fbaInventoryColumnLabels.has(label) || fbaInventoryColumnLabels.has(key);
+}
+
+function productRowTextByLabels(
+  record: Record<string, any>,
+  labels: string[],
+) {
+  for (const column of productDetailColumnDefs.value) {
+    if (!labels.includes(column.label)) continue;
+    const value = productMetricRawValue(record[column.key]);
+    if (value !== null && value !== undefined && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+  return '';
+}
+
+function productRowSpu(record: Record<string, any>) {
+  return (
+    String(productMetricRawValue(record.SPU ?? record.spu ?? '') || '').trim() ||
+    productRowTextByLabels(record, ['SPU'])
+  );
+}
+
+function productRowSite(record: Record<string, any>) {
+  return (
+    String(productMetricRawValue(record.site ?? record['站点'] ?? '') || '')
+      .trim()
+      .toUpperCase() || productRowTextByLabels(record, ['站点']).toUpperCase()
+  );
+}
+
+function fbaInventoryKey(spu: string, site: string) {
+  return `${String(spu || '').trim().toUpperCase()}__${String(site || '')
+    .trim()
+    .toUpperCase()}`;
+}
+
+function fbaInventoryFor(record: Record<string, any>) {
+  return fbaInventoryCache[
+    fbaInventoryKey(productRowSpu(record), productRowSite(record))
+  ];
+}
+
+function fbaInventoryRows(record: Record<string, any>): KanbanFbaInventorySkuRow[] {
+  const detail = fbaInventoryFor(record);
+  if (!detail) return [];
+  return [...detail.rows, detail.summary];
+}
+
+function isFbaInventoryLoading(record: Record<string, any>) {
+  return (
+    fbaInventoryLoadingKey.value ===
+    fbaInventoryKey(productRowSpu(record), productRowSite(record))
+  );
+}
+
+async function loadFbaInventory(record: Record<string, any>) {
+  const spu = productRowSpu(record);
+  const site = productRowSite(record);
+  const key = fbaInventoryKey(spu, site);
+  if (!spu || !site || fbaInventoryCache[key] || fbaInventoryLoadingKey.value === key) {
+    return;
+  }
+  fbaInventoryLoadingKey.value = key;
+  try {
+    fbaInventoryCache[key] = await fetchKanbanProductDetailFbaInventory({
+      site,
+      spu,
+    });
+  } finally {
+    if (fbaInventoryLoadingKey.value === key) {
+      fbaInventoryLoadingKey.value = '';
+    }
+  }
+}
+
+function handleFbaInventoryOpen(open: boolean, record: Record<string, any>) {
+  if (open) void loadFbaInventory(record);
+}
+
+function formatInventoryQty(value: number) {
+  return Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: 0,
+  });
+}
+
 function isProductMetricCell(value: any) {
   return Boolean(
     value &&
@@ -1417,7 +1531,9 @@ function productMetricFillToneClass(
 }
 
 function productCurrencySymbol(record?: Record<string, any>) {
-  const code = String(record?.currencyCode || '').trim().toUpperCase();
+  const code = String(record?.currencyCode || '')
+    .trim()
+    .toUpperCase();
   const symbol = String(record?.currencySymbol || '').trim();
   if (code === 'AED' || /[\u0600-\u06FF]/.test(symbol)) return 'AED ';
   return symbol || code;
@@ -1451,7 +1567,7 @@ function productMetricDeltaText(
 }
 
 function formatSignedMetricDelta(value: number, symbol = '') {
-  const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+  const sign = value > 0 ? '+' : (value < 0 ? '-' : '');
   return `${sign}${symbol}${formatCompactNumber(Math.abs(value))}`;
 }
 
@@ -1516,8 +1632,8 @@ function parseProductNumber(value: any) {
   if (typeof rawValue === 'number') return rawValue;
   if (rawValue === null || rawValue === undefined || rawValue === '') return 0;
   const normalized = String(rawValue)
-    .replace(/[,\s]/g, '')
-    .replace(/[^\d.+-]/g, '');
+    .replaceAll(/[,\s]/g, '')
+    .replaceAll(/[^\d.+-]/g, '');
   return Number(normalized || 0);
 }
 
@@ -1567,16 +1683,13 @@ watch(selectedProductColumns, () => {
   void refreshProductScrollSync();
 });
 
-watch(
-  productDetailBaseParamsSignature,
-  () => {
-    syncProductDetailDateFromBaseParams();
-    syncProductDetailResponsiblesWithOptions();
-    selectedProductCountries.value = [];
-    productCountryDraft.value = [];
-    void applyProductDetailFilters();
-  },
-);
+watch(productDetailBaseParamsSignature, () => {
+  syncProductDetailDateFromBaseParams();
+  syncProductDetailResponsiblesWithOptions();
+  selectedProductCountries.value = [];
+  productCountryDraft.value = [];
+  void applyProductDetailFilters();
+});
 
 watch(
   () => props.responsibleOptions.join('|'),
@@ -1615,15 +1728,6 @@ onBeforeUnmount(() => {
           </span>
           <span class="product-detail-meta">
             共 {{ productDetail?.totalRows ?? productDetailRows.length }} 条
-          </span>
-          <span class="product-detail-meta">
-            过滤({{ selectedProductCountries.length }})
-          </span>
-          <span class="product-detail-meta">
-            已选字段({{ selectedProductColumns.length }})
-          </span>
-          <span class="product-detail-meta">
-            隐藏({{ productHiddenColumnCount }})
           </span>
           <label class="product-detail-label">时间</label>
           <Select
@@ -1806,7 +1910,119 @@ onBeforeUnmount(() => {
                 productMetricFillStyle(String(column.dataIndex), record, text)
               "
             ></span>
-            <span class="product-metric-content">
+            <Popover
+              v-if="isFbaInventoryColumn(String(column.dataIndex))"
+              overlay-class-name="fba-inventory-popover"
+              placement="leftTop"
+              trigger="hover"
+              @open-change="
+                (open) => handleFbaInventoryOpen(open, record)
+              "
+            >
+              <template #content>
+                <div class="fba-inventory-panel">
+                  <div class="fba-inventory-title">
+                    <strong>
+                      {{ productRowSpu(record) }} · {{ productRowSite(record) }}
+                    </strong>
+                    <span>
+                      {{
+                        fbaInventoryFor(record)?.refreshedAt || '当前快照'
+                      }}
+                    </span>
+                  </div>
+                  <Spin
+                    :spinning="isFbaInventoryLoading(record)"
+                    size="small"
+                  >
+                    <table class="fba-inventory-table">
+                      <thead>
+                        <tr>
+                          <th>SKU</th>
+                          <th>ASIN</th>
+                          <th>MSKU</th>
+                          <th>店铺</th>
+                          <th>仓库</th>
+                          <th>FBA库存</th>
+                          <th>FBA可售</th>
+                          <th>FBA预留</th>
+                          <th>FBA在途</th>
+                          <th>总库存</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="item in fbaInventoryRows(record)"
+                          :key="
+                            `${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`
+                          "
+                          :class="{ summary: item.isSummary }"
+                        >
+                          <td>{{ item.sku || '-' }}</td>
+                          <td>{{ item.asinList || '-' }}</td>
+                          <td>{{ item.mskuList || '-' }}</td>
+                          <td>{{ item.shopNames || '-' }}</td>
+                          <td>{{ item.warehouseNames || '-' }}</td>
+                          <td>{{ formatInventoryQty(item.fbaStockQty) }}</td>
+                          <td>
+                            {{ formatInventoryQty(item.fbaAvailableQty) }}
+                          </td>
+                          <td>
+                            {{ formatInventoryQty(item.fbaReservedQty) }}
+                          </td>
+                          <td>{{ formatInventoryQty(item.fbaInboundQty) }}</td>
+                          <td>{{ formatInventoryQty(item.totalQty) }}</td>
+                        </tr>
+                        <tr
+                          v-if="
+                            !isFbaInventoryLoading(record) &&
+                            fbaInventoryRows(record).length === 0
+                          "
+                        >
+                          <td class="empty" colspan="10">
+                            暂无当前 FBA 库存明细
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </Spin>
+                </div>
+              </template>
+              <span class="product-metric-content inventory-hover">
+                <span class="product-metric-value">
+                  {{
+                    formatProductDetailValue(
+                      text,
+                      productColumnKind(String(column.dataIndex)),
+                      String(column.dataIndex),
+                      record,
+                    )
+                  }}
+                </span>
+                <span
+                  v-if="
+                    productMetricDeltaText(
+                      text,
+                      productColumnKind(String(column.dataIndex)),
+                      String(column.dataIndex),
+                      record,
+                    )
+                  "
+                  class="product-metric-delta"
+                  :class="productMetricDeltaClass(text)"
+                >
+                  {{
+                    productMetricDeltaText(
+                      text,
+                      productColumnKind(String(column.dataIndex)),
+                      String(column.dataIndex),
+                      record,
+                    )
+                  }}
+                </span>
+              </span>
+            </Popover>
+            <span v-else class="product-metric-content">
               <span class="product-metric-value">
                 {{
                   formatProductDetailValue(
@@ -2021,6 +2237,7 @@ onBeforeUnmount(() => {
 
 .product-detail-controls {
   justify-content: flex-end;
+  margin-bottom: 20px;
 }
 
 .product-detail-meta {
@@ -2068,6 +2285,89 @@ onBeforeUnmount(() => {
   min-height: 48px;
   background: var(--product-panel);
   border-bottom: 1px solid var(--product-border);
+}
+
+.inventory-hover {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+:global(.fba-inventory-popover) {
+  max-width: none;
+}
+
+:global(.fba-inventory-popover .ant-popover-inner) {
+  background: #fff;
+}
+
+:global(.dark .fba-inventory-popover .ant-popover-inner) {
+  background: #0f172a;
+}
+
+.fba-inventory-panel {
+  width: min(920px, calc(100vw - 72px));
+  max-height: 420px;
+  overflow: auto;
+}
+
+.fba-inventory-title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.fba-inventory-title strong {
+  font-size: 13px;
+  color: var(--product-heading, #334155);
+}
+
+.fba-inventory-title span {
+  font-size: 12px;
+  color: var(--product-subtle, #64748b);
+}
+
+.fba-inventory-table {
+  width: 100%;
+  min-width: 860px;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.fba-inventory-table th,
+.fba-inventory-table td {
+  max-width: 150px;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--product-border, #e2e8f0);
+}
+
+.fba-inventory-table th {
+  font-weight: 800;
+  color: var(--product-heading, #334155);
+  background: var(--product-panel-muted, #f8fafc);
+}
+
+.fba-inventory-table th:nth-child(-n + 5),
+.fba-inventory-table td:nth-child(-n + 5) {
+  text-align: left;
+}
+
+.fba-inventory-table tr.summary td {
+  font-weight: 850;
+  color: var(--product-heading, #334155);
+  background: var(--product-hover, #eff6ff);
+}
+
+.fba-inventory-table td.empty {
+  height: 58px;
+  color: var(--product-muted, #94a3b8);
+  text-align: center;
 }
 
 .product-filter-trigger {
@@ -2285,7 +2585,7 @@ onBeforeUnmount(() => {
 }
 
 .product-summary-scroll {
-  overflow-x: auto;
+  overflow: hidden;
   border-top: 1px solid var(--product-border);
 }
 
@@ -2299,10 +2599,10 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
   padding: 8px 10px;
   overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
   color: var(--product-text);
   text-align: center;
-  text-overflow: ellipsis;
   white-space: nowrap;
   border-right: 1px solid var(--product-border);
 }
@@ -2316,8 +2616,8 @@ onBeforeUnmount(() => {
 }
 
 .product-summary-number {
-  direction: ltr;
   font-variant-numeric: tabular-nums;
+  direction: ltr;
   unicode-bidi: isolate;
 }
 
@@ -2350,10 +2650,10 @@ onBeforeUnmount(() => {
   bottom: -10px;
   z-index: 30;
   width: 18px;
+  pointer-events: auto;
   cursor: col-resize;
   background: transparent;
   border: 0;
-  pointer-events: auto;
 }
 
 .product-column-resize-handle::after {
@@ -2530,9 +2830,9 @@ onBeforeUnmount(() => {
 }
 
 .product-metric-value {
-  direction: ltr;
   font-weight: 700;
   color: var(--product-heading);
+  direction: ltr;
   unicode-bidi: isolate;
 }
 

@@ -3,6 +3,7 @@ export type AlertLevel = 'gray' | 'green' | 'orange' | 'red';
 export interface KanbanFilters {
   alertLevels: AlertLevel[];
   categories: string[];
+  projectTags: string[];
   responsibles: string[];
   sites: string[];
   statuses: string[];
@@ -174,6 +175,7 @@ export interface KanbanProductDetailOverview {
     endDate: string;
     previousEndDate: string;
     previousStartDate: string;
+    projectTags: string[];
     responsibles: string[];
     sites: string[];
     startDate: string;
@@ -197,6 +199,28 @@ export interface KanbanProductDetailRows {
   rows: KanbanProductDetailRow[];
   summary: Record<string, any>;
   totalRows: number;
+}
+
+export interface KanbanFbaInventorySkuRow {
+  asinList: string;
+  fbaAvailableQty: number;
+  fbaInboundQty: number;
+  fbaReservedQty: number;
+  fbaStockQty: number;
+  isSummary: boolean;
+  mskuList: string;
+  shopNames: string;
+  sku: string;
+  totalQty: number;
+  warehouseNames: string;
+}
+
+export interface KanbanFbaInventorySkuBreakdown {
+  refreshedAt: string;
+  rows: KanbanFbaInventorySkuRow[];
+  site: string;
+  spu: string;
+  summary: KanbanFbaInventorySkuRow;
 }
 
 export interface SpuManagerFilters {
@@ -375,6 +399,7 @@ export interface AdMonitorOverview {
 export interface AnalyticsFilters {
   departments: string[];
   operationGroups: AnalyticsOperationGroup[];
+  projectTags: string[];
   responsibles: string[];
   sites: string[];
   transactionStatuses: string[];
@@ -449,6 +474,7 @@ export interface AnalyticsOverview {
     granularity: 'day' | 'month';
     operationGroupIds: number[];
     productExpressionRealtime: boolean;
+    projectTags: string[];
     responsibles: string[];
     siteDate: string;
     sites: string[];
@@ -561,6 +587,7 @@ export interface AnalyticsReportOverview {
     endDate: string;
     operationGroupIds: number[];
     productTypes: string[];
+    projectTags: string[];
     responsibles: string[];
     sites: string[];
     sortField: string;

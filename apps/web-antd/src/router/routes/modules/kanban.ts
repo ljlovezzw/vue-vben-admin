@@ -51,27 +51,6 @@ const routes: RouteRecordRaw[] = [
           title: 'ASIN360',
         },
       },
-      {
-        name: 'KanbanSpus',
-        path: 'spus',
-        component: () => import('#/views/kanban/spus/index.vue'),
-        meta: {
-          authority: ['kanban:spus'],
-          icon: 'lucide:boxes',
-          title: 'SPU管理',
-        },
-      },
-
-      {
-        name: 'KanbanConfig',
-        path: 'config',
-        component: () => import('#/views/kanban/config/index.vue'),
-        meta: {
-          authority: ['kanban:config'],
-          icon: 'lucide:settings',
-          title: '配置中心',
-        },
-      },
     ],
   },
 ];

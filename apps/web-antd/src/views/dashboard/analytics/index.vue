@@ -167,6 +167,7 @@ const query = reactive({
   departments: [] as string[],
   granularity: 'day' as AnalyticsGranularity,
   operationGroupIds: [] as number[],
+  projectTags: [] as string[],
   responsibles: [] as string[],
   startDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
@@ -273,6 +274,12 @@ const secondaryPeriodLabel = computed(() => {
 });
 const departmentOptions = computed(() =>
   (overview.value?.filters.departments ?? []).map((value) => ({
+    label: value,
+    value,
+  })),
+);
+const projectTagOptions = computed(() =>
+  (overview.value?.filters.projectTags ?? []).map((value) => ({
     label: value,
     value,
   })),
@@ -389,6 +396,18 @@ const reportColumnMap = computed(() => {
   }
   return map;
 });
+function defaultReportColumnKeys(data: AnalyticsReportOverview) {
+  const available = new Set(data.columns.map((column) => column.key));
+  const keys = data.defaultColumns.filter((key) => available.has(key));
+  if (!available.has('country')) return keys;
+  const withoutCountry = keys.filter((key) => key !== 'country');
+  const fbaIndex = withoutCountry.indexOf('fbaAvailable');
+  if (fbaIndex >= 0) {
+    withoutCountry.splice(fbaIndex + 1, 0, 'country');
+    return withoutCountry;
+  }
+  return [...withoutCountry, 'country'];
+}
 const selectedReportColumnMetas = computed(() => {
   const columns: AnalyticsReportColumn[] = [];
   for (const key of selectedReportColumns.value) {
@@ -572,10 +591,7 @@ const allResponsibleCards = computed<ResponsibleCard[]>(() => {
         row.grossMarginCompletionRate ??
         ratio(row.grossMarginRate ?? 0, row.targetGrossMarginRate ?? 0),
       grossMarginRate: row.grossMarginRate ?? 0,
-      grossProfitCompletionRate: ratio(
-        row.grossProfit,
-        row.dailyTargetProfit,
-      ),
+      grossProfitCompletionRate: ratio(row.grossProfit, row.dailyTargetProfit),
       grossProfit: row.grossProfit,
       inventoryQty: row.inventoryQty,
       name: row.responsible,
@@ -616,10 +632,7 @@ const departmentCards = computed(() =>
         row.grossMarginCompletionRate ??
         ratio(row.grossMarginRate ?? 0, row.targetGrossMarginRate ?? 0),
       grossMarginRate: row.grossMarginRate ?? 0,
-      grossProfitCompletionRate: ratio(
-        row.grossProfit,
-        row.dailyTargetProfit,
-      ),
+      grossProfitCompletionRate: ratio(row.grossProfit, row.dailyTargetProfit),
       inventoryQty: row.inventoryQty,
       name: row.department || '未配置部门',
       promotionRate: row.promotionRate ?? 0,
@@ -638,6 +651,7 @@ const productDetailBaseParams = computed(() => {
     countries: dashboardCountryLabelsFromSites(query.sites),
     dateRangeType: 'custom',
     endDate: dateRange.endDate,
+    projectTags: [...query.projectTags],
     responsibles: dashboardResponsibleScopeForTables(),
     sites: [...query.sites],
     startDate: dateRange.startDate,
@@ -706,6 +720,7 @@ async function loadData() {
       granularity: query.granularity,
       endDate: isMonthMode.value ? undefined : query.endDate,
       operationGroupIds: query.operationGroupIds,
+      projectTags: query.projectTags,
       responsibles: query.responsibles,
       siteDate: query.siteDate,
       sites: query.sites,
@@ -717,6 +732,7 @@ async function loadData() {
     query.siteDate = overview.value.query.siteDate;
     query.startDate = overview.value.query.startDate;
     query.endDate = overview.value.query.endDate;
+    query.projectTags = overview.value.query.projectTags ?? [];
     void nextTick(() => {
       syncingDashboardQuery = false;
     });
@@ -748,7 +764,7 @@ async function loadReportData() {
     reportQuery.sortOrder = (data.query.sortOrder ||
       'descend') as ReportSortOrder;
     if (!reportColumnsInitialized.value) {
-      selectedReportColumns.value = [...data.defaultColumns];
+      selectedReportColumns.value = defaultReportColumnKeys(data);
       reportColumnsInitialized.value = true;
     }
   } finally {
@@ -1352,6 +1368,7 @@ function resetFilters() {
   query.departments = [];
   query.granularity = 'day';
   query.operationGroupIds = [];
+  query.projectTags = [];
   query.responsibles = [];
   query.startDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
   query.endDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
@@ -1641,11 +1658,9 @@ function reportColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
   const handle = th.querySelector<HTMLElement>('.report-column-resize-handle');
   const handleKey = handle?.dataset.columnKey;
   if (handleKey) return handleKey;
-  const leafHeaders = Array.from(
-    th.parentElement?.querySelectorAll<HTMLTableCellElement>(
+  const leafHeaders = [...th.parentElement?.querySelectorAll<HTMLTableCellElement>(
       'th:not([colspan]), th[colspan="1"]',
-    ) ?? [],
-  ).filter((item) => item.querySelector('.report-resizable-header'));
+    ) ?? []].filter((item) => item.querySelector('.report-resizable-header'));
   const index = leafHeaders.indexOf(th);
   return selectedReportColumnMetas.value[index]?.key ?? '';
 }
@@ -1687,7 +1702,7 @@ function stopReportColumnResize() {
 }
 
 function reportOperationGroupIdsForRequest() {
-  return query.operationGroupIds;
+  return reportQuery.operationGroupIds;
 }
 
 function reportResponsiblesForRequest() {
@@ -1696,9 +1711,7 @@ function reportResponsiblesForRequest() {
   if (dashboardScope.includes('__NO_ACCESS__')) return ['__NO_ACCESS__'];
   if (reportQuery.responsibles.length === 0) return dashboardScope;
   const allowed = new Set(dashboardScope);
-  const narrowed = reportQuery.responsibles.filter((name) =>
-    allowed.has(name),
-  );
+  const narrowed = reportQuery.responsibles.filter((name) => allowed.has(name));
   return narrowed.length > 0 ? narrowed : ['__NO_ACCESS__'];
 }
 
@@ -1717,9 +1730,7 @@ function syncReportFiltersFromDashboard() {
   reportQuery.operationGroupIds = [...query.operationGroupIds];
   reportQuery.responsibles =
     allowedResponsibles.size > 0
-      ? reportQuery.responsibles.filter((name) =>
-          allowedResponsibles.has(name),
-        )
+      ? reportQuery.responsibles.filter((name) => allowedResponsibles.has(name))
       : [];
   reportQuery.countries = dashboardCountryLabelsFromSites(query.sites);
   reportQuery.dateRangeType = 'custom';
@@ -1737,6 +1748,7 @@ function buildReportParams(overrides: Record<string, any> = {}) {
     page: reportQuery.page,
     pageSize: reportQuery.pageSize,
     productTypes: reportQuery.productTypes,
+    projectTags: query.projectTags,
     responsibles: reportResponsiblesForRequest(),
     spus: reportQuery.spus,
     siteDate: reportQuery.endDate,
@@ -1761,7 +1773,10 @@ function dashboardOverviewOwnerScopeMatches() {
   if (!overviewQuery) return false;
   return (
     sameStringSet(overviewQuery.departments ?? [], query.departments) &&
-    sameNumberSet(overviewQuery.operationGroupIds ?? [], query.operationGroupIds)
+    sameNumberSet(
+      overviewQuery.operationGroupIds ?? [],
+      query.operationGroupIds,
+    )
   );
 }
 
@@ -1835,7 +1850,9 @@ function reportDateRangeLabel(value: unknown) {
 }
 
 function reportCurrencySymbol(record?: Record<string, any>) {
-  const code = String(record?.currencyCode || '').trim().toUpperCase();
+  const code = String(record?.currencyCode || '')
+    .trim()
+    .toUpperCase();
   const symbol = String(record?.currencySymbol || '').trim();
   if (code === 'AED' || /[\u0600-\u06FF]/.test(symbol)) return 'AED ';
   return symbol || code;
@@ -1845,7 +1862,7 @@ function reportSummaryCurrencySymbol() {
   const symbols = new Set(
     reportRows.value
       .map((row) => reportCurrencySymbol(row))
-      .filter((value) => value),
+      .filter(Boolean),
   );
   return symbols.size === 1 ? [...symbols][0] : '';
 }
@@ -1855,7 +1872,9 @@ function formatReportMoneyValue(
   fractionDigits = 0,
   record?: Record<string, any>,
 ) {
-  const symbol = record ? reportCurrencySymbol(record) : reportSummaryCurrencySymbol();
+  const symbol = record
+    ? reportCurrencySymbol(record)
+    : reportSummaryCurrencySymbol();
   const numeric = parseReportNumber(value);
   if (!Number.isFinite(numeric)) return '-';
   return `${symbol}${numeric.toLocaleString('zh-CN', {
@@ -1868,12 +1887,16 @@ function parseReportNumber(value: any) {
   if (typeof value === 'number') return value;
   if (value === null || value === undefined || value === '') return 0;
   const normalized = String(value)
-    .replace(/[,\s]/g, '')
-    .replace(/[^\d.+-]/g, '');
+    .replaceAll(/[,\s]/g, '')
+    .replaceAll(/[^\d.+-]/g, '');
   return Number(normalized || 0);
 }
 
-function formatReportValue(key: string, value: any, record?: Record<string, any>) {
+function formatReportValue(
+  key: string,
+  value: any,
+  record?: Record<string, any>,
+) {
   const column = reportColumnMap.value.get(key);
   if (!column) return value ?? '-';
   if (value === null || value === undefined || value === '') return '-';
@@ -2070,6 +2093,7 @@ watch(
   () => [
     query.departments.join('|'),
     query.operationGroupIds.join('|'),
+    query.projectTags.join('|'),
     query.responsibles.join('|'),
     query.sites.join('|'),
   ],
@@ -2149,6 +2173,16 @@ onBeforeUnmount(() => {
           placeholder="全部"
           size="small"
           style="min-width: 130px"
+        />
+        <label>项目标签</label>
+        <Select
+          v-model:value="query.projectTags"
+          :options="projectTagOptions"
+          allow-clear
+          mode="multiple"
+          placeholder="全部"
+          size="small"
+          style="min-width: 150px"
         />
         <label>国家</label>
         <Dropdown
@@ -2573,9 +2607,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <span>{{ secondaryLabel }}</span>
-                  <strong>{{
-                    formatCny(weekBefore?.grossProfit)
-                  }}</strong>
+                  <strong>{{ formatCny(weekBefore?.grossProfit) }}</strong>
                 </div>
                 <div>
                   <span>{{ secondaryLabel }}差值</span>
@@ -2621,7 +2653,9 @@ onBeforeUnmount(() => {
           <div class="white-panel group-panel">
             <section class="group-track-section">
               <div class="panel-heading track-heading">
-                <h2>{{ metricPrefix }}销量完成率 - 部门维度   --数据来自产品表现</h2>
+                <h2>
+                  {{ metricPrefix }}销量完成率 - 部门维度 --数据来自产品表现
+                </h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
                 <article
@@ -2665,7 +2699,9 @@ onBeforeUnmount(() => {
 
             <section class="group-track-section">
               <div class="panel-heading track-heading">
-                <h2>{{ metricPrefix }}销售额完成率 - 部门维度   --数据取自利润表</h2>
+                <h2>
+                  {{ metricPrefix }}销售额完成率 - 部门维度 --数据来自产品表现
+                </h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
                 <article
@@ -2714,7 +2750,9 @@ onBeforeUnmount(() => {
 
             <section class="group-track-section">
               <div class="panel-heading track-heading">
-                <h2>{{ metricPrefix }}毛利润完成率 - 部门维度  --数据取自利润表</h2>
+                <h2>
+                  {{ metricPrefix }}毛利润完成率 - 部门维度 --数据取自利润表(已发放)
+                </h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
                 <article
@@ -2744,19 +2782,13 @@ onBeforeUnmount(() => {
                         "
                         :title="
                           formatSignedCny(
-                            groupGap(
-                              item.grossProfit,
-                              item.dailyTargetProfit,
-                            ),
+                            groupGap(item.grossProfit, item.dailyTargetProfit),
                           )
                         "
                       >
                         {{
                           formatSignedCny(
-                            groupGap(
-                              item.grossProfit,
-                              item.dailyTargetProfit,
-                            ),
+                            groupGap(item.grossProfit, item.dailyTargetProfit),
                           )
                         }}
                       </b>
@@ -2909,7 +2941,7 @@ onBeforeUnmount(() => {
 
           <div class="white-panel responsible-panel">
             <div class="panel-heading responsible-heading">
-              <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度</h2>
+              <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度--毛利润数据来自利润表(已发放)</h2>
               <div class="responsible-heading-actions">
                 <span>
                   展示 {{ responsibleCards.length }} 人， 有销量
@@ -3055,7 +3087,9 @@ onBeforeUnmount(() => {
                 </p>
                 <p>
                   毛利完成率
-                  <b :class="completionTextClass(item.grossProfitCompletionRate)">
+                  <b
+                    :class="completionTextClass(item.grossProfitCompletionRate)"
+                  >
                     {{ formatPercent(item.grossProfitCompletionRate) }}
                   </b>
                 </p>
@@ -3069,7 +3103,9 @@ onBeforeUnmount(() => {
                 </p>
                 <p>
                   毛利率完成率
-                  <b :class="completionTextClass(item.grossMarginCompletionRate)">
+                  <b
+                    :class="completionTextClass(item.grossMarginCompletionRate)"
+                  >
                     {{ formatPercent(item.grossMarginCompletionRate) }}
                   </b>
                 </p>
@@ -3602,7 +3638,9 @@ onBeforeUnmount(() => {
             <template v-else>
               <span
                 :class="{ 'report-number': isReportNumberColumn(column) }"
-                :title="formatReportValue(reportColumnKey(column), text, record)"
+                :title="
+                  formatReportValue(reportColumnKey(column), text, record)
+                "
               >
                 {{ formatReportValue(reportColumnKey(column), text, record) }}
               </span>
@@ -4616,8 +4654,8 @@ h2 {
 .yellow-detail strong:hover {
   position: relative;
   z-index: 8;
-  max-width: none;
   min-width: max-content;
+  max-width: none;
   padding: 2px 8px;
   margin-inline: -8px;
   overflow: visible;
@@ -4968,8 +5006,8 @@ h2 {
 .responsible-grid {
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
   gap: 8px;
-  max-height: 348px;
   min-height: 0;
+  max-height: 348px;
   padding-right: 4px;
   margin-top: 8px;
   overflow-y: auto;
@@ -4977,8 +5015,8 @@ h2 {
 
 .responsible-grid article {
   display: grid;
-  align-content: start;
   grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   min-height: 344px;
   padding: 10px 12px;
   background: var(--analytics-panel);
@@ -5395,10 +5433,10 @@ h2 {
   bottom: -10px;
   z-index: 30;
   width: 18px;
+  pointer-events: auto;
   cursor: col-resize;
   background: transparent;
   border: 0;
-  pointer-events: auto;
 }
 
 .report-column-resize-handle::after {
@@ -5458,10 +5496,10 @@ h2 {
 }
 
 .report-number {
-  direction: ltr;
   display: block;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  direction: ltr;
   unicode-bidi: isolate;
 }
 
@@ -5476,7 +5514,7 @@ h2 {
 
 .report-summary-scroll {
   width: 100%;
-  overflow: auto hidden;
+  overflow: hidden;
 }
 
 .report-summary-grid {

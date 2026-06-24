@@ -4,6 +4,8 @@ import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 import type {
   AlertLevel,
   KanbanDailyMetric,
+  KanbanFbaInventorySkuBreakdown,
+  KanbanFbaInventorySkuRow,
   KanbanOverview,
   KanbanSpuRow,
 } from '#/api/kanban';
@@ -16,6 +18,7 @@ import {
   Descriptions,
   Drawer,
   Input,
+  Popover,
   Progress,
   Select,
   Space,
@@ -25,7 +28,11 @@ import {
   Tag,
 } from 'ant-design-vue';
 
-import { fetchKanbanOverview, fetchSpuDailyMetrics } from '#/api/kanban';
+import {
+  fetchKanbanOverview,
+  fetchKanbanProductDetailFbaInventory,
+  fetchSpuDailyMetrics,
+} from '#/api/kanban';
 
 import { resetTablePagination, useTablePagination } from '../shared/pagination';
 
@@ -55,6 +62,10 @@ const activeTab = ref('overview');
 const spuSearch = ref('');
 const quickStatus = ref<'all' | 'fail' | 'success'>('all');
 const dailyMetrics = ref<KanbanDailyMetric[]>([]);
+const fbaInventoryCache = reactive<
+  Record<string, KanbanFbaInventorySkuBreakdown>
+>({});
+const fbaInventoryLoadingKey = ref('');
 const spuPagination = useTablePagination(
   15,
   ['15', '30', '50', '100'],
@@ -530,6 +541,54 @@ function inventoryTone(row: KanbanSpuRow) {
   return '';
 }
 
+function fbaInventoryKey(spu: string, site: string) {
+  return `${String(spu || '').trim().toUpperCase()}__${String(site || '')
+    .trim()
+    .toUpperCase()}`;
+}
+
+function fbaInventoryFor(row: KanbanSpuRow) {
+  return fbaInventoryCache[fbaInventoryKey(row.spu, row.site)];
+}
+
+function fbaInventoryRows(row: KanbanSpuRow): KanbanFbaInventorySkuRow[] {
+  const detail = fbaInventoryFor(row);
+  if (!detail) return [];
+  return [...detail.rows, detail.summary];
+}
+
+function isFbaInventoryLoading(row: KanbanSpuRow) {
+  return fbaInventoryLoadingKey.value === fbaInventoryKey(row.spu, row.site);
+}
+
+async function loadFbaInventory(row: KanbanSpuRow) {
+  const key = fbaInventoryKey(row.spu, row.site);
+  if (!row.spu || !row.site || fbaInventoryCache[key] || fbaInventoryLoadingKey.value === key) {
+    return;
+  }
+  fbaInventoryLoadingKey.value = key;
+  try {
+    fbaInventoryCache[key] = await fetchKanbanProductDetailFbaInventory({
+      site: row.site,
+      spu: row.spu,
+    });
+  } finally {
+    if (fbaInventoryLoadingKey.value === key) {
+      fbaInventoryLoadingKey.value = '';
+    }
+  }
+}
+
+function handleFbaInventoryOpen(open: boolean, row: KanbanSpuRow) {
+  if (open) void loadFbaInventory(row);
+}
+
+function formatInventoryQty(value: number) {
+  return Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: 0,
+  });
+}
+
 function cardValueClass(tone: Tone) {
   return `value-${tone}`;
 }
@@ -829,8 +888,103 @@ onMounted(applyFilters);
                     </span>
                   </template>
                   <template v-else-if="column.dataIndex === 'stockQty'">
-                    {{ formatInteger(record.fbaStock) }} /
-                    {{ formatInteger(record.fbaInbound) }}
+                    <Popover
+                      overlay-class-name="fba-inventory-popover"
+                      placement="leftTop"
+                      trigger="hover"
+                      @open-change="
+                        (open) =>
+                          handleFbaInventoryOpen(
+                            open,
+                            record as KanbanSpuRow,
+                          )
+                      "
+                    >
+                      <template #content>
+                        <div class="fba-inventory-panel">
+                          <div class="fba-inventory-title">
+                            <strong>
+                              {{ (record as KanbanSpuRow).spu }} ·
+                              {{ (record as KanbanSpuRow).site }}
+                            </strong>
+                            <span>
+                              {{
+                                fbaInventoryFor(record as KanbanSpuRow)
+                                  ?.refreshedAt || '当前快照'
+                              }}
+                            </span>
+                          </div>
+                          <Spin
+                            :spinning="
+                              isFbaInventoryLoading(record as KanbanSpuRow)
+                            "
+                            size="small"
+                          >
+                            <table class="fba-inventory-table">
+                              <thead>
+                                <tr>
+                                  <th>SKU</th>
+                                  <th>ASIN</th>
+                                  <th>MSKU</th>
+                                  <th>店铺</th>
+                                  <th>仓库</th>
+                                  <th>FBA库存</th>
+                                  <th>FBA可售</th>
+                                  <th>FBA预留</th>
+                                  <th>FBA在途</th>
+                                  <th>总库存</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr
+                                  v-for="item in fbaInventoryRows(
+                                    record as KanbanSpuRow,
+                                  )"
+                                  :key="
+                                    `${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`
+                                  "
+                                  :class="{ summary: item.isSummary }"
+                                >
+                                  <td>{{ item.sku || '-' }}</td>
+                                  <td>{{ item.asinList || '-' }}</td>
+                                  <td>{{ item.mskuList || '-' }}</td>
+                                  <td>{{ item.shopNames || '-' }}</td>
+                                  <td>{{ item.warehouseNames || '-' }}</td>
+                                  <td>{{ formatInventoryQty(item.fbaStockQty) }}</td>
+                                  <td>
+                                    {{ formatInventoryQty(item.fbaAvailableQty) }}
+                                  </td>
+                                  <td>
+                                    {{ formatInventoryQty(item.fbaReservedQty) }}
+                                  </td>
+                                  <td>
+                                    {{ formatInventoryQty(item.fbaInboundQty) }}
+                                  </td>
+                                  <td>{{ formatInventoryQty(item.totalQty) }}</td>
+                                </tr>
+                                <tr
+                                  v-if="
+                                    !isFbaInventoryLoading(
+                                      record as KanbanSpuRow,
+                                    ) &&
+                                    fbaInventoryRows(record as KanbanSpuRow)
+                                      .length === 0
+                                  "
+                                >
+                                  <td class="empty" colspan="10">
+                                    暂无当前 FBA 库存明细
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </Spin>
+                        </div>
+                      </template>
+                      <span class="inventory-hover">
+                        {{ formatInteger(record.fbaStock) }} /
+                        {{ formatInteger(record.fbaInbound) }}
+                      </span>
+                    </Popover>
                   </template>
                   <template v-else-if="column.dataIndex === 'starRating'">
                     {{
@@ -1276,6 +1430,89 @@ onMounted(applyFilters);
   background: #eef2f7;
   border: 1px solid #dbe3ef;
   border-radius: 8px;
+}
+
+.inventory-hover {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  color: #1d4ed8;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+:global(.fba-inventory-popover) {
+  max-width: none;
+}
+
+:global(.fba-inventory-popover .ant-popover-inner) {
+  background: #fff;
+}
+
+.fba-inventory-panel {
+  width: min(920px, calc(100vw - 72px));
+  max-height: 420px;
+  overflow: auto;
+}
+
+.fba-inventory-title {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.fba-inventory-title strong {
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.fba-inventory-title span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.fba-inventory-table {
+  width: 100%;
+  min-width: 860px;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.fba-inventory-table th,
+.fba-inventory-table td {
+  max-width: 150px;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid #e2e8f0;
+}
+
+.fba-inventory-table th {
+  font-weight: 800;
+  color: #334155;
+  background: #f8fafc;
+}
+
+.fba-inventory-table th:nth-child(-n + 5),
+.fba-inventory-table td:nth-child(-n + 5) {
+  text-align: left;
+}
+
+.fba-inventory-table tr.summary td {
+  font-weight: 850;
+  color: #0f172a;
+  background: #eff6ff;
+}
+
+.fba-inventory-table td.empty {
+  height: 58px;
+  color: #94a3b8;
+  text-align: center;
 }
 
 .screen-tabs {
