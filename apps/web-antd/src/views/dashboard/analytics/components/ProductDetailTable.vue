@@ -229,6 +229,12 @@ const selectedProductColumnDraftMetas = computed<KanbanProductDetailColumn[]>(
       ),
 );
 const productColumnGroups = computed(() => {
+  const configuredGroups: Array<{
+    columns: KanbanProductDetailColumn[];
+    key: string;
+    title: string;
+  }> = [];
+  const configuredGroupMap = new Map<string, (typeof configuredGroups)[number]>();
   const groups: Array<{
     columns: KanbanProductDetailColumn[];
     key: string;
@@ -254,9 +260,24 @@ const productColumnGroups = computed(() => {
       continue;
     }
     const groupKey = productColumnGroupKey(column);
+    if (column.group?.trim()) {
+      const title = column.group.trim();
+      const key = `xlsx:${title}`;
+      let group = configuredGroupMap.get(key);
+      if (!group) {
+        group = { columns: [], key, title };
+        configuredGroups.push(group);
+        configuredGroupMap.set(key, group);
+      }
+      group.columns.push(column);
+      continue;
+    }
     (groupMap.get(groupKey) ?? groupMap.get('other'))?.columns.push(column);
   }
-  return groups.filter((group) => group.columns.length > 0);
+  return [
+    ...groups.filter((group) => group.columns.length > 0),
+    ...configuredGroups.filter((group) => group.columns.length > 0),
+  ];
 });
 const productColumnGroupTitles: Record<string, string> = {
   ad: '广告',
@@ -290,7 +311,9 @@ const productBasicInfoLabels = new Set([
   '销售均价',
 ]);
 const productDisplayColumns = computed(() =>
-  sortProductColumnsByTableGroup(productVisibleColumns.value),
+  productVisibleColumns.value.some((column) => column.group?.trim())
+    ? productVisibleColumns.value
+    : sortProductColumnsByTableGroup(productVisibleColumns.value),
 );
 const productVisibleColumnsTotalWidth = computed(() => {
   let total = 0;
@@ -304,29 +327,34 @@ const productDetailColumns = computed<TableColumnsType<Record<string, any>>>(
     const fixedKeys = new Set(pinnedProductColumnKeys.value);
     const groups: Array<{
       children: TableColumnsType<Record<string, any>>;
+      fixed: boolean;
+      groupKey: string;
       key: string;
       title: string;
     }> = [];
     for (const column of productDisplayColumns.value) {
       const groupKey = productColumnTableGroupKey(column);
-      const title = productColumnGroupTitles[groupKey] ?? '其他';
+      const title = productColumnTableGroupTitle(column, groupKey);
+      const fixed = fixedKeys.has(column.key);
+      const segmentKey = `${groupKey}:${fixed ? 'fixed' : 'scroll'}`;
       const current = groups.at(-1);
-      if (current?.key === groupKey) {
-        current.children.push(
-          buildProductDetailColumn(column, fixedKeys.has(column.key)),
-        );
+      if (current?.key === segmentKey) {
+        current.children.push(buildProductDetailColumn(column, fixed));
         continue;
       }
       groups.push({
-        children: [buildProductDetailColumn(column, fixedKeys.has(column.key))],
-        key: groupKey,
+        children: [buildProductDetailColumn(column, fixed)],
+        fixed,
+        groupKey,
+        key: segmentKey,
         title,
       });
     }
     return groups.map((group, index) => ({
       align: 'center',
       children: group.children,
-      className: `product-detail-group product-detail-group-${group.key}`,
+      className: `product-detail-group product-detail-group-${group.groupKey}`,
+      fixed: group.fixed ? ('left' as const) : undefined,
       key: `group-${group.key}-${index}`,
       title: group.title,
     }));
@@ -866,9 +894,11 @@ function startProductColumnResize(key: string, event: MouseEvent) {
 }
 
 function productResizableHeaderCells(row: HTMLElement | null) {
-  return [...row?.querySelectorAll<HTMLTableCellElement>(
+  return [
+    ...(row?.querySelectorAll<HTMLTableCellElement>(
       'th:not([colspan]), th[colspan="1"]',
-    ) ?? []].filter((item) => item.querySelector('.product-resizable-header'));
+    ) ?? []),
+  ].filter((item) => item.querySelector('.product-resizable-header'));
 }
 
 function productColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
@@ -1167,6 +1197,7 @@ function amazonParentAsinUrl(row: Record<string, any>, value: any) {
 }
 
 function productColumnGroupKey(column: KanbanProductDetailColumn) {
+  if (column.group?.trim()) return `xlsx:${column.group.trim()}`;
   const label = column.label;
   const source = column.source.toLowerCase();
   if (productBasicInfoLabels.has(label.trim())) return 'base';
@@ -1235,13 +1266,21 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
 }
 
 function productColumnTableGroupKey(column: KanbanProductDetailColumn) {
+  if (column.group?.trim()) return `xlsx:${column.group.trim()}`;
   const groupKey = productColumnGroupKey(column);
   if (groupKey === 'other') return 'performance';
   return groupKey;
 }
 
+function productColumnTableGroupTitle(
+  column: KanbanProductDetailColumn,
+  groupKey: string,
+) {
+  return column.group?.trim() || productColumnGroupTitles[groupKey] || '其他';
+}
+
 function sortProductColumnsByTableGroup(columns: KanbanProductDetailColumn[]) {
-  const order = new Map(
+  const order = new Map<string, number>(
     productColumnTableGroupOrder.map((groupKey, index) => [groupKey, index]),
   );
   return [...columns].toSorted((left, right) => {
@@ -1260,22 +1299,21 @@ function isProductMetricColumn(key: string) {
 }
 
 const fbaInventoryColumnLabels = new Set([
-  '总库存',
-  'FBA库存',
   'FBA可售',
   'FBA在途',
+  'FBA库存',
   'FBA调仓中',
+  '总库存',
 ]);
 
 function isFbaInventoryColumn(key: string) {
   const label = productColumnLabel(key).trim();
-  return fbaInventoryColumnLabels.has(label) || fbaInventoryColumnLabels.has(key);
+  return (
+    fbaInventoryColumnLabels.has(label) || fbaInventoryColumnLabels.has(key)
+  );
 }
 
-function productRowTextByLabels(
-  record: Record<string, any>,
-  labels: string[],
-) {
+function productRowTextByLabels(record: Record<string, any>, labels: string[]) {
   for (const column of productDetailColumnDefs.value) {
     if (!labels.includes(column.label)) continue;
     const value = productMetricRawValue(record[column.key]);
@@ -1288,8 +1326,9 @@ function productRowTextByLabels(
 
 function productRowSpu(record: Record<string, any>) {
   return (
-    String(productMetricRawValue(record.SPU ?? record.spu ?? '') || '').trim() ||
-    productRowTextByLabels(record, ['SPU'])
+    String(
+      productMetricRawValue(record.SPU ?? record.spu ?? '') || '',
+    ).trim() || productRowTextByLabels(record, ['SPU'])
   );
 }
 
@@ -1302,7 +1341,9 @@ function productRowSite(record: Record<string, any>) {
 }
 
 function fbaInventoryKey(spu: string, site: string) {
-  return `${String(spu || '').trim().toUpperCase()}__${String(site || '')
+  return `${String(spu || '')
+    .trim()
+    .toUpperCase()}__${String(site || '')
     .trim()
     .toUpperCase()}`;
 }
@@ -1313,7 +1354,9 @@ function fbaInventoryFor(record: Record<string, any>) {
   ];
 }
 
-function fbaInventoryRows(record: Record<string, any>): KanbanFbaInventorySkuRow[] {
+function fbaInventoryRows(
+  record: Record<string, any>,
+): KanbanFbaInventorySkuRow[] {
   const detail = fbaInventoryFor(record);
   if (!detail) return [];
   return [...detail.rows, detail.summary];
@@ -1330,7 +1373,12 @@ async function loadFbaInventory(record: Record<string, any>) {
   const spu = productRowSpu(record);
   const site = productRowSite(record);
   const key = fbaInventoryKey(spu, site);
-  if (!spu || !site || fbaInventoryCache[key] || fbaInventoryLoadingKey.value === key) {
+  if (
+    !spu ||
+    !site ||
+    fbaInventoryCache[key] ||
+    fbaInventoryLoadingKey.value === key
+  ) {
     return;
   }
   fbaInventoryLoadingKey.value = key;
@@ -1915,9 +1963,7 @@ onBeforeUnmount(() => {
               overlay-class-name="fba-inventory-popover"
               placement="leftTop"
               trigger="hover"
-              @open-change="
-                (open) => handleFbaInventoryOpen(open, record)
-              "
+              @open-change="(open) => handleFbaInventoryOpen(open, record)"
             >
               <template #content>
                 <div class="fba-inventory-panel">
@@ -1926,15 +1972,10 @@ onBeforeUnmount(() => {
                       {{ productRowSpu(record) }} · {{ productRowSite(record) }}
                     </strong>
                     <span>
-                      {{
-                        fbaInventoryFor(record)?.refreshedAt || '当前快照'
-                      }}
+                      {{ fbaInventoryFor(record)?.refreshedAt || '当前快照' }}
                     </span>
                   </div>
-                  <Spin
-                    :spinning="isFbaInventoryLoading(record)"
-                    size="small"
-                  >
+                  <Spin :spinning="isFbaInventoryLoading(record)" size="small">
                     <table class="fba-inventory-table">
                       <thead>
                         <tr>
@@ -1953,9 +1994,7 @@ onBeforeUnmount(() => {
                       <tbody>
                         <tr
                           v-for="item in fbaInventoryRows(record)"
-                          :key="
-                            `${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`
-                          "
+                          :key="`${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`"
                           :class="{ summary: item.isSummary }"
                         >
                           <td>{{ item.sku || '-' }}</td>
@@ -2288,9 +2327,9 @@ onBeforeUnmount(() => {
 }
 
 .inventory-hover {
-  cursor: help;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
+  cursor: help;
 }
 
 :global(.fba-inventory-popover) {
@@ -2341,8 +2380,8 @@ onBeforeUnmount(() => {
   max-width: 150px;
   padding: 6px 8px;
   overflow: hidden;
-  text-align: right;
   text-overflow: ellipsis;
+  text-align: right;
   white-space: nowrap;
   border: 1px solid var(--product-border, #e2e8f0);
 }
@@ -2634,8 +2673,9 @@ onBeforeUnmount(() => {
 .product-resizable-header span {
   min-width: 0;
   overflow: hidden;
+  line-height: 1.15;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre-line;
 }
 
 .product-detail-card :deep(th.product-header-resize-hover),

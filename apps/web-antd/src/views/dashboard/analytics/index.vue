@@ -402,7 +402,7 @@ function defaultReportColumnKeys(data: AnalyticsReportOverview) {
   if (!available.has('country')) return keys;
   const withoutCountry = keys.filter((key) => key !== 'country');
   const fbaIndex = withoutCountry.indexOf('fbaAvailable');
-  if (fbaIndex >= 0) {
+  if (fbaIndex !== -1) {
     withoutCountry.splice(fbaIndex + 1, 0, 'country');
     return withoutCountry;
   }
@@ -1658,9 +1658,11 @@ function reportColumnKeyFromHeaderCell(th: HTMLTableCellElement) {
   const handle = th.querySelector<HTMLElement>('.report-column-resize-handle');
   const handleKey = handle?.dataset.columnKey;
   if (handleKey) return handleKey;
-  const leafHeaders = [...th.parentElement?.querySelectorAll<HTMLTableCellElement>(
+  const leafHeaders = [
+    ...(th.parentElement?.querySelectorAll<HTMLTableCellElement>(
       'th:not([colspan]), th[colspan="1"]',
-    ) ?? []].filter((item) => item.querySelector('.report-resizable-header'));
+    ) ?? []),
+  ].filter((item) => item.querySelector('.report-resizable-header'));
   const index = leafHeaders.indexOf(th);
   return selectedReportColumnMetas.value[index]?.key ?? '';
 }
@@ -1860,9 +1862,7 @@ function reportCurrencySymbol(record?: Record<string, any>) {
 
 function reportSummaryCurrencySymbol() {
   const symbols = new Set(
-    reportRows.value
-      .map((row) => reportCurrencySymbol(row))
-      .filter(Boolean),
+    reportRows.value.map((row) => reportCurrencySymbol(row)).filter(Boolean),
   );
   return symbols.size === 1 ? [...symbols][0] : '';
 }
@@ -2751,7 +2751,8 @@ onBeforeUnmount(() => {
             <section class="group-track-section">
               <div class="panel-heading track-heading">
                 <h2>
-                  {{ metricPrefix }}毛利润完成率 - 部门维度 --数据取自利润表(已发放)
+                  {{ metricPrefix }}毛利润完成率 - 部门维度
+                  --数据取自利润表(已发放)
                 </h2>
               </div>
               <div v-if="departmentCards.length > 0" class="group-track-grid">
@@ -2941,7 +2942,10 @@ onBeforeUnmount(() => {
 
           <div class="white-panel responsible-panel">
             <div class="panel-heading responsible-heading">
-              <h2>{{ metricPrefix }}销量完成率 - 运营负责人维度--毛利润数据来自利润表(已发放)</h2>
+              <h2>
+                {{ metricPrefix }}销量完成率 -
+                运营负责人维度--毛利润数据来自利润表(已发放)
+              </h2>
               <div class="responsible-heading-actions">
                 <span>
                   展示 {{ responsibleCards.length }} 人， 有销量

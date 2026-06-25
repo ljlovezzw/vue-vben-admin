@@ -542,7 +542,9 @@ function inventoryTone(row: KanbanSpuRow) {
 }
 
 function fbaInventoryKey(spu: string, site: string) {
-  return `${String(spu || '').trim().toUpperCase()}__${String(site || '')
+  return `${String(spu || '')
+    .trim()
+    .toUpperCase()}__${String(site || '')
     .trim()
     .toUpperCase()}`;
 }
@@ -563,7 +565,12 @@ function isFbaInventoryLoading(row: KanbanSpuRow) {
 
 async function loadFbaInventory(row: KanbanSpuRow) {
   const key = fbaInventoryKey(row.spu, row.site);
-  if (!row.spu || !row.site || fbaInventoryCache[key] || fbaInventoryLoadingKey.value === key) {
+  if (
+    !row.spu ||
+    !row.site ||
+    fbaInventoryCache[key] ||
+    fbaInventoryLoadingKey.value === key
+  ) {
     return;
   }
   fbaInventoryLoadingKey.value = key;
@@ -894,10 +901,7 @@ onMounted(applyFilters);
                       trigger="hover"
                       @open-change="
                         (open) =>
-                          handleFbaInventoryOpen(
-                            open,
-                            record as KanbanSpuRow,
-                          )
+                          handleFbaInventoryOpen(open, record as KanbanSpuRow)
                       "
                     >
                       <template #content>
@@ -940,9 +944,7 @@ onMounted(applyFilters);
                                   v-for="item in fbaInventoryRows(
                                     record as KanbanSpuRow,
                                   )"
-                                  :key="
-                                    `${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`
-                                  "
+                                  :key="`${item.sku}-${item.mskuList}-${item.warehouseNames}-${item.isSummary}`"
                                   :class="{ summary: item.isSummary }"
                                 >
                                   <td>{{ item.sku || '-' }}</td>
@@ -950,17 +952,25 @@ onMounted(applyFilters);
                                   <td>{{ item.mskuList || '-' }}</td>
                                   <td>{{ item.shopNames || '-' }}</td>
                                   <td>{{ item.warehouseNames || '-' }}</td>
-                                  <td>{{ formatInventoryQty(item.fbaStockQty) }}</td>
                                   <td>
-                                    {{ formatInventoryQty(item.fbaAvailableQty) }}
+                                    {{ formatInventoryQty(item.fbaStockQty) }}
                                   </td>
                                   <td>
-                                    {{ formatInventoryQty(item.fbaReservedQty) }}
+                                    {{
+                                      formatInventoryQty(item.fbaAvailableQty)
+                                    }}
+                                  </td>
+                                  <td>
+                                    {{
+                                      formatInventoryQty(item.fbaReservedQty)
+                                    }}
                                   </td>
                                   <td>
                                     {{ formatInventoryQty(item.fbaInboundQty) }}
                                   </td>
-                                  <td>{{ formatInventoryQty(item.totalQty) }}</td>
+                                  <td>
+                                    {{ formatInventoryQty(item.totalQty) }}
+                                  </td>
                                 </tr>
                                 <tr
                                   v-if="
@@ -1486,8 +1496,8 @@ onMounted(applyFilters);
   max-width: 150px;
   padding: 6px 8px;
   overflow: hidden;
-  text-align: right;
   text-overflow: ellipsis;
+  text-align: right;
   white-space: nowrap;
   border: 1px solid #e2e8f0;
 }

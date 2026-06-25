@@ -150,6 +150,7 @@ export interface KanbanOverview {
 
 export interface KanbanProductDetailColumn {
   defaultVisible: boolean;
+  group?: string;
   key: string;
   kind: 'decimal' | 'image' | 'number' | 'percent' | 'text';
   label: string;
