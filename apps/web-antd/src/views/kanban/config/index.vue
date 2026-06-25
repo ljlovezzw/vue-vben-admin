@@ -273,7 +273,11 @@ const filteredUsers = computed(() => {
 });
 
 const memberScopeUsers = computed(() =>
-  filteredUsers.value.filter((user) => canEditMembers(user)),
+  filteredUsers.value.filter(
+    (user) =>
+      String(user.role || '').toLowerCase() === 'leader' &&
+      canEditMembers(user),
+  ),
 );
 
 function isCurrentUser(row: ConfigUserRow) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
+import type { Spin ,TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
   AlertLevel,
@@ -234,7 +234,10 @@ const productColumnGroups = computed(() => {
     key: string;
     title: string;
   }> = [];
-  const configuredGroupMap = new Map<string, (typeof configuredGroups)[number]>();
+  const configuredGroupMap = new Map<
+    string,
+    (typeof configuredGroups)[number]
+  >();
   const groups: Array<{
     columns: KanbanProductDetailColumn[];
     key: string;
@@ -1601,7 +1604,7 @@ function productMetricDeltaText(
     return '';
   const delta = Number(value.delta || 0);
   if (!Number.isFinite(delta) || delta === 0) return '';
-  if (kind === 'percent')
+  if (kind === 'percent' || isProductPercentColumn(key))
     return `${delta > 0 ? '+' : ''}${formatCompactNumber(delta * 100)}pp`;
   const rate = Number(value.deltaRate);
   const deltaText = formatSignedMetricDelta(
@@ -1626,6 +1629,7 @@ function productTextClass(key: string) {
 
 function isProductMoneyColumn(key: string) {
   const label = productColumnLabel(key);
+  if (isProductPercentColumn(key)) return false;
   return [
     '金额',
     '均价',
@@ -1639,6 +1643,16 @@ function isProductMoneyColumn(key: string) {
   ].some((flag) => label.includes(flag));
 }
 
+function isProductPercentColumn(key: string) {
+  const label = productColumnLabel(key).toUpperCase();
+  return (
+    ['率', '占比', '完成率'].some((flag) => label.includes(flag)) ||
+    ['ACOS', 'ACOAS', 'TACOS', 'ROAS', 'ROI', 'CVR', 'CTR'].some((flag) =>
+      label.includes(flag),
+    )
+  );
+}
+
 function formatProductDetailValue(
   value: any,
   kind: string,
@@ -1648,6 +1662,9 @@ function formatProductDetailValue(
   const rawValue = productMetricRawValue(value);
   if (rawValue === null || rawValue === undefined || rawValue === '')
     return '-';
+  if (kind === 'percent' || isProductPercentColumn(key)) {
+    return formatPercent(Number(rawValue || 0), 0);
+  }
   if (isProductMoneyColumn(key)) {
     return formatProductMoney(
       rawValue,
@@ -1655,7 +1672,6 @@ function formatProductDetailValue(
       productCurrencySymbol(record),
     );
   }
-  if (kind === 'percent') return formatPercent(Number(rawValue || 0), 0);
   if (kind === 'decimal') return formatCompactNumber(rawValue, 2);
   if (kind === 'number') return formatCompactNumber(rawValue, 0);
   return String(rawValue);
@@ -2673,8 +2689,8 @@ onBeforeUnmount(() => {
 .product-resizable-header span {
   min-width: 0;
   overflow: hidden;
-  line-height: 1.15;
   text-overflow: ellipsis;
+  line-height: 1.15;
   white-space: pre-line;
 }
 
