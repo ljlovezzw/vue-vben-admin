@@ -7,6 +7,7 @@ import type {
 } from '#/api/kanban/types';
 
 import { computed, reactive, ref } from 'vue';
+import VChart from 'vue-echarts';
 
 import {
   Button,
@@ -24,10 +25,131 @@ import {
   Spin,
   Table,
 } from 'ant-design-vue';
+import { LineChart } from 'echarts/charts';
+import {
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+} from 'echarts/components';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchKeywordReverse } from '#/api/kanban';
 
 type SortDirection = 'ASC' | 'DESC';
+type TrendMetric = 'rankT30' | 'searches';
+type TrendPoint = {
+  month: string;
+  rankT30: null | number;
+  searches: null | number;
+};
+type WordItem = {
+  count: null | number | string;
+  raw: unknown;
+  text: string;
+};
+
+use([
+  CanvasRenderer,
+  GridComponent,
+  LegendComponent,
+  LineChart,
+  TooltipComponent,
+]);
+
+const TREND_COLUMN_KEY = '__keywordTrend';
+const TREND_FIELD_KEYS = new Set(['rankTrends', 'searchTrends', 'trends']);
+const HIDDEN_TABLE_FIELD_KEYS = new Set(['keywordZh', 'marketPlaceId']);
+const AMAZON_MARKETPLACE_DOMAINS: Record<number, string> = {
+  1: 'www.amazon.com',
+  3: 'www.amazon.co.uk',
+  4: 'www.amazon.de',
+  5: 'www.amazon.fr',
+  6: 'www.amazon.co.jp',
+  7: 'www.amazon.ca',
+  44_551: 'www.amazon.es',
+  44_571: 'www.amazon.in',
+  35_691: 'www.amazon.it',
+  328_451: 'www.amazon.nl',
+  338_801: 'www.amazon.ae',
+  338_811: 'www.amazon.sa',
+  526_970: 'www.amazon.com.br',
+  771_770: 'www.amazon.com.mx',
+  111_172: 'www.amazon.com.au',
+};
+
+const fieldDescriptions: Record<string, string> = {
+  abaEndTime: 'ABA 周期结束时间',
+  abaStartTime: 'ABA 周期开始时间',
+  abaWeek: 'ABA 周期描述',
+  abaWeekRank: 'ABA 关键词周排名',
+  adExposureT7: '当前 ASIN 近 7 天广告曝光',
+  adPageNum: '广告排名所在页码',
+  adPageSize: '广告排名采集页大小',
+  adPosition: '广告排名所在位置',
+  adRank: '广告排名',
+  adTrafficRatio: '当前 ASIN 该关键词广告曝光占比',
+  adUpdateTime: '广告排名采集更新时间',
+  adsT30: '近 30 天投放广告的商品数',
+  avgDaySearch: '日均搜索量',
+  chinaSellerNumber: '中国卖家数量',
+  chinaSellerProportion: '中国卖家占比',
+  clickSalesRate: '点击成交转化率',
+  clickT30: '近 30 天总点击量',
+  crawlNum: '爬虫采集到的样本商品数',
+  impression: '当前 ASIN 近 7 天总曝光',
+  impressionsT30: '近 30 天市场总曝光量',
+  keyword: '关键词',
+  keywordZh: '关键词中文',
+  marketAdExposure: '该关键词市场近 7 天广告总曝光',
+  marketAdTrafficRatio: '市场广告曝光占比',
+  marketNaExposure: '该关键词市场近 7 天自然总曝光',
+  marketNaTrafficRatio: '市场自然曝光占比',
+  marketTrafficRatio: '在市场关键词流量池中，该关键词贡献的占比',
+  naExposureT7: '当前 ASIN 近 7 天自然曝光',
+  naPageNum: '自然排名所在页码',
+  naPageSize: '自然排名采集页大小',
+  naPosition: '自然排名所在位置',
+  naRank: '自然排名',
+  naTrafficRatio: '当前 ASIN 该关键词自然曝光占比',
+  naUpdateTime: '自然排名采集更新时间',
+  parentAdExposureT7: '父体近 7 天广告曝光',
+  parentAdTrafficRatio: '父体广告曝光占比',
+  parentImpression: '父体近 7 天总曝光',
+  parentNaExposureT7: '父体近 7 天自然曝光',
+  parentNaTrafficRatio: '父体自然曝光占比',
+  parentTrafficRatio: '当前父体的流量中，这个关键词贡献的占比',
+  ppcBid: '建议 PPC 竞价',
+  ppcBidMax: '建议最高竞价',
+  ppcBidMin: '建议最低竞价',
+  products: '竞争商品数',
+  rankTrends: 'ABA 排名趋势，[年月编码, 排名, ...]',
+  recent12mNewProducts: '近 12 个月新品数量',
+  recent1mNewProducts: '近 1 个月新品数量',
+  recent2mNewProducts: '近 2 个月新品数量',
+  recent3mNewProducts: '近 3 个月新品数量',
+  recent6mNewProducts: '近 6 个月新品数量',
+  salableAdTrafficRatio: '当前可售 ASIN 广告曝光占比',
+  salableAsinAdExposureT7: '当前可售 ASIN 近 7 天广告曝光量',
+  salableAsinNaExposureT7: '当前可售 ASIN 近 7 天自然曝光量',
+  salableImpression: '当前可售 ASIN 近 7 天曝光量',
+  salableNaTrafficRatio: '当前可售 ASIN 自然曝光占比',
+  salableTrafficRatio: '当前可售 ASIN 的流量中，这个关键词贡献的占比',
+  salesRateT30: '近 30 天搜索转化率',
+  salesT30: '近 30 天该关键词带来的市场总销量',
+  searchConversionRateT30: '搜索转化率',
+  searchHeat: '搜索热度',
+  searchT30: '近 30 天搜索量',
+  searchTrends: '搜索量趋势，[年月编码, 搜索量, ...]',
+  searchUrl: '亚马逊前台搜索链接',
+  supplyDemandRatio: '供需比',
+  titleDensity: '标题密度',
+  top10Asin: '该关键词下 Top 10 点击/销量/排名 ASIN',
+  top3ClickRate: 'Top 3 ASIN 点击占比',
+  top3ConversionRate: 'Top 3 ASIN 转化率',
+  trafficRatio: '当前 ASIN 的流量中，这个关键词贡献的占比',
+  trends: '趋势明细，包含月份、搜索量、ABA 排名和环比',
+};
 
 const loading = ref(false);
 const drawerOpen = ref(false);
@@ -55,15 +177,18 @@ const monthOptions = [
 
 const sortFieldOptions = [
   { label: '流量占比', value: 'trafficRatio' },
-  { label: '搜索量', value: 'searchVolume' },
-  { label: '自然排名', value: 'organicRank' },
-  { label: '广告排名', value: 'sponsoredRank' },
+  { label: '近30天搜索量', value: 'searchT30' },
+  { label: '日均搜索量', value: 'avgDaySearch' },
+  { label: '自然排名', value: 'naRank' },
+  { label: '广告排名', value: 'adRank' },
+  { label: 'ABA周排名', value: 'abaWeekRank' },
   { label: '标题密度', value: 'titleDensity' },
+  { label: '供需比', value: 'supplyDemandRatio' },
 ];
 
 const totalText = computed(() => result.value?.page.total ?? 0);
-const highFrequencyWords = computed(
-  () => result.value?.highFrequencyWords ?? [],
+const highFrequencyWords = computed(() =>
+  normalizeHighFrequencyWords(resolveHighFrequencyWords(result.value)),
 );
 const rows = computed(() => result.value?.rows ?? []);
 const filteredRows = computed(() => {
@@ -85,8 +210,13 @@ const tablePagination = computed<TablePaginationConfig>(() => ({
 
 const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
   const columns = (result.value?.columns ?? [])
+    .filter((column) => !isHiddenTableColumn(column.key))
+    .filter((column) => !isTrendColumn(column.key))
     .filter((column) => showTopProducts.value || !isProductColumn(column.key))
     .map((column) => ({
+      customHeaderCell: () => ({
+        title: fieldDescriptions[column.key] || column.label,
+      }),
       dataIndex: column.key,
       ellipsis: column.kind === 'text' && !isKeywordColumn(column.key),
       fixed: column.fixed === 'left' ? ('left' as const) : undefined,
@@ -94,6 +224,28 @@ const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
       title: column.label,
       width: columnWidth(column),
     }));
+  const hasTrendColumn = rows.value.some((row) => hasTrendData(row));
+  if (hasTrendColumn) {
+    const insertAt = Math.min(
+      Math.max(
+        columns.findIndex((column) => isProductColumn(column.key)) + 1,
+        1,
+      ),
+      columns.length,
+    );
+    columns.splice(insertAt, 0, {
+      customHeaderCell: () => ({
+        title:
+          '由 rankTrends、searchTrends 或 trends 绘制搜索量和 ABA 排名趋势',
+      }),
+      dataIndex: TREND_COLUMN_KEY,
+      ellipsis: false,
+      fixed: undefined,
+      key: TREND_COLUMN_KEY,
+      title: '趋势',
+      width: 300,
+    });
+  }
 
   return [
     {
@@ -106,6 +258,10 @@ const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
     ...columns,
   ];
 });
+const tableScrollX = computed(() =>
+  Math.max(tableColumns.value.length * 130 + 120, 980),
+);
+const tableScrollY = 720;
 
 function parseAsins() {
   return [
@@ -118,13 +274,68 @@ function parseAsins() {
   ];
 }
 
+function normalizeHighFrequencyWords(value: unknown): WordItem[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (item && typeof item === 'object') {
+          const record = item as Record<string, any>;
+          return {
+            count: record.count ?? record.num ?? record.value ?? null,
+            raw: item,
+            text: String(
+              record.word ?? record.keyword ?? record.name ?? record.text ?? '',
+            ).trim(),
+          };
+        }
+        return { count: null, raw: item, text: String(item || '').trim() };
+      })
+      .filter((item) => item.text);
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([text, count]) => ({
+        count: count as WordItem['count'],
+        raw: { [text]: count },
+        text: text.trim(),
+      }))
+      .filter((item) => item.text);
+  }
+  return [];
+}
+
+function resolveHighFrequencyWords(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  const record = value as Record<string, any>;
+  return (
+    record.highFrequencyWords ??
+    record.high_frequency_words ??
+    record.data?.highFrequencyWords ??
+    record.data?.data?.highFrequencyWords ??
+    record.rawSummary?.highFrequencyWords ??
+    record.rawSummary?.high_frequency_words ??
+    null
+  );
+}
+
 function columnWidth(column: KeywordReverseColumn) {
   if (isProductColumn(column.key)) return 260;
+  if (isTrendColumn(column.key)) return 300;
+  if (column.key === 'searchUrl') return 220;
   if (column.fixed === 'left') return 220;
   if (column.kind === 'percent') return 118;
   if (column.kind === 'rank') return 104;
   if (column.kind === 'number') return 120;
   return 150;
+}
+
+function isTrendColumn(key: unknown) {
+  return TREND_FIELD_KEYS.has(String(key || ''));
+}
+
+function isHiddenTableColumn(key: unknown) {
+  return HIDDEN_TABLE_FIELD_KEYS.has(String(key || ''));
 }
 
 function isKeywordColumn(key: unknown) {
@@ -140,6 +351,7 @@ function isProductColumn(key: unknown) {
     'imageList',
     'productList',
     'products',
+    'top10Asin',
     'top10Product',
     'top10Products',
     'topProducts',
@@ -158,7 +370,14 @@ function keywordText(row: Record<string, any>) {
 }
 
 function cnKeywordText(row: Record<string, any>) {
-  return row.cnKeyword ?? row.keywordCn ?? row.chinese ?? row.translation ?? '';
+  return (
+    row.keywordZh ??
+    row.cnKeyword ??
+    row.keywordCn ??
+    row.chinese ??
+    row.translation ??
+    ''
+  );
 }
 
 function numberValue(value: unknown) {
@@ -167,16 +386,48 @@ function numberValue(value: unknown) {
   return Number(value.replaceAll(',', '').replace('%', '').trim());
 }
 
-function formatNumber(value: number, digits = 0) {
+function formatNumber(value: number, digits = 0, minimumDigits = digits) {
   return new Intl.NumberFormat('zh-CN', {
     maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
+    minimumFractionDigits: minimumDigits,
   }).format(value);
+}
+
+function formatFlexibleNumber(value: number) {
+  return Number.isInteger(value)
+    ? formatNumber(value, 0)
+    : formatNumber(value, 2, 0);
+}
+
+function formatMonthCode(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (/^\d{4}$/.test(text)) {
+    const year = 2000 + Number(text.slice(0, 2));
+    return `${year}-${text.slice(2)}`;
+  }
+  if (/^\d{6}$/.test(text)) {
+    return `${text.slice(0, 4)}-${text.slice(4)}`;
+  }
+  return text;
+}
+
+function formatDateTime(value: unknown) {
+  const numeric = numberValue(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return String(value);
+  const date = new Date(numeric);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (item: number) => String(item).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function isTimeColumn(key: unknown) {
+  return /(?:updateTime|startTime|endTime)$/i.test(String(key || ''));
 }
 
 function formatCell(value: unknown, column?: KeywordReverseColumn) {
   if (value === null || value === undefined || value === '') return '-';
   if (!column) return String(value);
+  if (isTimeColumn(column.key)) return formatDateTime(value);
   if (column.kind === 'percent') {
     if (typeof value === 'string' && value.includes('%')) return value;
     const numeric = numberValue(value);
@@ -190,8 +441,11 @@ function formatCell(value: unknown, column?: KeywordReverseColumn) {
   }
   if (column.kind === 'number') {
     const numeric = numberValue(value);
-    return Number.isFinite(numeric) ? formatNumber(numeric, 2) : String(value);
+    return Number.isFinite(numeric)
+      ? formatFlexibleNumber(numeric)
+      : String(value);
   }
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
 
@@ -255,11 +509,210 @@ function imageFromProduct(item: unknown) {
   );
 }
 
-function productImages(value: unknown) {
+function labelFromProduct(item: unknown) {
+  if (typeof item === 'string') return item;
+  if (!item || typeof item !== 'object') return '';
+  const product = item as Record<string, any>;
+  return String(
+    product.asin ??
+      product.parentAsin ??
+      product.childAsin ??
+      product.title ??
+      product.name ??
+      '',
+  );
+}
+
+function asinFromProduct(item: unknown) {
+  const value =
+    typeof item === 'string'
+      ? item
+      : (item && typeof item === 'object'
+        ? ((item as Record<string, any>).asin ??
+          (item as Record<string, any>).parentAsin ??
+          (item as Record<string, any>).childAsin ??
+          (item as Record<string, any>).parent_asin ??
+          (item as Record<string, any>).child_asin ??
+          '')
+        : '');
+  const match = String(value || '')
+    .toUpperCase()
+    .match(/\bB[A-Z0-9]{9}\b/);
+  return match?.[0] ?? '';
+}
+
+function amazonDomain(marketPlaceId: unknown) {
+  const numeric = Number(marketPlaceId || query.marketPlaceId || 1);
+  return AMAZON_MARKETPLACE_DOMAINS[numeric] ?? 'www.amazon.com';
+}
+
+function amazonProductUrl(asin: string, marketPlaceId: unknown) {
+  if (!asin) return '';
+  return `https://${amazonDomain(marketPlaceId)}/dp/${asin}`;
+}
+
+function productItems(value: unknown, record?: Record<string, any>) {
+  const marketPlaceId = record?.marketPlaceId ?? query.marketPlaceId;
   return normalizeProductItems(value)
-    .map((item) => imageFromProduct(item))
-    .filter(Boolean)
+    .map((item, index) => {
+      const asin = asinFromProduct(item);
+      const image = imageFromProduct(item);
+      const label = labelFromProduct(item);
+      return {
+        asin,
+        domain: amazonDomain(marketPlaceId),
+        image,
+        key: `${asin || image || label || 'product'}-${index}`,
+        label: asin || label,
+        url: amazonProductUrl(asin, marketPlaceId),
+      };
+    })
+    .filter((item) => item.image || item.label)
     .slice(0, 10);
+}
+
+function parseTrendValue(value: unknown) {
+  if (!value) return [];
+  if (typeof value === 'string') {
+    const parsed = parseJsonMaybe(value);
+    return Array.isArray(parsed) ? parsed : [];
+  }
+  return Array.isArray(value) ? value : [];
+}
+
+function readNullableNumber(value: unknown) {
+  const numeric = numberValue(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function mergeTrendPoint(
+  map: Map<string, TrendPoint>,
+  monthValue: unknown,
+  metric: TrendMetric,
+  metricValue: unknown,
+) {
+  const month = formatMonthCode(monthValue);
+  if (!month) return;
+  const nextValue = readNullableNumber(metricValue);
+  if (nextValue === null) return;
+  const point = map.get(month) ?? {
+    month,
+    rankT30: null,
+    searches: null,
+  };
+  point[metric] = metric === 'rankT30' && nextValue <= 0 ? null : nextValue;
+  map.set(month, point);
+}
+
+function applyPairTrend(
+  map: Map<string, TrendPoint>,
+  value: unknown,
+  metric: TrendMetric,
+) {
+  const list = parseTrendValue(value);
+  for (let index = 0; index < list.length - 1; index += 2) {
+    mergeTrendPoint(map, list[index], metric, list[index + 1]);
+  }
+}
+
+function rowTrendPoints(row: Record<string, any>): TrendPoint[] {
+  const pointMap = new Map<string, TrendPoint>();
+  for (const item of parseTrendValue(row.trends)) {
+    if (!item || typeof item !== 'object') continue;
+    const trend = item as Record<string, any>;
+    const month = trend.month ?? trend.monthStr ?? trend.date;
+    mergeTrendPoint(pointMap, month, 'searches', trend.searches);
+    mergeTrendPoint(pointMap, month, 'rankT30', trend.rankT30);
+  }
+  applyPairTrend(pointMap, row.searchTrends, 'searches');
+  applyPairTrend(pointMap, row.rankTrends, 'rankT30');
+  return [...pointMap.values()].toSorted((left, right) =>
+    left.month.localeCompare(right.month),
+  );
+}
+
+function hasTrendData(row: Record<string, any>) {
+  return rowTrendPoints(row).length > 0;
+}
+
+function trendChartOption(row: Record<string, any>) {
+  const points = rowTrendPoints(row);
+  const hasSearches = points.some((point) => point.searches !== null);
+  const hasRank = points.some((point) => point.rankT30 !== null);
+  return {
+    animation: false,
+    color: ['#2563eb', '#ea580c'],
+    grid: {
+      bottom: 18,
+      left: 8,
+      right: 8,
+      top: 18,
+    },
+    legend: {
+      bottom: 0,
+      data: [
+        ...(hasSearches ? ['搜索量'] : []),
+        ...(hasRank ? ['ABA排名'] : []),
+      ],
+      itemHeight: 6,
+      itemWidth: 10,
+      textStyle: { color: '#64748b', fontSize: 10 },
+    },
+    series: [
+      ...(hasSearches
+        ? [
+            {
+              data: points.map((point) => point.searches),
+              name: '搜索量',
+              showSymbol: false,
+              smooth: true,
+              type: 'line',
+              yAxisIndex: 0,
+            },
+          ]
+        : []),
+      ...(hasRank
+        ? [
+            {
+              data: points.map((point) => point.rankT30),
+              name: 'ABA排名',
+              showSymbol: false,
+              smooth: true,
+              type: 'line',
+              yAxisIndex: 1,
+            },
+          ]
+        : []),
+    ],
+    tooltip: {
+      confine: true,
+      trigger: 'axis',
+      valueFormatter: (value: unknown) => {
+        const numeric = readNullableNumber(value);
+        return numeric === null ? '-' : formatNumber(numeric, 0);
+      },
+    },
+    xAxis: {
+      axisLabel: { color: '#94a3b8', fontSize: 10 },
+      axisLine: { lineStyle: { color: '#cbd5e1' } },
+      axisTick: { show: false },
+      data: points.map((point) => point.month),
+      type: 'category',
+    },
+    yAxis: [
+      {
+        axisLabel: { show: false },
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        type: 'value',
+      },
+      {
+        axisLabel: { show: false },
+        inverse: true,
+        splitLine: { show: false },
+        type: 'value',
+      },
+    ],
+  };
 }
 
 async function runQuery(resetPage = true) {
@@ -362,7 +815,12 @@ function escapeCsv(value: unknown) {
 }
 
 function exportCsv() {
-  const columns = result.value?.columns ?? [];
+  const columns = (result.value?.columns ?? []).filter(
+    (column) =>
+      !isHiddenTableColumn(column.key) &&
+      !isTrendColumn(column.key) &&
+      (showTopProducts.value || !isProductColumn(column.key)),
+  );
   if (columns.length === 0 || filteredRows.value.length === 0) {
     message.warning('当前没有可导出的结果');
     return;
@@ -506,8 +964,10 @@ function exportCsv() {
             type="button"
             @click="keywordFilter = word.text"
           >
-            {{ word.text }}
-            <span v-if="word.count !== null && word.count !== undefined">({{ word.count }})</span>
+            <span>{{ word.text }}</span>
+            <span v-if="word.count !== null && word.count !== undefined">
+              ({{ word.count }})
+            </span>
           </button>
         </div>
         <Empty
@@ -576,7 +1036,7 @@ function exportCsv() {
           :data-source="filteredRows"
           :pagination="tablePagination"
           :row-key="rowKey"
-          :scroll="{ x: Math.max(tableColumns.length * 130 + 120, 980) }"
+          :scroll="{ x: tableScrollX, y: tableScrollY }"
           size="small"
           sticky
           @change="handleTableChange"
@@ -589,6 +1049,16 @@ function exportCsv() {
               <Button size="small" type="link" @click="openRaw(record)">
                 原始字段
               </Button>
+            </template>
+            <template v-else-if="column.dataIndex === TREND_COLUMN_KEY">
+              <div v-if="hasTrendData(record)" class="trend-cell">
+                <VChart
+                  :option="trendChartOption(record)"
+                  autoresize
+                  class="trend-chart"
+                />
+              </div>
+              <span v-else>-</span>
             </template>
             <template v-else-if="isKeywordColumn(column.dataIndex)">
               <div class="keyword-cell">
@@ -614,15 +1084,33 @@ function exportCsv() {
                 </div>
               </div>
             </template>
+            <template v-else-if="column.dataIndex === 'searchUrl' && text">
+              <a :href="String(text)" rel="noreferrer" target="_blank">
+                打开搜索页
+              </a>
+            </template>
             <template v-else-if="isProductColumn(column.dataIndex)">
               <div class="product-strip">
-                <img
-                  v-for="src in productImages(text)"
-                  :key="src"
-                  :src="src"
-                  alt=""
-                />
-                <span v-if="productImages(text).length === 0">-</span>
+                <template v-if="productItems(text, record).length > 0">
+                  <a
+                    v-for="item in productItems(text, record)"
+                    :key="item.key"
+                    class="product-item"
+                    :href="item.url || undefined"
+                    rel="noreferrer"
+                    target="_blank"
+                    :title="
+                      item.url ? `${item.label} · ${item.domain}` : item.label
+                    "
+                  >
+                    <img v-if="item.image" :src="item.image" alt="" />
+                    <span v-else class="product-token">
+                      <span>{{ item.label }}</span>
+                      <small v-if="item.url">{{ item.domain }}</small>
+                    </span>
+                  </a>
+                </template>
+                <span v-else>-</span>
               </div>
             </template>
             <template v-else>
@@ -784,22 +1272,19 @@ function exportCsv() {
 }
 
 .word-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
-  gap: 14px 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   max-height: 260px;
   padding: 8px 2px 2px;
   overflow: auto;
 }
 
 .word-item {
-  min-width: 0;
   padding: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: #1f2937;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
   cursor: pointer;
   background: transparent;
   border: 0;
@@ -876,7 +1361,7 @@ function exportCsv() {
   gap: 6px;
   align-items: center;
   min-height: 48px;
-  overflow: hidden;
+  overflow: auto hidden;
 }
 
 .product-strip img {
@@ -886,6 +1371,62 @@ function exportCsv() {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
+}
+
+.product-item {
+  color: inherit;
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.product-token {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  justify-content: center;
+  max-width: 132px;
+  min-width: 94px;
+  min-height: 38px;
+  padding: 0 7px;
+  overflow: hidden;
+  font-size: 12px;
+  color: #334155;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 4px;
+}
+
+.product-token span,
+.product-token small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-token small {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.product-item:hover .product-token {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+.trend-cell {
+  width: 284px;
+  min-height: 98px;
+}
+
+.trend-chart {
+  width: 284px;
+  height: 98px;
 }
 
 .numeric-cell {
