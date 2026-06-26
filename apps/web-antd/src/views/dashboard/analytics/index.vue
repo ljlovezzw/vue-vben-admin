@@ -557,18 +557,13 @@ const salesCompletion = computed(() =>
 const grossProfitCompletion = computed(() =>
   nullableRatio(latest.value?.grossProfit, targets.value?.dailyTargetProfit),
 );
-const promotionRate = computed(() =>
-  ratio(
-    advertising.value?.summary.totalSpend,
-    advertising.value?.summary.totalSales,
-  ),
+const promotionRate = computed(() => latest.value?.promotionRate ?? 0);
+const adAcoas = computed(() => latest.value?.adAcoas ?? 0);
+const previousPromotionRate = computed(
+  () => previous.value?.promotionRate ?? 0,
 );
-
-const previousPromotionRate = computed(() =>
-  ratio(previous.value?.adSpend, previous.value?.salesAmount),
-);
-const weekBeforePromotionRate = computed(() =>
-  ratio(weekBefore.value?.adSpend, weekBefore.value?.salesAmount),
+const weekBeforePromotionRate = computed(
+  () => weekBefore.value?.promotionRate ?? 0,
 );
 const previousCompareLabel = computed(() =>
   periodDays.value > 1 ? previousLabel.value : '前一天',
@@ -2828,7 +2823,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div>
                   <span>ACoAS</span>
-                  <strong>{{ formatPercent(promotionRate) }}</strong>
+                  <strong>{{ formatPercent(adAcoas) }}</strong>
                 </div>
                 <div>
                   <span>{{ previousCompareLabel }}推广费占比</span>

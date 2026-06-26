@@ -1,8 +1,8 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-06-22
+更新时间：2026-06-26
 
-本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。后端说明文档位于：
+本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
 ```text
 E:\junlee\Kanban\docs\BACKEND_DEVELOPMENT_GUIDE.md
@@ -158,7 +158,7 @@ apps/web-antd/src/
 当前前端最新改动主要集中在这些文件：
 
 - `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额/毛利润卡片、推广与周转卡片、部门销量完成率、负责人完成率、商品维度明细报表和内嵌新品详情表。底部两个表格的负责人范围必须从顶部筛选后的最终负责人作用域继承；部门筛选本身不出现在子表 UI 中。
-- `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，继承顶部时间、站点、国家和负责人作用域，同时拥有自己的国家、负责人、列配置、固定列、分页、汇总行和点击排序；本地负责人筛选只能在父级作用域内继续缩小。
+- `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，继承顶部时间、站点、国家、项目标签和负责人作用域，同时拥有自己的国家、负责人、列配置、固定列、分页、汇总行、FBA SKU 库存弹窗和点击排序；本地负责人筛选只能在父级作用域内继续缩小。
 - `src\views\kanban\monitor\index.vue`：新品监控主页面，新品详情表已改成类似商品维度明细报表的确认式筛选和列配置，并增加时间范围、负责人筛选。
 - `public\tools\upload-tool.html`：图片标准命名打包工具，负责本地预览、AI 标记、ZIP 生成、JSON 元数据打包和飞书任务上传。
 - `src\api\kanban\index.ts` 与 `src\api\kanban\types.ts`：补齐 `fetchKanbanProductDetail` 的时间范围参数和 `KanbanProductDetailOverview.query` 类型。
@@ -200,16 +200,16 @@ Authorization: Bearer <accessToken>
 
 ### 4.2 页面权限
 
-| 页面           | 路由              | 权限码                             |
-| -------------- | ----------------- | ---------------------------------- |
-| 公司经营驾驶舱 | `/analytics`      | `kanban:analytics`，仅用于菜单展示 |
-| 新品监控       | `/kanban/monitor` | `kanban:monitor`                   |
-| 广告监控       | `/kanban/ads`     | `kanban:ads`                       |
-| 目标跟踪       | `/kanban/targets` | `kanban:targets`                   |
-| ASIN360        | `/kanban/asin360` | `kanban:asin360`                   |
-| SPU 管理       | `/kanban/spus`    | `kanban:spus`                      |
-| 工具           | `/tools/upload`   | 复用看板权限                       |
-| 配置中心       | `/kanban/config`  | `kanban:config`                    |
+| 页面 | 路由 | 权限码 |
+| --- | --- | --- |
+| 公司经营驾驶舱 | `/analytics` | `kanban:analytics`，仅用于菜单展示 |
+| 新品监控 | `/kanban/monitor` | `kanban:monitor` |
+| 广告监控 | `/kanban/ads` | `kanban:ads` |
+| 目标跟踪 | `/kanban/targets` | `kanban:targets` |
+| ASIN360 | `/kanban/asin360` | `kanban:asin360` |
+| SPU 管理 | `/kanban/spus` | `kanban:spus` |
+| 工具 | `/tools/upload`、`/tools/keyword-reverse` | 复用看板权限 |
+| 配置中心 | `/kanban/config` | `kanban:config` |
 
 页面路由的 `meta.authority` 负责菜单和页面可见性；后端仍会再次校验权限，不能只依赖前端。
 
@@ -218,14 +218,14 @@ Authorization: Bearer <accessToken>
 - 所有角色默认拥有 `kanban:analytics`、`kanban:monitor`、`kanban:ads`、`kanban:targets`、`kanban:asin360`，因此默认可见公司经营驾驶舱、新品监控、广告监控、目标跟踪和 ASIN360。
 - `operator`、`leader` 的 `permissions_json` 只用于追加默认模块之外的权限，例如 SPU 管理和配置中心。
 - `manager`、`admin`、`super` 默认拥有全部模块权限。
-- 模块可见性不代表数据全量可见；除公司经营驾驶舱外，数据范围仍由后端按登录人负责人范围过滤。
-- 公司经营驾驶舱 `/analytics` 是全员可见、全量数据口径页面，后端 `/kanban/analytics/overview` 不做模块权限校验，也不按登录人负责人范围裁剪；页面上的负责人和运营组筛选只代表用户主动选择的筛选条件。
+- 模块可见性不代表数据全量可见；后端会按接口场景应用登录人的负责人、部门或国家范围。
+- 公司经营驾驶舱 `/analytics` 是全员可见的公司级页面，后端 `/kanban/analytics/overview` 不做模块权限校验，也不按登录人的负责人范围裁剪；页面上的负责人和运营组筛选代表用户主动选择的筛选条件。但 `operator/leader` 仍可能受后端 `department` 和 `countryScope` 裁剪，前端必须以后端返回的 `filters/query` 为准。
 
 ## 4.4 公司经营驾驶舱交互口径
 
-分析页主筛选的负责人选项来自后端 `product_life.运营负责人`，不再依赖利润表或目标表。公司经营驾驶舱仍全员可见、全量数据口径；负责人、部门、运营组只是用户主动筛选条件。
+分析页主筛选的负责人选项来自后端 `product_life.运营负责人`，不再依赖利润表或目标表。公司经营驾驶舱仍是公司级视角；负责人、部门、运营组和项目标签是用户主动筛选条件。若登录用户配置了国家范围或部门范围，后端会裁剪对应候选和查询参数，前端不要用本地选项绕过接口回显。
 
-商品维度明细报表维护自己的分页、列配置、SPU、新品/老品等查询状态，但顶部时间、国家、部门、运营组和负责人是它的全局范围，会跟随顶部筛选自动刷新。明细报表支持国家、新品/老品、运营组、SPU、负责人、展示列、固定列和分页/排序筛选；SPU 选项来自后端 `filters.spus`，请求参数为 `spus[]`。运营组使用总览接口返回的 `filters.operationGroups`。国家、新品/老品、运营组、SPU、负责人使用 Dropdown + Checkbox 的确认式筛选，不直接用普通多选 Select，避免大选项列表频繁触发表格请求。筛选浮层必须使用实体背景和足够层级，避免透明叠字。
+商品维度明细报表维护自己的分页、列配置、SPU、新品/老品等查询状态，但顶部时间、国家、部门、运营组和负责人是它的全局范围，会跟随顶部筛选自动刷新。明细报表支持国家、新品/老品、运营组、SPU、负责人、展示列、固定列和分页/排序筛选；SPU 选项来自后端 `filters.spus`，请求参数为 `spus[]`。运营组使用总览接口返回的 `filters.operationGroups`。国家、新品/老品、运营组、SPU、负责人使用 Dropdown + Checkbox 的确认式筛选，不直接用普通多选 Select，避免大选项列表频繁触发表格请求。筛选浮层必须使用实体背景和足够层级，避免透明叠字。注意：当前后端 `/kanban/analytics/report` 还没有接入 `projectTags` 参数，顶部项目标签只确定性作用于总览和内嵌新品详情表；若要让商品明细也按项目标签过滤，需要先补后端。
 
 顶部部门筛选不会在商品维度明细报表和新品详情表里单独展示，但必须通过负责人范围生效。实现口径是：父页面先请求 `/kanban/analytics/overview`，使用响应里的 `query.responsibles` 作为部门、运营组、负责人取交集后的最终负责人名单，再把这个名单传给 `/kanban/analytics/report` 和 `ProductDetailTable.baseParams.responsibles`。如果顶部筛选后没有负责人，子表请求传内部空集哨兵 `__NO_ACCESS__`，避免误查成全部负责人。子表自己的负责人筛选只能在这个父级名单内继续缩小；父级名单变化时，需要清掉不再允许的本地负责人选择。
 
@@ -254,10 +254,13 @@ apps\web-antd\src\api\kanban\types.ts
 
 | 前端函数 | 后端路由 |
 | --- | --- | --- |
-| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存；分析页不再展示或发送交易状态筛选 |
-| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据 |
+| `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`projectTags` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存；分析页不再展示或发送交易状态筛选 |
+| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据；当前后端尚未接入 `projectTags` |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail`，支持新品详情表 `dateRangeType/startDate/endDate`、国家、负责人、类目、状态、预警和站点筛选；响应包含 `query` 回显 |
+| `fetchKanbanProductDetailMeta` | `GET /kanban/monitor/product-detail/meta`，轻量返回列配置、国家候选和查询回显 |
+| `fetchKanbanProductDetailRows` | `GET /kanban/monitor/product-detail/rows`，分页返回当前页宽表、全量汇总、排序结果和精确总数 |
+| `fetchKanbanProductDetailFbaInventory` | `GET /kanban/monitor/product-detail/fba-inventory`，按 `spu + site` 返回当前 FBA SKU 库存弹窗数据 |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
 | `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
 | `fetchTargetTrackerOverview` | `GET /kanban/targets/overview` |
@@ -294,21 +297,21 @@ src\views\dashboard\analytics\components\ProductDetailTable.vue
 
 当前口径：
 
-- 纯历史日期的销量、库存、周转等运营指标来自数据库 `productexpressionnew`；包含今天或昨天的日维度区间会混合 `productexpressionnew_live_cache` 和 `productexpressionnew`。但销售额完成率的实际销售额仍由后端用利润表“已发放”销售额覆盖，利润表 CNY 会先除以 `ANALYTICS_USD_TO_CNY_RATE` 转成 USD；没有利润表匹配行时显示 0，不回退产品表现销售额。
+- 纯历史日期的销量、销售额、库存、周转等运营指标来自数据库 `productexpressionnew` 或产品表现日/月快照；包含今天或昨天的日维度区间会混合 `productexpressionnew_live_cache` 和历史产品表现数据。销售额完成率的实际销售额使用产品表现销售额，不再被利润表销售额覆盖。
 - 页面首次进入和重置时，日维度默认选择北京时间当前日期减 1 到当前日期减 1 的单日范围。
 - 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
-- 顶部主筛选的时间、站点、部门、运营组、负责人会作为底部商品维度明细报表和内嵌新品详情表的全局范围；报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。部门没有子表 UI，但会通过 `overview.query.responsibles` 传递到子表请求。
+- 顶部主筛选的时间、站点、部门、运营组、负责人会作为底部商品维度明细报表和内嵌新品详情表的全局范围；项目标签当前作用于总览和内嵌新品详情表，商品维度明细报表后端尚未接入。报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。部门没有子表 UI，但会通过 `overview.query.responsibles` 传递到子表请求。
 - 底部报表快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，当前包含“泛欧”和非泛欧业务国家；欧洲国家在后端归并到“泛欧”。顶部国家筛选会映射为后端报表使用的中文国家标签，例如 `US -> 美国`、`PAN_EU -> 泛欧`。
 - 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。商品维度明细报表的“店铺”是后端聚合维度之一，导出后按店铺二次汇总应与同日期同店铺的原始产品表现销量对齐。
 - 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
-- 顶部不再展示“交易状态”筛选；分析页运营指标主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端默认使用利润表“已发放”口径计算销售额实际值、毛利润和推广费用，其中销售额、广告费、广告销售额和推广费用会从 CNY 转 USD，毛利润保持 CNY。
+- 顶部不再展示“交易状态”筛选；分析页运营指标主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端默认仅把利润表“已发放”口径用于毛利润、广告费、广告销售额和推广费用等财务项，其中广告费、广告销售额和推广费用会从 CNY 转 USD，毛利润保持 CNY；销售额实际值保留产品表现口径。
 - 日维度日期范围如果包含今天或昨天，后端会优先用 `productexpressionnew_live_cache` 覆盖这些近实时日期，再与其余历史日期的 `productexpressionnew` 数据合并；只有纯历史日期才完全读取 `productexpressionnew`。
 - 月维度固定使用 `productexpressionnew` 聚合，不触发实时产品表现缓存；当前月默认截止北京时间当前日期减 1。
 - 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
-- 产品表现实时缓存由后端定时任务每 5 分钟刷新今天和昨天两天，按 USD 拉取；前端不直接触发领星全量 API。接口 `source.message` 会显示缓存大约多久前刷新。分析页上半部分销售额展示美元，毛利润展示人民币；毛利润实际值由后端按 CNY 口径返回，用来匹配 `dailyTargetProfit`。底部商品维度明细报表和新品详情表是例外，金额字段展示后端行级 `currencySymbol` 对应的原币种。
-- 第二个仪表盘是销售额完成率，实际销售额来自利润表“已发放”销售额，后端会从 CNY 转 USD；目标值来自后端按 `operator_targets.target_sales_original_currency` 的 USD 目标折算出的 `dailyTargetSales`，旧行缺失 USD 字段时后端才使用 CNY 目标兜底换算。
+- 产品表现实时缓存由后端计划任务刷新今天和昨天两天，按 USD 拉取；前端不直接触发领星全量 API。接口 `source.message` 会显示缓存大约多久前刷新。分析页上半部分销售额展示美元，毛利润展示人民币；毛利润实际值由后端按 CNY 口径返回，用来匹配 `dailyTargetProfit`。底部商品维度明细报表和新品详情表是例外，金额字段展示后端行级 `currencySymbol` 对应的原币种。
+- 第二个仪表盘是销售额完成率，实际销售额来自产品表现历史表/快照或今天、昨天实时缓存；目标值来自后端优先按 `operator_target_summary` 汇总出的 USD 目标折算，缺失组合再由旧 `operator_targets.target_sales_original_currency` 或 CNY 目标兜底。
 - 日维度目标为所选日期范围内逐日目标累加后的区间目标；月维度目标为当月目标总额。由于接口兼容原因，仍读取 `dailyTargetUnits/dailyTargetSales/dailyTargetProfit` 字段，但页面文案按维度显示为“区间目标”或“月目标”。`dailyTargetSales` 是 USD，`dailyTargetProfit` 是 CNY。
-- 销售额、销售额目标、销售额差值和推广占比中的总销售额展示美元金额；毛利润、目标毛利、毛利差值展示人民币金额。分析页总览的销售额实际值按利润表“已发放”口径返回，且后端已从 CNY 转 USD；历史 `productexpressionnew` 的原币种金额只用于销量、库存、周转以及必要的兜底计算。总览毛利润如果缺少利润表 CNY 记录，后端会用 USD 毛利乘 `ANALYTICS_USD_TO_CNY_RATE` 兜底。毛利润目标和目标毛利率优先来自后端 `operator_target_summary`，缺少 UK/泛欧时由旧 `operator_targets` 兜底；前端只展示后端返回的 `dailyTargetProfit`、`targetGrossMarginRate` 和 `grossMarginCompletionRate`，不要自行按行重算。商品维度明细报表和新品详情表不要套用这里的 USD 规则，它们保留原币种。月维度展示 2 位小数，日维度保留紧凑金额展示。
+- 销售额、销售额目标、销售额差值和推广占比中的总销售额展示美元金额；毛利润、目标毛利、毛利差值展示人民币金额。分析页总览的销售额实际值来自产品表现，历史 `productexpressionnew` 原币种金额会由后端按站点汇率换算到 USD，今天/昨天实时缓存本身按 USD 拉取。总览毛利润优先取利润表 CNY 记录，缺失时后端会用产品表现/实时缓存毛利乘 `ANALYTICS_USD_TO_CNY_RATE` 兜底。毛利润目标和目标毛利率优先来自后端 `operator_target_summary`，缺少 UK/泛欧时由旧 `operator_targets` 兜底；前端只展示后端返回的 `dailyTargetProfit`、`targetGrossMarginRate` 和 `grossMarginCompletionRate`，不要自行按行重算。商品维度明细报表和新品详情表不要套用这里的 USD 规则，它们保留原币种。月维度展示 2 位小数，日维度保留紧凑金额展示。
 - 周转周期(月)展示后端返回的 `turnoverMonths`，口径为 `(FBA库存 + FBA在途 + FBA调仓中) / 当天销量 / 30`；前端不再用其它库存字段补算。右侧周转卡片经过压缩布局，主值、前一周期和上周同期需要保持上下对齐。
 - 三个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示 USD 实际销售额，毛利润图展示 CNY 实际毛利润；下方继续展示实际值和目标值。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片按维度切换文案：日维度为前一周期/上周同期，月维度为上月/去年同期，并展示绝对差值和百分比差异。
@@ -366,6 +369,7 @@ src\views\kanban\monitor\components\
 - 顶部主筛选同时刷新概览和商品明细；商品明细页签内的国家筛选只刷新 `GET /kanban/monitor/product-detail`，避免重复请求概览接口。国家下拉候选项必须使用后端返回的 `countries`，不要从当前表格 rows 本地反推；后端保证该候选项不受当前国家筛选影响。
 - 新品详情表已经增加与商品维度明细报表相同语义的时间范围和负责人筛选。分析页内嵌场景中，它的时间范围默认继承顶部时间，负责人为空时继承顶部筛选后的最终负责人作用域；如果用户在新品详情表内选择负责人，只能在父级作用域内继续缩小，不能绕过顶部部门筛选。
 - 新品详情表的金额、毛利、利润、花费、退款、运费、销售额、净销售额等金额类字段展示两位小数；后端保留原币种并返回 `currencyCode/currencySymbol`，前端使用行级币种符号展示，不要统一加 `$`，也不要按站点二次换算。
+- 新品详情表库存相关单元格可通过 `fetchKanbanProductDetailFbaInventory` 读取 `GET /kanban/monitor/product-detail/fba-inventory`，按当前行 `spu + site` 展示 SKU 维度库存弹窗。该接口读取当前 `fba_inventory_snapshot`，不按详情表日期回溯；登录人的国家/负责人范围仍由后端校验。
 - 指标填色只用于有明确进度或占比含义的字段。`目标销量`、`销量完成率` 使用完成率口径；广告订单、自然订单、退款量等字段如果展示进度，应与同 SPU 当前时间维度下的总订单、总销量或销售额相比，不能简单按自身数值填满。
 - 父 ASIN 在新品详情表中应渲染为 Amazon 链接，点击新窗口打开对应站点商品页。
 - `上线天数`、`销量`、`目标销量`、`销量完成率`、`销售额` 这几列支持点击排序；排序使用后端返回指标对象中的原始数值。
@@ -454,6 +458,7 @@ src\views\kanban\spus\index.vue
 
 ```text
 src\views\kanban\tools\upload\index.vue
+src\views\kanban\tools\keyword-reverse\index.vue
 public\tools\upload-tool.html
 ```
 
@@ -461,6 +466,10 @@ public\tools\upload-tool.html
 
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
+- `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
+- 关键词反查页输入 ASIN、市场 ID、时间范围、排序字段和排序方向。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
+- 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`trafficRatio/searchVolume/organicRank/sponsoredRank/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
+- 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
@@ -509,6 +518,7 @@ src\views\kanban\config\index.vue
 - 顶部为类目数、上新计划、成品率目标和运营人员汇总。
 - `admin/super` 可看到新增类目、新增运营人员、类目阈值和运营组组织架构。
 - 飞书用户权限卡片拆成“成员范围维护”和“管理员权限维护”两个页签；管理员权限维护页可编辑用户部门，用于分析页部门筛选兜底。保存用户权限时必须把 `department` 放入 `updateConfigUserAuth` payload，且仅 `admin/super` 可传该字段。
+- 管理员权限维护页还可编辑“国家范围” `countryScope`。不选表示不限制国家；选择后后端会在 `main.py` 中把中文国家映射到站点或国家候选，并裁剪分析页、商品明细、新品详情和 FBA SKU 库存弹窗等接口的查询范围。
 - 成员范围维护支持姓名、邮箱、部门、飞书 ID 搜索，并支持按角色、状态和登录方式过滤。
 - `leader` 在成员范围维护页签只看到并保存自己的组员范围；`manager` 可以维护成员范围；`admin/super` 还能进入管理员权限维护页签修改角色、状态和可访问模块。
 

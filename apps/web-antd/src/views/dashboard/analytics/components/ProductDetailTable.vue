@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { Spin ,TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
+import type {
+  Spin,
+  TableColumnsType,
+  TablePaginationConfig,
+} from 'ant-design-vue';
 
 import type {
   AlertLevel,

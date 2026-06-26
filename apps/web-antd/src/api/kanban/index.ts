@@ -16,6 +16,8 @@ import type {
   KanbanProductDetailMeta,
   KanbanProductDetailOverview,
   KanbanProductDetailRows,
+  KeywordReversePayload,
+  KeywordReverseResult,
   LoginLogRow,
   OperationGroupPayload,
   OperationGroupRow,
@@ -42,6 +44,9 @@ export type {
   KanbanProductDetailRow,
   KanbanProductDetailRows,
   KanbanSpuRow,
+  KeywordReverseColumn,
+  KeywordReversePayload,
+  KeywordReverseResult,
   SpuManagerRow,
 } from './types';
 
@@ -139,6 +144,12 @@ export interface CreateConfigUserPayload {
   email: string;
   role: string;
   username: string;
+}
+
+export async function fetchKeywordReverse(
+  data: KeywordReversePayload,
+): Promise<KeywordReverseResult> {
+  return requestClient.post('/kanban/tools/keyword-reverse', data);
 }
 
 export async function fetchKanbanOverview(

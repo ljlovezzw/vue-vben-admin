@@ -224,6 +224,39 @@ export interface KanbanFbaInventorySkuBreakdown {
   summary: KanbanFbaInventorySkuRow;
 }
 
+export interface KeywordReversePayload {
+  asins: string[];
+  expendMethod?: string;
+  marketPlaceId?: number;
+  monthStr?: string;
+  pageNo?: number;
+  pageSize?: number;
+  searchType?: string;
+  sortDirection?: 'ASC' | 'DESC';
+  sortField?: string;
+}
+
+export interface KeywordReverseColumn {
+  fixed?: string;
+  key: string;
+  kind: 'number' | 'percent' | 'rank' | 'text';
+  label: string;
+}
+
+export interface KeywordReverseResult {
+  columns: KeywordReverseColumn[];
+  highFrequencyWords: Array<Record<string, any> & { text: string }>;
+  page: {
+    pageNo: number;
+    pages: number;
+    pageSize: number;
+    total: number;
+  };
+  query: Required<KeywordReversePayload>;
+  rawSummary: Record<string, any>;
+  rows: Record<string, any>[];
+}
+
 export interface SpuManagerFilters {
   categories: string[];
   responsibles: string[];

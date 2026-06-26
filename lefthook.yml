@@ -42,7 +42,7 @@
 #       runner: go run
 
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     code-workspace:
       run: pnpm vsh code-workspace --auto-commit

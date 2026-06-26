@@ -31,6 +31,17 @@ const routes: RouteRecordRaw[] = [
           title: '图片打包工具',
         },
       },
+      {
+        name: 'KeywordReverseTool',
+        path: 'keyword-reverse',
+        component: () =>
+          import('#/views/kanban/tools/keyword-reverse/index.vue'),
+        meta: {
+          authority: toolAuthorities,
+          icon: 'lucide:search',
+          title: '关键词反查',
+        },
+      },
     ],
   },
 ];
