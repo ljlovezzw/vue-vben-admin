@@ -945,6 +945,18 @@ export interface LoginLogRow {
   username: string;
 }
 
+export interface InAppCardNotification {
+  card: Record<string, any>;
+  detectedAt: string;
+  event: Record<string, any>;
+  eventKey: string;
+  id: number;
+  preview: boolean;
+  scene: string;
+  sentAt: string;
+  title: string;
+}
+
 export interface ConfigRuleGroup {
   level: string;
   rules: string[];

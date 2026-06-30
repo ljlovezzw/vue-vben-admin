@@ -164,6 +164,7 @@ apps/web-antd/src/
 - `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额/毛利润卡片、推广与周转卡片、部门销量完成率、负责人完成率、商品维度明细报表和内嵌新品详情表。底部两个表格的负责人范围必须从顶部筛选后的最终负责人作用域继承；部门筛选本身不出现在子表 UI 中。
 - `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，继承顶部时间、站点、国家、项目标签和负责人作用域，同时拥有自己的国家、负责人、列配置、固定列、分页、汇总行、FBA SKU 库存弹窗和点击排序；本地负责人筛选只能在父级作用域内继续缩小。
 - `src\views\kanban\monitor\index.vue`：新品监控主页面，新品详情表已改成类似商品维度明细报表的确认式筛选和列配置，并增加时间范围、负责人筛选。
+- `src\layouts\basic.vue`：系统全局布局，包含用户菜单、水印、右上角通知入口，以及飞书卡片通知同步到前端后的站内弹窗确认。
 - `public\tools\upload-tool.html`：图片标准命名打包工具，负责本地预览、AI 标记、ZIP 生成、JSON 元数据打包和飞书任务上传。
 - `src\api\kanban\index.ts` 与 `src\api\kanban\types.ts`：补齐 `fetchKanbanProductDetail` 的时间范围参数和 `KanbanProductDetailOverview.query` 类型。
 
@@ -202,6 +203,8 @@ Authorization: Bearer <accessToken>
 
 个人中心 `/profile` 只保留“基本设置”。页面展示 `/user/info` 返回的姓名、账号、邮箱、角色、部门、直属上级和登录方式，所有字段只读，不提供密码、安全设置或通知设置入口。直属上级来自后端登录时同步的飞书通讯录字段 `directLeaderName`；如果飞书开放平台未开通组织架构权限，则显示为空。
 
+全局站内卡片通知由 `src\layouts\basic.vue` 负责：登录后立即请求 `/kanban/card-notifications/in-app`，之后每 30 秒轮询一次。后端返回的是飞书卡片事件中的 `card` JSON，前端提取 header 标题、markdown 正文和 note 内容渲染 Modal，同时同步到右上角通知列表。用户必须点击“已收到”，前端调用 `/kanban/card-notifications/in-app/{event_id}/ack` 后才会关闭弹窗并从通知列表移除；刷新页面后未确认通知仍会继续弹出。冷启动 FBA 到货测试阶段默认发给费李君，只有对应飞书账号登录前端时能看到同内容站内弹窗。
+
 ### 4.2 页面权限
 
 | 页面 | 路由 | 权限码 |
@@ -212,7 +215,7 @@ Authorization: Bearer <accessToken>
 | 目标跟踪 | `/kanban/targets` | `kanban:targets` |
 | ASIN360 | `/kanban/asin360` | `kanban:asin360` |
 | SPU 管理 | `/kanban/spus` | `kanban:spus` |
-| 工具 | `/tools/upload`、`/tools/keyword-reverse`、`/tools/search-term-report` | 复用看板权限 |
+| 工具 | `/tools/upload`、`/tools/keyword-reverse`、`/tools/search-term-report` | 登录用户可见，不要求模块权限码 |
 | 配置中心 | `/kanban/config` | `kanban:config` |
 
 页面路由的 `meta.authority` 负责菜单和页面可见性；后端仍会再次校验权限，不能只依赖前端。
@@ -222,6 +225,7 @@ Authorization: Bearer <accessToken>
 - 所有角色默认拥有 `kanban:analytics`、`kanban:monitor`、`kanban:ads`、`kanban:targets`、`kanban:asin360`，因此默认可见公司经营驾驶舱、新品监控、广告监控、目标跟踪和 ASIN360。
 - `operator`、`leader` 的 `permissions_json` 只用于追加默认模块之外的权限，例如 SPU 管理和配置中心。
 - `manager`、`admin`、`super` 默认拥有全部模块权限。
+- 工具菜单属于最低权限入口，只要求用户已登录；`operator`、`leader`、`manager`、`admin`、`super` 都可见可用，不跟随 `kanban:*` 模块权限。
 - 模块可见性不代表数据全量可见；后端会按接口场景应用登录人的负责人、部门或国家范围。
 - 公司经营驾驶舱 `/analytics` 是全员可见的公司级页面，后端 `/kanban/analytics/overview` 不做模块权限校验，也不按登录人的负责人范围裁剪；页面上的负责人和运营组筛选代表用户主动选择的筛选条件。但 `operator/leader` 仍可能受后端 `department` 和 `countryScope` 裁剪，前端必须以后端返回的 `filters/query` 为准。
 
@@ -473,7 +477,8 @@ public\tools\upload-tool.html
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
 - `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
 - 关键词反查页输入 ASIN、市场、时间范围、排序字段和排序方向。`marketPlaceId` 当前已知映射不完整，只确认 `美国=1、英国=5、德国=6、法国=7、意大利=8、西班牙=9`，页面用下拉选择这 6 个市场，不再让用户手输 ID。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
-- 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`trafficRatio/searchVolume/organicRank/sponsoredRank/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
+- 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`rankTrends/searchTrends/trends` 合并为“趋势”小折线图，`naRank/adRank` 展示最新排名、页码位置和采集日期，`naTrafficRatio/adTrafficRatio` 合并为“流量分布”，`ppcBid/ppcBidMin/ppcBidMax` 合并为建议竞价，`trafficRatio/searchVolume/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
+- `abaWeek` 前端显示为 `2026第25周` 这类短格式；`abaStartTime/abaEndTime` 不单独占表格列，只在鼠标 hover `ABA周` 单元格时展示详细周期。`searchUrl` 只展示“打开搜索页”入口，列宽保持紧凑，避免亚马逊搜索链接拉宽表格。
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 按店铺 + SPU 查询父 ASIN 候选，调用 `createSearchTermReportTask()` 提交后端生成任务，再用 `fetchSearchTermReportTask()` 每 30 秒轮询任务状态；任务成功后用 `downloadSearchTermReport()` 按 blob 下载文件，避免裸链接下载丢失登录态。
 - 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期、一级分类、二级分类和匹配行数。候选表的店铺列以后端返回为准，当前后端按 `店铺 -> 品牌+站点 -> 全店铺` 真实匹配到父 ASIN 后才把筛选店铺作为展示店铺返回。父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。页面用 localStorage 缓存店铺、SPU、日期范围、候选行、已选父 ASIN 和当前 `taskId`，刷新后恢复并继续查询任务状态。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。
@@ -487,7 +492,7 @@ public\tools\upload-tool.html
 
 权限：
 
-- 工具菜单暂不新增后端权限码，前端路由复用现有看板模块权限，避免未配置 `kanban:tools` 时菜单不可见。
+- 工具菜单暂不新增后端权限码，前端路由不配置 `meta.authority`，只要求登录后进入系统即可显示。工具接口在后端做 Bearer Token 登录校验，但不挂 `kanban:*` 模块权限；运营账号即使没有额外权限，也可以使用工具分组下的所有工具。
 
 ### 6.8 配置中心 `/kanban/config`
 

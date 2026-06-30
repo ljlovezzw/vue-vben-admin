@@ -18,7 +18,14 @@ interface WebAntdPreferencesExtension {
 export const overridesPreferences = defineOverridesPreferences({
   // overrides
   app: {
+    enableCheckUpdates: false,
     name: import.meta.env.VITE_APP_TITLE,
+  },
+  theme: {
+    mode: 'light',
+    semiDarkHeader: false,
+    semiDarkSidebar: false,
+    semiDarkSidebarSub: false,
   },
 });
 

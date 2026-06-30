@@ -1,4 +1,4 @@
-import { initPreferences } from '@vben/preferences';
+import { initPreferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
 import { overridesPreferences, preferencesExtension } from './preferences';
@@ -18,6 +18,15 @@ async function initApplication() {
     extension: preferencesExtension,
     namespace,
     overrides: overridesPreferences,
+  });
+  updatePreferences({
+    app: { name: import.meta.env.VITE_APP_TITLE },
+    theme: {
+      mode: 'light',
+      semiDarkHeader: false,
+      semiDarkSidebar: false,
+      semiDarkSidebarSub: false,
+    },
   });
 
   // 启动应用并挂载

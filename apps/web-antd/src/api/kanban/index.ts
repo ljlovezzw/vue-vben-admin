@@ -9,6 +9,7 @@ import type {
   ConfigOverview,
   ConfigUserAuthPayload,
   ConfigUserRow,
+  InAppCardNotification,
   KanbanDailyMetric,
   KanbanFbaInventorySkuBreakdown,
   KanbanFilters,
@@ -41,6 +42,7 @@ export type {
   KanbanDailyMetric,
   KanbanFbaInventorySkuBreakdown,
   KanbanFbaInventorySkuRow,
+  InAppCardNotification,
   KanbanOverview,
   KanbanProductDetailColumn,
   KanbanProductDetailMeta,
@@ -197,6 +199,20 @@ export async function downloadSearchTermReport(
 ): Promise<Blob> {
   return requestClient.download(
     `/kanban/tools/search-term-report/download/${encodeURIComponent(fileName)}`,
+  );
+}
+
+export async function fetchInAppCardNotifications(params: {
+  limit?: number;
+} = {}): Promise<InAppCardNotification[]> {
+  return requestClient.get('/kanban/card-notifications/in-app', { params });
+}
+
+export async function acknowledgeInAppCardNotification(
+  eventId: number,
+): Promise<{ id: number; status: string }> {
+  return requestClient.post(
+    `/kanban/card-notifications/in-app/${eventId}/ack`,
   );
 }
 

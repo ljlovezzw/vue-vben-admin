@@ -24,6 +24,7 @@ import {
   Space,
   Spin,
   Table,
+  Tooltip,
 } from 'ant-design-vue';
 import { LineChart } from 'echarts/charts';
 import {
@@ -58,8 +59,27 @@ use([
 ]);
 
 const TREND_COLUMN_KEY = '__keywordTrend';
+const TRAFFIC_DISTRIBUTION_COLUMN_KEY = '__trafficDistribution';
 const TREND_FIELD_KEYS = new Set(['rankTrends', 'searchTrends', 'trends']);
-const HIDDEN_TABLE_FIELD_KEYS = new Set(['keywordZh', 'marketPlaceId']);
+const HIDDEN_TABLE_FIELD_KEYS = new Set([
+  'abaEndTime',
+  'abaStartTime',
+  'adPageNum',
+  'adPageSize',
+  'adPosition',
+  'adTrafficRatio',
+  'adUpdateTime',
+  'keywordZh',
+  'marketPlaceId',
+  'naPageNum',
+  'naPageSize',
+  'naPosition',
+  'naTrafficRatio',
+  'naUpdateTime',
+  'ppcBidMax',
+  'ppcBidMin',
+  'ppcCurrencySymbol',
+]);
 const MARKETPLACE_OPTIONS = [
   { label: '美国', value: 1 },
   { label: '英国', value: 5 },
@@ -245,6 +265,35 @@ const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
       width: 300,
     });
   }
+  const hasTrafficDistribution = rows.value.some(
+    (row) =>
+      readNullableNumber(row.naTrafficRatio) !== null ||
+      readNullableNumber(row.adTrafficRatio) !== null,
+  );
+  if (
+    hasTrafficDistribution &&
+    !columns.some((column) => column.key === TRAFFIC_DISTRIBUTION_COLUMN_KEY)
+  ) {
+    const insertAt = Math.min(
+      Math.max(
+        columns.findIndex((column) => column.key === 'parentTrafficRatio') + 1,
+        columns.findIndex((column) => column.key === 'trafficRatio') + 1,
+        1,
+      ),
+      columns.length,
+    );
+    columns.splice(insertAt, 0, {
+      customHeaderCell: () => ({
+        title: '自然流量占比与广告流量占比分布',
+      }),
+      dataIndex: TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+      ellipsis: false,
+      fixed: undefined,
+      key: TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+      title: '流量分布',
+      width: 118,
+    });
+  }
 
   return [
     {
@@ -321,7 +370,10 @@ function resolveHighFrequencyWords(value: unknown): unknown {
 function columnWidth(column: KeywordReverseColumn) {
   if (isProductColumn(column.key)) return 260;
   if (isTrendColumn(column.key)) return 300;
-  if (column.key === 'searchUrl') return 220;
+  if (isLatestRankColumn(column.key)) return 126;
+  if (isBidColumn(column.key)) return 112;
+  if (isAbaWeekColumn(column.key)) return 112;
+  if (column.key === 'searchUrl') return 104;
   if (column.fixed === 'left') return 220;
   if (column.kind === 'percent') return 118;
   if (column.kind === 'rank') return 104;
@@ -355,6 +407,22 @@ function isProductColumn(key: unknown) {
     'top10Products',
     'topProducts',
   ].includes(String(key || ''));
+}
+
+function isLatestRankColumn(key: unknown) {
+  return ['adRank', 'naRank'].includes(String(key || ''));
+}
+
+function isBidColumn(key: unknown) {
+  return String(key || '') === 'ppcBid';
+}
+
+function isTrafficDistributionColumn(key: unknown) {
+  return String(key || '') === TRAFFIC_DISTRIBUTION_COLUMN_KEY;
+}
+
+function isAbaWeekColumn(key: unknown) {
+  return String(key || '') === 'abaWeek';
 }
 
 function keywordText(row: Record<string, any>) {
@@ -413,10 +481,119 @@ function formatMonthCode(value: unknown) {
 function formatDateTime(value: unknown) {
   const numeric = numberValue(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return String(value);
-  const date = new Date(numeric);
+  const timestamp = numeric < 1_000_000_000_000 ? numeric * 1000 : numeric;
+  const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return String(value);
   const pad = (item: number) => String(item).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatAbaWeek(value: unknown) {
+  const text = String(value ?? '').trim();
+  if (!text) return '-';
+  const existing = text.match(/^(\d{4})\s*第\s*(\d{1,2})\s*周$/);
+  if (existing) return `${existing[1]}第${Number(existing[2])}周`;
+  if (/^\d{6}$/.test(text)) {
+    return `${text.slice(0, 4)}第${Number(text.slice(4))}周`;
+  }
+  if (/^\d{4}$/.test(text)) {
+    return `20${text.slice(0, 2)}第${Number(text.slice(2))}周`;
+  }
+  const matched = text.match(/(\d{4}).*?(\d{1,2})(?:\s*周|w|week)?/i);
+  if (matched) return `${matched[1]}第${Number(matched[2])}周`;
+  return text;
+}
+
+function formatTooltipDateTime(value: unknown) {
+  if (value === null || value === undefined || value === '') return '';
+  return formatDateTime(value);
+}
+
+function abaWeekTooltip(row: Record<string, any>) {
+  const start = formatTooltipDateTime(row.abaStartTime);
+  const end = formatTooltipDateTime(row.abaEndTime);
+  if (start && end) return `ABA周期：${start} ~ ${end}`;
+  if (start) return `ABA周期开始：${start}`;
+  if (end) return `ABA周期结束：${end}`;
+  return '';
+}
+
+function marketplaceShortName() {
+  const labels: Record<number, string> = {
+    1: '美',
+    5: '英',
+    6: '德',
+    7: '法',
+    8: '意',
+    9: '西',
+  };
+  return labels[query.marketPlaceId] || '站';
+}
+
+function formatShortRankDate(value: unknown) {
+  if (value === null || value === undefined || value === '') return '';
+  const formatted = formatDateTime(value);
+  const matched = formatted.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return matched ? `${matched[2]}-${matched[3]}` : String(value).slice(0, 5);
+}
+
+function rankDisplayInfo(row: Record<string, any>, type: 'ad' | 'na') {
+  const prefix = type === 'na' ? 'na' : 'ad';
+  const rank = readNullableNumber(row[`${prefix}Rank`]);
+  const page = readNullableNumber(row[`${prefix}PageNum`]);
+  const position = readNullableNumber(row[`${prefix}Position`]);
+  const pageSize = readNullableNumber(row[`${prefix}PageSize`]);
+  const dateText = formatShortRankDate(row[`${prefix}UpdateTime`]);
+  const detailParts = [];
+  if (page !== null) detailParts.push(`第${formatNumber(page, 0)}页`);
+  if (position !== null || pageSize !== null) {
+    detailParts.push(
+      `${position === null ? '-' : formatNumber(position, 0)}/${
+        pageSize === null ? '-' : formatNumber(pageSize, 0)
+      }`,
+    );
+  }
+  return {
+    dateText,
+    detailText: detailParts.join(','),
+    empty: rank === null,
+    rankText: rank === null ? '-' : formatNumber(rank, 0),
+    siteText: marketplaceShortName(),
+    type,
+  };
+}
+
+function percentNumber(value: unknown) {
+  const numeric = readNullableNumber(value);
+  if (numeric === null) return null;
+  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+}
+
+function trafficDistributionInfo(row: Record<string, any>) {
+  const natural = percentNumber(row.naTrafficRatio);
+  const ad = percentNumber(row.adTrafficRatio);
+  const naturalValue = natural ?? 0;
+  const adValue = ad ?? 0;
+  const total = naturalValue + adValue;
+  return {
+    adText: ad === null ? '-' : `${formatNumber(ad, 0)}%`,
+    adWidth: total > 0 ? (adValue / total) * 100 : 0,
+    naturalText: natural === null ? '-' : `${formatNumber(natural, 0)}%`,
+    naturalWidth: total > 0 ? (naturalValue / total) * 100 : 0,
+  };
+}
+
+function bidDisplayInfo(row: Record<string, any>) {
+  const currency = String(row.ppcCurrencySymbol || '$').trim() || '$';
+  const formatBid = (value: unknown) => {
+    const numeric = readNullableNumber(value);
+    return numeric === null ? '-' : `${currency}${numeric.toFixed(2)}`;
+  };
+  return {
+    max: formatBid(row.ppcBidMax),
+    min: formatBid(row.ppcBidMin),
+    value: formatBid(row.ppcBid),
+  };
 }
 
 function isTimeColumn(key: unknown) {
@@ -642,20 +819,10 @@ function trendChartOption(row: Record<string, any>) {
     animation: false,
     color: ['#2563eb', '#ea580c'],
     grid: {
-      bottom: 18,
+      bottom: 14,
       left: 8,
       right: 8,
-      top: 18,
-    },
-    legend: {
-      bottom: 0,
-      data: [
-        ...(hasSearches ? ['搜索量'] : []),
-        ...(hasRank ? ['ABA排名'] : []),
-      ],
-      itemHeight: 6,
-      itemWidth: 10,
-      textStyle: { color: '#64748b', fontSize: 10 },
+      top: 10,
     },
     series: [
       ...(hasSearches
@@ -847,7 +1014,7 @@ function exportCsv() {
     <section class="page-head">
       <div>
         <h1>亚马逊关键词反查</h1>
-        <p>输入竞品 ASIN，按流量占比、搜索量和排名维度反查关键词。</p>
+        <p>输入ASIN，按流量占比、搜索量和排名维度反查关键词。</p>
       </div>
       <Space>
         <Button @click="resetQuery">重置</Button>
@@ -1039,6 +1206,51 @@ function exportCsv() {
           sticky
           @change="handleTableChange"
         >
+          <template #headerCell="{ column }">
+            <template v-if="column.dataIndex === TREND_COLUMN_KEY">
+              <div class="trend-header">
+                <span class="trend-header-title">趋势</span>
+                <span class="trend-header-legend">
+                  <span class="trend-legend-item">
+                    <span
+                      class="trend-legend-dot trend-legend-dot-search"
+                    ></span>
+                    <span>搜索量</span>
+                  </span>
+                  <span class="trend-legend-item">
+                    <span class="trend-legend-dot trend-legend-dot-rank"></span>
+                    <span>ABA排名</span>
+                  </span>
+                </span>
+              </div>
+            </template>
+            <template v-else-if="column.dataIndex === 'naRank'">
+              <div class="compact-header">
+                <span>最新</span>
+                <span>自然排名</span>
+              </div>
+            </template>
+            <template v-else-if="column.dataIndex === 'adRank'">
+              <div class="compact-header">
+                <span>最新</span>
+                <span>SP(常规)排名</span>
+              </div>
+            </template>
+            <template
+              v-else-if="column.dataIndex === TRAFFIC_DISTRIBUTION_COLUMN_KEY"
+            >
+              <div class="compact-header">
+                <span>流量分布</span>
+                <span class="header-select-chip">自然-广告</span>
+              </div>
+            </template>
+            <template v-else-if="column.dataIndex === 'ppcBid'">
+              <div class="compact-header">
+                <span>建议竞价</span>
+                <span class="header-select-chip">固定-精准</span>
+              </div>
+            </template>
+          </template>
           <template #bodyCell="{ column, index, record, text }">
             <template v-if="column.dataIndex === '__index'">
               {{ (query.pageNo - 1) * query.pageSize + index + 1 }}
@@ -1047,6 +1259,95 @@ function exportCsv() {
               <Button size="small" type="link" @click="openRaw(record)">
                 原始字段
               </Button>
+            </template>
+            <template v-else-if="isLatestRankColumn(column.dataIndex)">
+              <div
+                class="rank-card"
+                :class="[
+                  `rank-card-${column.dataIndex === 'naRank' ? 'na' : 'ad'}`,
+                  {
+                    'rank-card-empty': rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).empty,
+                  },
+                ]"
+              >
+                <div class="rank-main">
+                  {{
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).rankText
+                  }}
+                </div>
+                <div
+                  v-if="
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).detailText
+                  "
+                  class="rank-detail"
+                >
+                  {{
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).detailText
+                  }}
+                </div>
+                <div
+                  v-if="
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).dateText
+                  "
+                  class="rank-date"
+                >
+                  [{{
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).siteText
+                  }}]{{
+                    rankDisplayInfo(
+                      record,
+                      column.dataIndex === 'naRank' ? 'na' : 'ad',
+                    ).dateText
+                  }}排名
+                </div>
+              </div>
+            </template>
+            <template v-else-if="isTrafficDistributionColumn(column.dataIndex)">
+              <div class="traffic-distribution">
+                <div class="traffic-percent-row">
+                  <span>{{ trafficDistributionInfo(record).naturalText }}</span>
+                  <span>{{ trafficDistributionInfo(record).adText }}</span>
+                </div>
+                <div class="traffic-bar">
+                  <span
+                    class="traffic-bar-na"
+                    :style="{
+                      width: `${trafficDistributionInfo(record).naturalWidth}%`,
+                    }"
+                  ></span>
+                  <span
+                    class="traffic-bar-ad"
+                    :style="{
+                      width: `${trafficDistributionInfo(record).adWidth}%`,
+                    }"
+                  ></span>
+                </div>
+              </div>
+            </template>
+            <template v-else-if="isBidColumn(column.dataIndex)">
+              <div class="bid-cell">
+                <div class="bid-bound">{{ bidDisplayInfo(record).max }}</div>
+                <div class="bid-main">{{ bidDisplayInfo(record).value }}</div>
+                <div class="bid-bound">{{ bidDisplayInfo(record).min }}</div>
+              </div>
             </template>
             <template v-else-if="column.dataIndex === TREND_COLUMN_KEY">
               <div v-if="hasTrendData(record)" class="trend-cell">
@@ -1082,8 +1383,22 @@ function exportCsv() {
                 </div>
               </div>
             </template>
+            <template v-else-if="isAbaWeekColumn(column.dataIndex)">
+              <Tooltip
+                v-if="abaWeekTooltip(record)"
+                :title="abaWeekTooltip(record)"
+              >
+                <span class="aba-week-cell">{{ formatAbaWeek(text) }}</span>
+              </Tooltip>
+              <span v-else class="aba-week-cell">{{ formatAbaWeek(text) }}</span>
+            </template>
             <template v-else-if="column.dataIndex === 'searchUrl' && text">
-              <a :href="String(text)" rel="noreferrer" target="_blank">
+              <a
+                class="search-link-cell"
+                :href="String(text)"
+                rel="noreferrer"
+                target="_blank"
+              >
                 打开搜索页
               </a>
             </template>
@@ -1417,14 +1732,208 @@ function exportCsv() {
   border-color: #93c5fd;
 }
 
+.compact-header {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 18px;
+  text-align: center;
+}
+
+.header-select-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 20px 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 22px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #d7e0ea;
+  border-radius: 4px;
+}
+
+.header-select-chip::after {
+  position: absolute;
+  right: 7px;
+  width: 0;
+  height: 0;
+  content: '';
+  border-color: #94a3b8 transparent transparent;
+  border-style: solid;
+  border-width: 4px 4px 0;
+}
+
+.rank-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.rank-main {
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.rank-detail {
+  min-width: 104px;
+  padding: 2px 6px 1px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentcolor;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+.rank-date {
+  min-width: 104px;
+  padding: 1px 6px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentcolor;
+  border-radius: 0 0 4px 4px;
+}
+
+.rank-card-na {
+  color: #16a34a;
+}
+
+.rank-card-ad {
+  color: #64748b;
+}
+
+.rank-card-empty {
+  color: #94a3b8;
+}
+
+.traffic-distribution {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 92px;
+  min-height: 72px;
+  margin: 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.traffic-percent-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.traffic-bar {
+  display: flex;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.traffic-bar-na {
+  background: #22c55e;
+}
+
+.traffic-bar-ad {
+  background: #f59e0b;
+}
+
+.bid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.bid-main {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.bid-bound {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
 .trend-cell {
   width: 284px;
   min-height: 98px;
 }
 
+.trend-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 240px;
+}
+
+.trend-header-title {
+  font-weight: 600;
+}
+
+.trend-header-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.trend-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.trend-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.trend-legend-dot-search {
+  background: #2563eb;
+}
+
+.trend-legend-dot-rank {
+  background: #ea580c;
+}
+
 .trend-chart {
   width: 284px;
   height: 98px;
+}
+
+.aba-week-cell {
+  display: inline-block;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.search-link-cell {
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .numeric-cell {
