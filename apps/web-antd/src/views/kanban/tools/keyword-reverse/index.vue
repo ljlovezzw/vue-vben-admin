@@ -60,22 +60,21 @@ use([
 const TREND_COLUMN_KEY = '__keywordTrend';
 const TREND_FIELD_KEYS = new Set(['rankTrends', 'searchTrends', 'trends']);
 const HIDDEN_TABLE_FIELD_KEYS = new Set(['keywordZh', 'marketPlaceId']);
+const MARKETPLACE_OPTIONS = [
+  { label: '美国', value: 1 },
+  { label: '英国', value: 5 },
+  { label: '德国', value: 6 },
+  { label: '法国', value: 7 },
+  { label: '意大利', value: 8 },
+  { label: '西班牙', value: 9 },
+];
 const AMAZON_MARKETPLACE_DOMAINS: Record<number, string> = {
   1: 'www.amazon.com',
-  3: 'www.amazon.co.uk',
-  4: 'www.amazon.de',
-  5: 'www.amazon.fr',
-  6: 'www.amazon.co.jp',
-  7: 'www.amazon.ca',
-  44_551: 'www.amazon.es',
-  44_571: 'www.amazon.in',
-  35_691: 'www.amazon.it',
-  328_451: 'www.amazon.nl',
-  338_801: 'www.amazon.ae',
-  338_811: 'www.amazon.sa',
-  526_970: 'www.amazon.com.br',
-  771_770: 'www.amazon.com.mx',
-  111_172: 'www.amazon.com.au',
+  5: 'www.amazon.co.uk',
+  6: 'www.amazon.de',
+  7: 'www.amazon.fr',
+  8: 'www.amazon.it',
+  9: 'www.amazon.es',
 };
 
 const fieldDescriptions: Record<string, string> = {
@@ -871,11 +870,10 @@ function exportCsv() {
               placeholder="支持输入多个 ASIN，用换行、空格或逗号分隔"
             />
           </Form.Item>
-          <Form.Item label="市场 ID">
-            <InputNumber
+          <Form.Item label="市场">
+            <Select
               v-model:value="query.marketPlaceId"
-              :min="1"
-              :precision="0"
+              :options="MARKETPLACE_OPTIONS"
               class="full-control"
             />
           </Form.Item>
@@ -1374,9 +1372,9 @@ function exportCsv() {
 }
 
 .product-item {
+  flex: 0 0 auto;
   color: inherit;
   text-decoration: none;
-  flex: 0 0 auto;
 }
 
 .product-token {
@@ -1385,14 +1383,14 @@ function exportCsv() {
   gap: 1px;
   align-items: center;
   justify-content: center;
-  max-width: 132px;
   min-width: 94px;
+  max-width: 132px;
   min-height: 38px;
   padding: 0 7px;
   overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   color: #334155;
-  text-overflow: ellipsis;
   white-space: nowrap;
   background: #f8fafc;
   border: 1px solid #dbe4ef;
@@ -1404,8 +1402,8 @@ function exportCsv() {
   display: block;
   max-width: 100%;
   overflow: hidden;
-  line-height: 15px;
   text-overflow: ellipsis;
+  line-height: 15px;
   white-space: nowrap;
 }
 

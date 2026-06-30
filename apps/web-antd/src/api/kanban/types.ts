@@ -257,6 +257,83 @@ export interface KeywordReverseResult {
   rows: Record<string, any>[];
 }
 
+export interface SearchTermReportDatePreset {
+  endDate: string;
+  label: string;
+  startDate: string;
+}
+
+export interface SearchTermReportOptions {
+  datePresets: SearchTermReportDatePreset[];
+  shops: string[];
+}
+
+export interface SearchTermReportParentAsinRow {
+  asinList: string;
+  lifecycle: string;
+  parentAsin: string;
+  projectTag: string;
+  rowCount: number;
+  shopName: string;
+  site: string;
+  spu: string;
+}
+
+export interface SearchTermReportParentAsinsResult {
+  query: {
+    shopName: string;
+    spu: string;
+  };
+  rows: SearchTermReportParentAsinRow[];
+}
+
+export interface SearchTermReportPayload {
+  endDate: string;
+  parentAsin?: null | string;
+  parentAsins?: string[];
+  shopName: string;
+  spu: string;
+  startDate: string;
+}
+
+export interface SearchTermReportSheet {
+  key: string;
+  label: string;
+  previewRows: Record<string, any>[];
+  rowCount: number;
+  summary: Record<string, any>;
+}
+
+export interface SearchTermReportResult {
+  downloadUrl: string;
+  fileName: string;
+  parentAsin: string;
+  parentAsins: string[];
+  reportDate: string;
+  sheets: SearchTermReportSheet[];
+  shopName: string;
+  spu: string;
+  summaryRows: Record<string, any>[];
+}
+
+export type SearchTermReportTaskStatus =
+  | 'failed'
+  | 'queued'
+  | 'running'
+  | 'succeeded';
+
+export interface SearchTermReportTask {
+  error?: null | string;
+  finishedAt?: null | number;
+  queued: boolean;
+  queuedAt: number;
+  result?: null | SearchTermReportResult;
+  startedAt?: null | number;
+  status: SearchTermReportTaskStatus;
+  taskId: string;
+  updatedAt: number;
+}
+
 export interface SpuManagerFilters {
   categories: string[];
   responsibles: string[];

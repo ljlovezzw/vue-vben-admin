@@ -42,6 +42,17 @@ const routes: RouteRecordRaw[] = [
           title: '关键词反查',
         },
       },
+      {
+        name: 'SearchTermReportTool',
+        path: 'search-term-report',
+        component: () =>
+          import('#/views/kanban/tools/search-term-report/index.vue'),
+        meta: {
+          authority: toolAuthorities,
+          icon: 'lucide:file-spreadsheet',
+          title: '搜索词报告词库',
+        },
+      },
     ],
   },
 ];

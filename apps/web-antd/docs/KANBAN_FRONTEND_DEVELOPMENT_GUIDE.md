@@ -208,7 +208,7 @@ Authorization: Bearer <accessToken>
 | 目标跟踪 | `/kanban/targets` | `kanban:targets` |
 | ASIN360 | `/kanban/asin360` | `kanban:asin360` |
 | SPU 管理 | `/kanban/spus` | `kanban:spus` |
-| 工具 | `/tools/upload`、`/tools/keyword-reverse` | 复用看板权限 |
+| 工具 | `/tools/upload`、`/tools/keyword-reverse`、`/tools/search-term-report` | 复用看板权限 |
 | 配置中心 | `/kanban/config` | `kanban:config` |
 
 页面路由的 `meta.authority` 负责菜单和页面可见性；后端仍会再次校验权限，不能只依赖前端。
@@ -459,6 +459,7 @@ src\views\kanban\spus\index.vue
 ```text
 src\views\kanban\tools\upload\index.vue
 src\views\kanban\tools\keyword-reverse\index.vue
+src\views\kanban\tools\search-term-report\index.vue
 public\tools\upload-tool.html
 ```
 
@@ -467,9 +468,11 @@ public\tools\upload-tool.html
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
 - `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
-- 关键词反查页输入 ASIN、市场 ID、时间范围、排序字段和排序方向。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
+- 关键词反查页输入 ASIN、市场、时间范围、排序字段和排序方向。`marketPlaceId` 当前已知映射不完整，只确认 `美国=1、英国=5、德国=6、法国=7、意大利=8、西班牙=9`，页面用下拉选择这 6 个市场，不再让用户手输 ID。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
 - 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`trafficRatio/searchVolume/organicRank/sponsoredRank/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
+- `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 按店铺 + SPU 查询父 ASIN 候选，调用 `createSearchTermReportTask()` 提交后端生成任务，再用 `fetchSearchTermReportTask()` 每 30 秒轮询任务状态；任务成功后用 `downloadSearchTermReport()` 按 blob 下载文件，避免裸链接下载丢失登录态。
+- 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期和匹配行数；父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。
 - 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。

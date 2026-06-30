@@ -21,6 +21,10 @@ import type {
   LoginLogRow,
   OperationGroupPayload,
   OperationGroupRow,
+  SearchTermReportOptions,
+  SearchTermReportParentAsinsResult,
+  SearchTermReportPayload,
+  SearchTermReportTask,
   SpuManagerFilters,
   SpuManagerOptions,
   SpuManagerOverview,
@@ -47,6 +51,15 @@ export type {
   KeywordReverseColumn,
   KeywordReversePayload,
   KeywordReverseResult,
+  SearchTermReportDatePreset,
+  SearchTermReportOptions,
+  SearchTermReportParentAsinRow,
+  SearchTermReportParentAsinsResult,
+  SearchTermReportPayload,
+  SearchTermReportResult,
+  SearchTermReportSheet,
+  SearchTermReportTask,
+  SearchTermReportTaskStatus,
   SpuManagerRow,
 } from './types';
 
@@ -150,6 +163,39 @@ export async function fetchKeywordReverse(
   data: KeywordReversePayload,
 ): Promise<KeywordReverseResult> {
   return requestClient.post('/kanban/tools/keyword-reverse', data);
+}
+
+export async function fetchSearchTermReportOptions(): Promise<SearchTermReportOptions> {
+  return requestClient.get('/kanban/tools/search-term-report/options');
+}
+
+export async function fetchSearchTermReportParentAsins(params: {
+  shopName: string;
+  spu: string;
+}): Promise<SearchTermReportParentAsinsResult> {
+  return requestClient.get('/kanban/tools/search-term-report/parent-asins', {
+    params,
+  });
+}
+
+export async function createSearchTermReportTask(
+  data: SearchTermReportPayload,
+): Promise<SearchTermReportTask> {
+  return requestClient.post('/kanban/tools/search-term-report', data);
+}
+
+export async function fetchSearchTermReportTask(
+  taskId: string,
+): Promise<SearchTermReportTask> {
+  return requestClient.get(
+    `/kanban/tools/search-term-report/tasks/${encodeURIComponent(taskId)}`,
+  );
+}
+
+export async function downloadSearchTermReport(fileName: string): Promise<Blob> {
+  return requestClient.download(
+    `/kanban/tools/search-term-report/download/${encodeURIComponent(fileName)}`,
+  );
 }
 
 export async function fetchKanbanOverview(
