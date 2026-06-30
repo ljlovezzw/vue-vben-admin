@@ -1390,7 +1390,9 @@ function exportCsv() {
               >
                 <span class="aba-week-cell">{{ formatAbaWeek(text) }}</span>
               </Tooltip>
-              <span v-else class="aba-week-cell">{{ formatAbaWeek(text) }}</span>
+              <span v-else class="aba-week-cell">{{
+                formatAbaWeek(text)
+              }}</span>
             </template>
             <template v-else-if="column.dataIndex === 'searchUrl' && text">
               <a
@@ -1881,8 +1883,8 @@ function exportCsv() {
 
 .trend-header {
   display: inline-flex;
-  align-items: center;
   gap: 14px;
+  align-items: center;
   min-width: 240px;
 }
 
@@ -1892,8 +1894,8 @@ function exportCsv() {
 
 .trend-header-legend {
   display: inline-flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
   font-size: 12px;
   font-weight: 400;
   color: #64748b;
@@ -1901,8 +1903,8 @@ function exportCsv() {
 
 .trend-legend-item {
   display: inline-flex;
-  align-items: center;
   gap: 4px;
+  align-items: center;
   white-space: nowrap;
 }
 

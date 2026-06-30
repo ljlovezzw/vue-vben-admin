@@ -38,11 +38,11 @@ import { requestClient } from '#/api/request';
 
 export type {
   AlertLevel,
+  InAppCardNotification,
   KanbanCoreKpi,
   KanbanDailyMetric,
   KanbanFbaInventorySkuBreakdown,
   KanbanFbaInventorySkuRow,
-  InAppCardNotification,
   KanbanOverview,
   KanbanProductDetailColumn,
   KanbanProductDetailMeta,
@@ -202,18 +202,18 @@ export async function downloadSearchTermReport(
   );
 }
 
-export async function fetchInAppCardNotifications(params: {
-  limit?: number;
-} = {}): Promise<InAppCardNotification[]> {
+export async function fetchInAppCardNotifications(
+  params: {
+    limit?: number;
+  } = {},
+): Promise<InAppCardNotification[]> {
   return requestClient.get('/kanban/card-notifications/in-app', { params });
 }
 
 export async function acknowledgeInAppCardNotification(
   eventId: number,
 ): Promise<{ id: number; status: string }> {
-  return requestClient.post(
-    `/kanban/card-notifications/in-app/${eventId}/ack`,
-  );
+  return requestClient.post(`/kanban/card-notifications/in-app/${eventId}/ack`);
 }
 
 export async function fetchKanbanOverview(

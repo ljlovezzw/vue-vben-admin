@@ -1,11 +1,10 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
+
 import type { InAppCardNotification } from '#/api/kanban';
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-
-import { Button, message, Modal } from 'ant-design-vue';
 
 import { AuthenticationLoginExpiredModal } from '@vben/common-ui';
 import { useWatermark } from '@vben/hooks';
@@ -18,11 +17,13 @@ import {
 import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { $t } from '#/locales';
+import { Button, message, Modal } from 'ant-design-vue';
+
 import {
   acknowledgeInAppCardNotification,
   fetchInAppCardNotifications,
 } from '#/api/kanban';
+import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
@@ -119,25 +120,10 @@ function cardTitle(item: InAppCardNotification | null) {
 function cardPlainText(item: InAppCardNotification) {
   const blocks = cardContentBlocks(item);
   return blocks
-    .map((block) => block.text.replaceAll(/\*\*/g, '').trim())
+    .map((block) => block.text.replaceAll('**', '').trim())
     .filter(Boolean)
     .join('\n')
     .slice(0, 160);
-}
-
-function escapeHtml(text: string) {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-function markdownToHtml(text: string) {
-  return escapeHtml(text)
-    .replaceAll(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replaceAll('\n', '<br />');
 }
 
 function cardContentBlocks(item: InAppCardNotification | null) {
@@ -147,19 +133,19 @@ function cardContentBlocks(item: InAppCardNotification | null) {
   return elements
     .map((element: Record<string, any>) => {
       if (element.tag === 'markdown') {
-        const text = String(element.content || '');
-        return { html: markdownToHtml(text), kind: 'markdown', text };
+        const text = String(element.content || '').replaceAll('**', '');
+        return { kind: 'markdown', text };
       }
       if (element.tag === 'note' && Array.isArray(element.elements)) {
         const text = element.elements
           .map((child: Record<string, any>) => String(child.content || ''))
           .filter(Boolean)
           .join('\n');
-        return { html: markdownToHtml(text), kind: 'note', text };
+        return { kind: 'note', text };
       }
       return null;
     })
-    .filter(Boolean) as Array<{ html: string; kind: string; text: string }>;
+    .filter(Boolean) as Array<{ kind: string; text: string }>;
 }
 
 function syncNotificationDropdown() {
@@ -358,8 +344,9 @@ onBeforeUnmount(() => {
             :key="index"
             class="in-app-card-block"
             :class="{ 'in-app-card-note': block.kind === 'note' }"
-            v-html="block.html"
-          ></div>
+          >
+            {{ block.text }}
+          </div>
           <div class="in-app-card-actions">
             <Button
               :loading="ackLoadingId === activeInAppCardNotification.id"
