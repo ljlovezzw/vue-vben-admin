@@ -41,7 +41,7 @@ apps\web-antd
 
 ```powershell
 cd E:\junlee\Kanban
-python -m uvicorn api_server.main:app --host 0.0.0.0 --port 8001 --reload
+.\scripts\start_backend_dev.ps1
 ```
 
 启动前端：
@@ -73,8 +73,10 @@ apps\web-antd\vite.config.ts
 开发环境中，浏览器请求 `/api/*` 会由 Vite 转发到：
 
 ```text
-http://localhost:8001
+http://localhost:8002
 ```
+
+该地址由 `apps\web-antd\.env.development` 的 `VITE_DEV_API_PROXY_TARGET` 控制。`8002` 是开发后端端口；`8001` 保留给正式后端，并由 `https://api.junlee.top` 穿透到外网。
 
 代理会去掉 `/api` 前缀。例如：
 
@@ -94,6 +96,8 @@ http://localhost:8001
 ```text
 https://api.junlee.top
 ```
+
+该域名当前是本机正式后端 `localhost:8001` 的外网穿透地址。开发前端不要代理到 `8001`，否则本地调试会影响线上用户。
 
 后端会对部分父 ASIN 做运行时 SPU 口径修正，前端展示和下钻应以后端接口返回的 `spu` 为准。当前特例：`B0D53PVTZD -> LLW000526`。
 
@@ -472,13 +476,13 @@ public\tools\upload-tool.html
 - 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`trafficRatio/searchVolume/organicRank/sponsoredRank/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 按店铺 + SPU 查询父 ASIN 候选，调用 `createSearchTermReportTask()` 提交后端生成任务，再用 `fetchSearchTermReportTask()` 每 30 秒轮询任务状态；任务成功后用 `downloadSearchTermReport()` 按 blob 下载文件，避免裸链接下载丢失登录态。
-- 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期和匹配行数；父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。
+- 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期、一级分类、二级分类和匹配行数。候选表的店铺列以后端返回为准，当前后端按 `店铺 -> 品牌+站点 -> 全店铺` 真实匹配到父 ASIN 后才把筛选店铺作为展示店铺返回。父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。页面用 localStorage 缓存店铺、SPU、日期范围、候选行、已选父 ASIN 和当前 `taskId`，刷新后恢复并继续查询任务状态。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。
 - 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
 - 在线 Listing 查询完成后，从返回行提取父 ASIN 下拉选项，并按所选父 ASIN 展示对应 ASIN 列表和 Listing 明细。查询前父 ASIN 下拉保留可操作状态，只显示提示项。
 - Listing 明细表固定展示：父ASIN、ASIN、图片、MSKU、SKU、品名、店铺、国家、品牌、状态、负责人；Listing 代理当前返回中文列名，图片列优先读取 `图片`，兼容 `small_image_url`、对象、数组、JSON 字符串和 `//` 协议相对地址，并在候选字段未命中时从图片类字段名兜底提取 URL；品牌读取 `亚马逊品牌`，状态 1/true 显示在售，0/false 显示停售。图片加载失败显示空占位。
-- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到本机 FastAPI；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`。飞书任务上传同样按环境切换，本地使用 `/api/feishu/image-upload-tasks`，线上使用 `https://api.junlee.top/api/feishu/image-upload-tasks`。
+- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。飞书任务上传同样按环境切换，本地使用 `/api/feishu/image-upload-tasks`，线上使用 `https://api.junlee.top/api/feishu/image-upload-tasks`。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：

@@ -192,7 +192,9 @@ export async function fetchSearchTermReportTask(
   );
 }
 
-export async function downloadSearchTermReport(fileName: string): Promise<Blob> {
+export async function downloadSearchTermReport(
+  fileName: string,
+): Promise<Blob> {
   return requestClient.download(
     `/kanban/tools/search-term-report/download/${encodeURIComponent(fileName)}`,
   );

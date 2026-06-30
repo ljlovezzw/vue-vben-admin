@@ -270,6 +270,8 @@ export interface SearchTermReportOptions {
 
 export interface SearchTermReportParentAsinRow {
   asinList: string;
+  categoryLevel1: string;
+  categoryLevel2: string;
   lifecycle: string;
   parentAsin: string;
   projectTag: string;

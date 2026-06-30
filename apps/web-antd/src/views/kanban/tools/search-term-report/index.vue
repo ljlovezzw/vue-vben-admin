@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Dayjs } from 'dayjs';
 import type { TableColumnsType } from 'ant-design-vue';
+import type { Dayjs } from 'dayjs';
 
 import type {
   SearchTermReportOptions,
@@ -10,7 +10,14 @@ import type {
   SearchTermReportTask,
 } from '#/api/kanban/types';
 
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 
 import {
   Button,
@@ -34,9 +41,9 @@ import dayjs from 'dayjs';
 import {
   createSearchTermReportTask,
   downloadSearchTermReport,
-  fetchSearchTermReportTask,
   fetchSearchTermReportOptions,
   fetchSearchTermReportParentAsins,
+  fetchSearchTermReportTask,
 } from '#/api/kanban';
 
 const DEFAULT_DATE_RANGE: [Dayjs, Dayjs] = [
@@ -44,6 +51,7 @@ const DEFAULT_DATE_RANGE: [Dayjs, Dayjs] = [
   dayjs(),
 ];
 const TASK_POLL_INTERVAL_MS = 30_000;
+const STATE_CACHE_KEY = 'kanban:search-term-report:state:v1';
 
 const loadingOptions = ref(false);
 const searching = ref(false);
@@ -55,13 +63,15 @@ const options = ref<SearchTermReportOptions>({
 });
 const parentRows = ref<SearchTermReportParentAsinRow[]>([]);
 const selectedParentAsins = ref<string[]>([]);
-const result = ref<SearchTermReportResult | null>(null);
+const result = ref<null | SearchTermReportResult>(null);
 const activeSheetKey = ref('');
 const dateRange = ref<[Dayjs, Dayjs]>(DEFAULT_DATE_RANGE);
 const currentTaskId = ref('');
 const taskStatus = ref('');
 const taskError = ref('');
-let taskPollTimer: ReturnType<typeof setTimeout> | null = null;
+let taskPollTimer: null | ReturnType<typeof setTimeout> = null;
+let restoringState = false;
+let restoredDateRange = false;
 
 const query = reactive({
   shopName: '',
@@ -81,7 +91,7 @@ const canGenerate = computed(
     (parentRows.value.length === 0 || selectedParentAsins.value.length > 0),
 );
 
-const activeSheet = computed<SearchTermReportSheet | null>(() => {
+const activeSheet = computed<null | SearchTermReportSheet>(() => {
   const sheets = result.value?.sheets ?? [];
   return (
     sheets.find((sheet) => sheet.key === activeSheetKey.value) ??
@@ -107,6 +117,8 @@ const parentColumns: TableColumnsType<SearchTermReportParentAsinRow> = [
   { dataIndex: 'parentAsin', title: '父ASIN', width: 150 },
   { dataIndex: 'projectTag', title: '项目标签', width: 150 },
   { dataIndex: 'lifecycle', title: '生命周期', width: 150 },
+  { dataIndex: 'categoryLevel1', title: '一级分类', width: 140 },
+  { dataIndex: 'categoryLevel2', title: '二级分类', width: 140 },
   { dataIndex: 'rowCount', title: '匹配行数', width: 100 },
 ];
 
@@ -137,7 +149,8 @@ function dynamicColumns(rows: Record<string, any>[]) {
 }
 
 function columnWidth(key: string) {
-  if (key.includes('搜索词') || key.toLowerCase().includes('keyword')) return 220;
+  if (key.includes('搜索词') || key.toLowerCase().includes('keyword'))
+    return 220;
   if (key.includes('ASIN')) return 150;
   if (key.includes('日期')) return 128;
   return 120;
@@ -153,6 +166,64 @@ function formattedDateRange() {
     endDate: end?.format('YYYY-MM-DD') ?? '',
     startDate: start?.format('YYYY-MM-DD') ?? '',
   };
+}
+
+function restoreCachedState() {
+  try {
+    const raw = localStorage.getItem(STATE_CACHE_KEY);
+    if (!raw) return false;
+    const state = JSON.parse(raw) as Record<string, any>;
+    restoringState = true;
+    query.shopName = String(state.query?.shopName || '');
+    query.spu = String(state.query?.spu || '');
+    if (state.dateRange?.startDate && state.dateRange?.endDate) {
+      dateRange.value = [
+        dayjs(String(state.dateRange.startDate)),
+        dayjs(String(state.dateRange.endDate)),
+      ];
+      restoredDateRange = true;
+    }
+    parentRows.value = Array.isArray(state.parentRows) ? state.parentRows : [];
+    selectedParentAsins.value = Array.isArray(state.selectedParentAsins)
+      ? state.selectedParentAsins
+          .map((item) => String(item || ''))
+          .filter(Boolean)
+      : [];
+    currentTaskId.value = String(state.currentTaskId || '');
+    taskStatus.value = String(state.taskStatus || '');
+    taskError.value = String(state.taskError || '');
+    activeSheetKey.value = String(state.activeSheetKey || '');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    restoringState = false;
+  }
+}
+
+function persistCachedState() {
+  if (restoringState) return;
+  const { startDate, endDate } = formattedDateRange();
+  try {
+    localStorage.setItem(
+      STATE_CACHE_KEY,
+      JSON.stringify({
+        activeSheetKey: activeSheetKey.value,
+        currentTaskId: currentTaskId.value,
+        dateRange: { endDate, startDate },
+        parentRows: parentRows.value,
+        query: {
+          shopName: query.shopName,
+          spu: query.spu,
+        },
+        selectedParentAsins: selectedParentAsins.value,
+        taskError: taskError.value,
+        taskStatus: taskStatus.value,
+      }),
+    );
+  } catch {
+    // Local cache is an optimization; ignore quota or privacy-mode failures.
+  }
 }
 
 function applyPreset(startDate: string, endDate: string) {
@@ -207,6 +278,12 @@ function resetResultState() {
   taskError.value = '';
 }
 
+function resetCandidateState() {
+  parentRows.value = [];
+  selectedParentAsins.value = [];
+  resetResultState();
+}
+
 async function loadOptions() {
   loadingOptions.value = true;
   try {
@@ -214,7 +291,7 @@ async function loadOptions() {
     const defaultPreset =
       options.value.datePresets.find((item) => item.label === '近30天') ??
       options.value.datePresets[0];
-    if (defaultPreset) {
+    if (defaultPreset && !restoredDateRange) {
       applyPreset(defaultPreset.startDate, defaultPreset.endDate);
     }
   } finally {
@@ -305,18 +382,20 @@ function handleTaskStatus(task: SearchTermReportTask) {
     result.value = task.result;
     selectedParentAsins.value = task.result.parentAsins?.length
       ? task.result.parentAsins
-      : task.result.parentAsin
+      : (task.result.parentAsin
         ? [task.result.parentAsin]
-        : [];
+        : []);
     activeSheetKey.value = task.result.sheets[0]?.key ?? '';
     generating.value = false;
     message.success('搜索词报告已生成');
+    persistCachedState();
     return;
   }
 
   if (task.status === 'failed') {
     generating.value = false;
     message.error(`生成报告失败：${task.error || '未知错误'}`);
+    persistCachedState();
     return;
   }
 
@@ -356,7 +435,31 @@ async function downloadReport() {
   }
 }
 
-onMounted(loadOptions);
+watch(
+  () => ({
+    activeSheetKey: activeSheetKey.value,
+    currentTaskId: currentTaskId.value,
+    dateEnd: formattedDateRange().endDate,
+    dateStart: formattedDateRange().startDate,
+    parentRows: parentRows.value,
+    queryShopName: query.shopName,
+    querySpu: query.spu,
+    selectedParentAsins: selectedParentAsins.value,
+    taskError: taskError.value,
+    taskStatus: taskStatus.value,
+  }),
+  persistCachedState,
+  { deep: true },
+);
+
+onMounted(() => {
+  const restored = restoreCachedState();
+  loadOptions();
+  if (restored && currentTaskId.value) {
+    generating.value = ['queued', 'running'].includes(taskStatus.value);
+    pollTaskStatus(currentTaskId.value);
+  }
+});
 onBeforeUnmount(clearTaskPoll);
 </script>
 
@@ -393,7 +496,7 @@ onBeforeUnmount(clearTaskPoll);
                 allow-clear
                 placeholder="选择店铺"
                 show-search
-                @change="resetResultState"
+                @change="resetCandidateState"
               />
             </Form.Item>
             <Form.Item label="SPU" required>
@@ -401,6 +504,7 @@ onBeforeUnmount(clearTaskPoll);
                 v-model:value="query.spu"
                 placeholder="如 LLW000001"
                 @blur="normalizeSpu"
+                @change="resetCandidateState"
                 @press-enter="searchParentAsins"
               />
             </Form.Item>
@@ -434,7 +538,7 @@ onBeforeUnmount(clearTaskPoll);
           <h2>父ASIN候选</h2>
           <p>输入店铺和 SPU 后先查询候选，可选择一个或多个父ASIN。</p>
         </div>
-        <Tag v-if="selectedParentAsins.length" color="blue">
+        <Tag v-if="selectedParentAsins.length > 0" color="blue">
           已选择 {{ selectedParentAsins.length }} 个
         </Tag>
       </div>
@@ -445,7 +549,7 @@ onBeforeUnmount(clearTaskPoll);
         :pagination="{ pageSize: 8, showTotal: (total) => `共 ${total} 条` }"
         :row-class-name="parentRowClassName"
         :row-key="parentRowKey"
-        :scroll="{ x: 974 }"
+        :scroll="{ x: 1254 }"
         size="small"
       >
         <template #bodyCell="{ column, record }">
@@ -474,7 +578,15 @@ onBeforeUnmount(clearTaskPoll);
           <h2>生成结果</h2>
           <p>生成完成后可预览各 sheet 前 50 行，并下载完整 Excel。</p>
           <div v-if="currentTaskId" class="task-status">
-            <Tag :color="taskStatus === 'failed' ? 'red' : taskStatus === 'succeeded' ? 'green' : 'blue'">
+            <Tag
+              :color="
+                taskStatus === 'failed'
+                  ? 'red'
+                  : taskStatus === 'succeeded'
+                    ? 'green'
+                    : 'blue'
+              "
+            >
               {{ taskStatus || 'queued' }}
             </Tag>
             <span>{{ taskStatusText }}</span>
@@ -514,7 +626,7 @@ onBeforeUnmount(clearTaskPoll);
           </Descriptions.Item>
         </Descriptions>
 
-        <div v-if="result.summaryRows.length" class="summary-table">
+        <div v-if="result.summaryRows.length > 0" class="summary-table">
           <h3>汇总</h3>
           <Table
             :columns="summaryColumns"
@@ -541,7 +653,10 @@ onBeforeUnmount(clearTaskPoll);
             <Table
               :columns="previewColumns"
               :data-source="sheet.previewRows"
-              :pagination="{ pageSize: 10, showTotal: (total) => `共 ${total} 行预览` }"
+              :pagination="{
+                pageSize: 10,
+                showTotal: (total) => `共 ${total} 行预览`,
+              }"
               :scroll="{ x: Math.max(previewColumns.length * 120, 960) }"
               size="small"
             >
@@ -583,8 +698,8 @@ onBeforeUnmount(clearTaskPoll);
 .page-head h1,
 .section-title h2 {
   margin: 0;
-  color: #12233f;
   font-weight: 700;
+  color: #12233f;
   letter-spacing: 0;
 }
 
@@ -607,7 +722,7 @@ onBeforeUnmount(clearTaskPoll);
 .query-card,
 .result-section {
   margin-bottom: 14px;
-  background: #ffffff;
+  background: #fff;
   border: 1px solid #d7e0ea;
   border-radius: 8px;
 }
@@ -618,7 +733,10 @@ onBeforeUnmount(clearTaskPoll);
 
 .query-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.7fr) minmax(320px, 1.2fr);
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.7fr) minmax(
+      320px,
+      1.2fr
+    );
   gap: 12px;
   align-items: end;
 }
@@ -648,9 +766,9 @@ onBeforeUnmount(clearTaskPoll);
 
 .summary-table h3 {
   margin: 0 0 10px;
-  color: #12233f;
   font-size: 15px;
   line-height: 22px;
+  color: #12233f;
 }
 
 .sheet-summary {

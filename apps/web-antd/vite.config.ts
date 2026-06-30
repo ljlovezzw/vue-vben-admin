@@ -1,6 +1,14 @@
+import process from 'node:process';
+
 import { defineConfig } from '@vben/vite-config';
 
-export default defineConfig(async () => {
+import { loadEnv } from 'vite';
+
+export default defineConfig(async ({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiProxyTarget =
+    env.VITE_DEV_API_PROXY_TARGET || 'http://localhost:8002';
+
   return {
     application: {},
     vite: {
@@ -10,8 +18,7 @@ export default defineConfig(async () => {
           '/api': {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/api/, ''),
-            // 开发环境代理到本机 FastAPI；公网访问 hub.junlee.top 时也由 Vite 转发到本机 8001
-            target: 'http://localhost:8001',
+            target: apiProxyTarget,
             ws: true,
           },
         },
