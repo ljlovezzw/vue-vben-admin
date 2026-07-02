@@ -20,7 +20,10 @@ async function initApplication() {
     overrides: overridesPreferences,
   });
   updatePreferences({
-    app: { name: import.meta.env.VITE_APP_TITLE },
+    app: {
+      enableCheckUpdates: false,
+      name: import.meta.env.VITE_APP_TITLE,
+    },
     theme: {
       mode: 'light',
       semiDarkHeader: false,

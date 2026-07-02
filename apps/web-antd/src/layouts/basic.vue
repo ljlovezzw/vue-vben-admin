@@ -27,12 +27,13 @@ import { $t } from '#/locales';
 import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
-const IN_APP_NOTIFICATION_POLL_MS = 30_000;
+const IN_APP_NOTIFICATION_POLL_MS = 60_000;
 
 const notifications = ref<NotificationItem[]>([]);
 const inAppCardNotifications = ref<InAppCardNotification[]>([]);
 const ackLoadingId = ref<null | number>(null);
 let notificationPollTimer: ReturnType<typeof setInterval> | undefined;
+let notificationVisibilityListenerBound = false;
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -188,10 +189,46 @@ function stopNotificationPolling() {
 
 function startNotificationPolling() {
   stopNotificationPolling();
+  if (document.hidden) {
+    return;
+  }
   void loadInAppCardNotifications();
   notificationPollTimer = setInterval(() => {
     void loadInAppCardNotifications();
   }, IN_APP_NOTIFICATION_POLL_MS);
+}
+
+function handleNotificationVisibilityChange() {
+  if (!accessStore.accessToken) {
+    return;
+  }
+  if (document.hidden) {
+    stopNotificationPolling();
+  } else {
+    startNotificationPolling();
+  }
+}
+
+function bindNotificationVisibilityListener() {
+  if (notificationVisibilityListenerBound) {
+    return;
+  }
+  document.addEventListener(
+    'visibilitychange',
+    handleNotificationVisibilityChange,
+  );
+  notificationVisibilityListenerBound = true;
+}
+
+function unbindNotificationVisibilityListener() {
+  if (!notificationVisibilityListenerBound) {
+    return;
+  }
+  document.removeEventListener(
+    'visibilitychange',
+    handleNotificationVisibilityChange,
+  );
+  notificationVisibilityListenerBound = false;
 }
 
 async function acknowledgeInAppNotification(eventId: number) {
@@ -281,9 +318,11 @@ watch(
   () => accessStore.accessToken,
   (token) => {
     if (token) {
+      bindNotificationVisibilityListener();
       startNotificationPolling();
     } else {
       stopNotificationPolling();
+      unbindNotificationVisibilityListener();
       inAppCardNotifications.value = [];
       syncNotificationDropdown();
     }
@@ -293,6 +332,7 @@ watch(
 
 onBeforeUnmount(() => {
   stopNotificationPolling();
+  unbindNotificationVisibilityListener();
 });
 </script>
 

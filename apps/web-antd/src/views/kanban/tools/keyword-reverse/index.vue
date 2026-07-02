@@ -49,6 +49,13 @@ type WordItem = {
   raw: unknown;
   text: string;
 };
+type KeywordReverseTableColumn = TableColumnsType<
+  Record<string, any>
+>[number] & {
+  dataIndex?: unknown;
+  key: string;
+};
+type TrafficDistributionScope = 'current' | 'market' | 'parent';
 
 use([
   CanvasRenderer,
@@ -60,6 +67,9 @@ use([
 
 const TREND_COLUMN_KEY = '__keywordTrend';
 const TRAFFIC_DISTRIBUTION_COLUMN_KEY = '__trafficDistribution';
+const PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY = '__parentTrafficDistribution';
+const MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY = '__marketTrafficDistribution';
+const ABA_TOP3_CONCENTRATION_COLUMN_KEY = '__abaTop3Concentration';
 const TREND_FIELD_KEYS = new Set(['rankTrends', 'searchTrends', 'trends']);
 const HIDDEN_TABLE_FIELD_KEYS = new Set([
   'abaEndTime',
@@ -70,15 +80,21 @@ const HIDDEN_TABLE_FIELD_KEYS = new Set([
   'adTrafficRatio',
   'adUpdateTime',
   'keywordZh',
+  'marketAdTrafficRatio',
+  'marketNaTrafficRatio',
   'marketPlaceId',
   'naPageNum',
   'naPageSize',
   'naPosition',
   'naTrafficRatio',
   'naUpdateTime',
+  'parentAdTrafficRatio',
+  'parentNaTrafficRatio',
   'ppcBidMax',
   'ppcBidMin',
   'ppcCurrencySymbol',
+  'top3ClickRate',
+  'top3ConversionRate',
 ]);
 const MARKETPLACE_OPTIONS = [
   { label: '美国', value: 1 },
@@ -170,6 +186,74 @@ const fieldDescriptions: Record<string, string> = {
   trends: '趋势明细，包含月份、搜索量、ABA 排名和环比',
 };
 
+const PRIMARY_COLUMN_ORDER: readonly string[] = [
+  '__index',
+  'keyword',
+  'keywordText',
+  'searchKeyword',
+  'word',
+  TREND_COLUMN_KEY,
+  'searchUrl',
+  'top10Asin',
+  'top10Product',
+  'top10Products',
+  'first10Product',
+  'first10Products',
+  'topProducts',
+  'productList',
+  'imageList',
+  'trafficRatio',
+  TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+  'naRank',
+  'adRank',
+  'abaWeekRank',
+  ABA_TOP3_CONCENTRATION_COLUMN_KEY,
+  'searchConversionRateT30',
+  'salesRateT30',
+  'clickSalesRate',
+  'ppcBid',
+] as const;
+
+const RELATED_COLUMN_ORDER: readonly string[] = [
+  'abaWeek',
+  'parentTrafficRatio',
+  PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+  'parentImpression',
+  'parentNaExposureT7',
+  'parentAdExposureT7',
+  'marketTrafficRatio',
+  MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+  'marketNaExposure',
+  'marketAdExposure',
+  'salableTrafficRatio',
+  'salableNaTrafficRatio',
+  'salableAdTrafficRatio',
+  'salableImpression',
+  'salableAsinNaExposureT7',
+  'salableAsinAdExposureT7',
+  'impression',
+  'naExposureT7',
+  'adExposureT7',
+  'searchT30',
+  'avgDaySearch',
+  'searchHeat',
+  'salesT30',
+  'clickT30',
+  'impressionsT30',
+  'titleDensity',
+  'supplyDemandRatio',
+  'products',
+  'adsT30',
+  'crawlNum',
+  'chinaSellerNumber',
+  'chinaSellerProportion',
+  'recent1mNewProducts',
+  'recent2mNewProducts',
+  'recent3mNewProducts',
+  'recent6mNewProducts',
+  'recent12mNewProducts',
+] as const;
+
 const loading = ref(false);
 const drawerOpen = ref(false);
 const highFrequencyCollapsed = ref(false);
@@ -245,14 +329,7 @@ const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
     }));
   const hasTrendColumn = rows.value.some((row) => hasTrendData(row));
   if (hasTrendColumn) {
-    const insertAt = Math.min(
-      Math.max(
-        columns.findIndex((column) => isProductColumn(column.key)) + 1,
-        1,
-      ),
-      columns.length,
-    );
-    columns.splice(insertAt, 0, {
+    columns.push({
       customHeaderCell: () => ({
         title:
           '由 rankTrends、searchTrends 或 trends 绘制搜索量和 ABA 排名趋势',
@@ -265,35 +342,49 @@ const tableColumns = computed<TableColumnsType<Record<string, any>>>(() => {
       width: 300,
     });
   }
-  const hasTrafficDistribution = rows.value.some(
+  addTrafficDistributionColumn(
+    columns,
+    TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+    '流量分布',
+    '当前 ASIN 自然流量占比与广告流量占比分布',
+    'current',
+  );
+  addTrafficDistributionColumn(
+    columns,
+    PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+    '父体流量分布',
+    '父体自然曝光占比与广告曝光占比分布',
+    'parent',
+  );
+  addTrafficDistributionColumn(
+    columns,
+    MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+    '市场流量分布',
+    '市场自然曝光占比与广告曝光占比分布',
+    'market',
+  );
+  const hasAbaTop3 = rows.value.some(
     (row) =>
-      readNullableNumber(row.naTrafficRatio) !== null ||
-      readNullableNumber(row.adTrafficRatio) !== null,
+      readNullableNumber(row.top3ClickRate) !== null ||
+      readNullableNumber(row.top3ConversionRate) !== null,
   );
   if (
-    hasTrafficDistribution &&
-    !columns.some((column) => column.key === TRAFFIC_DISTRIBUTION_COLUMN_KEY)
+    hasAbaTop3 &&
+    !columns.some((column) => column.key === ABA_TOP3_CONCENTRATION_COLUMN_KEY)
   ) {
-    const insertAt = Math.min(
-      Math.max(
-        columns.findIndex((column) => column.key === 'parentTrafficRatio') + 1,
-        columns.findIndex((column) => column.key === 'trafficRatio') + 1,
-        1,
-      ),
-      columns.length,
-    );
-    columns.splice(insertAt, 0, {
+    columns.push({
       customHeaderCell: () => ({
-        title: '自然流量占比与广告流量占比分布',
+        title: 'Top 3 ASIN 点击占比与转化率',
       }),
-      dataIndex: TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+      dataIndex: ABA_TOP3_CONCENTRATION_COLUMN_KEY,
       ellipsis: false,
       fixed: undefined,
-      key: TRAFFIC_DISTRIBUTION_COLUMN_KEY,
-      title: '流量分布',
-      width: 118,
+      key: ABA_TOP3_CONCENTRATION_COLUMN_KEY,
+      title: 'ABA Top3集中度',
+      width: 112,
     });
   }
+  columns.sort(compareTableColumns);
 
   return [
     {
@@ -310,6 +401,52 @@ const tableScrollX = computed(() =>
   Math.max(tableColumns.value.length * 130 + 120, 980),
 );
 const tableScrollY = 720;
+
+function addTrafficDistributionColumn(
+  columns: KeywordReverseTableColumn[],
+  key: string,
+  title: string,
+  tooltip: string,
+  scope: TrafficDistributionScope,
+) {
+  if (columns.some((column) => column.key === key)) return;
+  const hasData = rows.value.some((row) =>
+    hasTrafficDistributionData(row, scope),
+  );
+  if (!hasData) return;
+  columns.push({
+    customHeaderCell: () => ({ title: tooltip }),
+    dataIndex: key,
+    ellipsis: false,
+    fixed: undefined,
+    key,
+    title,
+    width: 118,
+  });
+}
+
+function columnOrderValue(column: KeywordReverseTableColumn) {
+  const key = String(column.key || column.dataIndex || '');
+  const primaryIndex = PRIMARY_COLUMN_ORDER.indexOf(key);
+  if (primaryIndex !== -1) return primaryIndex;
+  if (isKeywordColumn(key)) return PRIMARY_COLUMN_ORDER.indexOf('keyword');
+  if (isProductColumn(key)) return PRIMARY_COLUMN_ORDER.indexOf('top10Asin');
+  const relatedIndex = RELATED_COLUMN_ORDER.indexOf(key);
+  if (relatedIndex !== -1) {
+    return PRIMARY_COLUMN_ORDER.length + relatedIndex;
+  }
+  return PRIMARY_COLUMN_ORDER.length + RELATED_COLUMN_ORDER.length + 100;
+}
+
+function compareTableColumns(
+  left: KeywordReverseTableColumn,
+  right: KeywordReverseTableColumn,
+) {
+  const leftOrder = columnOrderValue(left);
+  const rightOrder = columnOrderValue(right);
+  if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+  return String(left.key || '').localeCompare(String(right.key || ''));
+}
 
 function parseAsins() {
   return [
@@ -401,7 +538,6 @@ function isProductColumn(key: unknown) {
     'first10Products',
     'imageList',
     'productList',
-    'products',
     'top10Asin',
     'top10Product',
     'top10Products',
@@ -418,7 +554,32 @@ function isBidColumn(key: unknown) {
 }
 
 function isTrafficDistributionColumn(key: unknown) {
-  return String(key || '') === TRAFFIC_DISTRIBUTION_COLUMN_KEY;
+  return [
+    MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+    PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+    TRAFFIC_DISTRIBUTION_COLUMN_KEY,
+  ].includes(String(key || ''));
+}
+
+function trafficDistributionScope(key: unknown): TrafficDistributionScope {
+  if (String(key || '') === PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY) {
+    return 'parent';
+  }
+  if (String(key || '') === MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY) {
+    return 'market';
+  }
+  return 'current';
+}
+
+function trafficDistributionHeader(key: unknown) {
+  const scope = trafficDistributionScope(key);
+  if (scope === 'parent') return '父体流量';
+  if (scope === 'market') return '市场流量';
+  return '流量分布';
+}
+
+function isAbaTop3ConcentrationColumn(key: unknown) {
+  return String(key || '') === ABA_TOP3_CONCENTRATION_COLUMN_KEY;
 }
 
 function isAbaWeekColumn(key: unknown) {
@@ -569,9 +730,43 @@ function percentNumber(value: unknown) {
   return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
 }
 
-function trafficDistributionInfo(row: Record<string, any>) {
-  const natural = percentNumber(row.naTrafficRatio);
-  const ad = percentNumber(row.adTrafficRatio);
+function trafficDistributionFields(scope: TrafficDistributionScope) {
+  if (scope === 'parent') {
+    return {
+      ad: 'parentAdTrafficRatio',
+      natural: 'parentNaTrafficRatio',
+    };
+  }
+  if (scope === 'market') {
+    return {
+      ad: 'marketAdTrafficRatio',
+      natural: 'marketNaTrafficRatio',
+    };
+  }
+  return {
+    ad: 'adTrafficRatio',
+    natural: 'naTrafficRatio',
+  };
+}
+
+function hasTrafficDistributionData(
+  row: Record<string, any>,
+  scope: TrafficDistributionScope,
+) {
+  const fields = trafficDistributionFields(scope);
+  return (
+    readNullableNumber(row[fields.natural]) !== null ||
+    readNullableNumber(row[fields.ad]) !== null
+  );
+}
+
+function trafficDistributionInfo(
+  row: Record<string, any>,
+  scope: TrafficDistributionScope = 'current',
+) {
+  const fields = trafficDistributionFields(scope);
+  const natural = percentNumber(row[fields.natural]);
+  const ad = percentNumber(row[fields.ad]);
   const naturalValue = natural ?? 0;
   const adValue = ad ?? 0;
   const total = naturalValue + adValue;
@@ -580,6 +775,18 @@ function trafficDistributionInfo(row: Record<string, any>) {
     adWidth: total > 0 ? (adValue / total) * 100 : 0,
     naturalText: natural === null ? '-' : `${formatNumber(natural, 0)}%`,
     naturalWidth: total > 0 ? (naturalValue / total) * 100 : 0,
+  };
+}
+
+function compactPercentText(value: unknown, digits = 1) {
+  const percent = percentNumber(value);
+  return percent === null ? '-' : `${formatNumber(percent, digits, 0)}%`;
+}
+
+function abaTop3ConcentrationInfo(row: Record<string, any>) {
+  return {
+    clickText: compactPercentText(row.top3ClickRate, 0),
+    conversionText: compactPercentText(row.top3ConversionRate, 1),
   };
 }
 
@@ -981,11 +1188,44 @@ function escapeCsv(value: unknown) {
 }
 
 function exportCsv() {
-  const columns = (result.value?.columns ?? []).filter(
+  const columns: KeywordReverseColumn[] = (result.value?.columns ?? []).filter(
     (column) =>
       !isHiddenTableColumn(column.key) &&
       !isTrendColumn(column.key) &&
       (showTopProducts.value || !isProductColumn(column.key)),
+  );
+  const addExportColumn = (key: string, label: string) => {
+    if (columns.some((column) => column.key === key)) return;
+    columns.push({ key, kind: 'text', label });
+  };
+  if (
+    filteredRows.value.some((row) => hasTrafficDistributionData(row, 'current'))
+  ) {
+    addExportColumn(TRAFFIC_DISTRIBUTION_COLUMN_KEY, '流量分布');
+  }
+  if (
+    filteredRows.value.some((row) => hasTrafficDistributionData(row, 'parent'))
+  ) {
+    addExportColumn(PARENT_TRAFFIC_DISTRIBUTION_COLUMN_KEY, '父体流量分布');
+  }
+  if (
+    filteredRows.value.some((row) => hasTrafficDistributionData(row, 'market'))
+  ) {
+    addExportColumn(MARKET_TRAFFIC_DISTRIBUTION_COLUMN_KEY, '市场流量分布');
+  }
+  const hasAbaTop3 = filteredRows.value.some(
+    (row) =>
+      readNullableNumber(row.top3ClickRate) !== null ||
+      readNullableNumber(row.top3ConversionRate) !== null,
+  );
+  if (hasAbaTop3) {
+    addExportColumn(ABA_TOP3_CONCENTRATION_COLUMN_KEY, 'ABA Top3集中度');
+  }
+  columns.sort((left, right) =>
+    compareTableColumns(
+      left as KeywordReverseTableColumn,
+      right as KeywordReverseTableColumn,
+    ),
   );
   if (columns.length === 0 || filteredRows.value.length === 0) {
     message.warning('当前没有可导出的结果');
@@ -994,7 +1234,29 @@ function exportCsv() {
   const lines = [
     columns.map((column) => escapeCsv(column.label)).join(','),
     ...filteredRows.value.map((row) =>
-      columns.map((column) => escapeCsv(row[column.key])).join(','),
+      columns
+        .map((column) =>
+          escapeCsv(
+            isTrafficDistributionColumn(column.key)
+              ? `自然: ${
+                  trafficDistributionInfo(
+                    row,
+                    trafficDistributionScope(column.key),
+                  ).naturalText
+                } / 广告: ${
+                  trafficDistributionInfo(
+                    row,
+                    trafficDistributionScope(column.key),
+                  ).adText
+                }`
+              : (column.key === ABA_TOP3_CONCENTRATION_COLUMN_KEY
+                ? `点击: ${abaTop3ConcentrationInfo(row).clickText} / 转化: ${
+                    abaTop3ConcentrationInfo(row).conversionText
+                  }`
+                : row[column.key]),
+          ),
+        )
+        .join(','),
     ),
   ];
   const blob = new Blob([`\uFEFF${lines.join('\n')}`], {
@@ -1236,11 +1498,9 @@ function exportCsv() {
                 <span>SP(常规)排名</span>
               </div>
             </template>
-            <template
-              v-else-if="column.dataIndex === TRAFFIC_DISTRIBUTION_COLUMN_KEY"
-            >
+            <template v-else-if="isTrafficDistributionColumn(column.dataIndex)">
               <div class="compact-header">
-                <span>流量分布</span>
+                <span>{{ trafficDistributionHeader(column.dataIndex) }}</span>
                 <span class="header-select-chip">自然-广告</span>
               </div>
             </template>
@@ -1248,6 +1508,14 @@ function exportCsv() {
               <div class="compact-header">
                 <span>建议竞价</span>
                 <span class="header-select-chip">固定-精准</span>
+              </div>
+            </template>
+            <template
+              v-else-if="column.dataIndex === ABA_TOP3_CONCENTRATION_COLUMN_KEY"
+            >
+              <div class="compact-header">
+                <span>ABA Top3</span>
+                <span>集中度</span>
               </div>
             </template>
           </template>
@@ -1323,22 +1591,60 @@ function exportCsv() {
             <template v-else-if="isTrafficDistributionColumn(column.dataIndex)">
               <div class="traffic-distribution">
                 <div class="traffic-percent-row">
-                  <span>{{ trafficDistributionInfo(record).naturalText }}</span>
-                  <span>{{ trafficDistributionInfo(record).adText }}</span>
+                  <span>{{
+                    trafficDistributionInfo(
+                      record,
+                      trafficDistributionScope(column.dataIndex),
+                    ).naturalText
+                  }}</span>
+                  <span>{{
+                    trafficDistributionInfo(
+                      record,
+                      trafficDistributionScope(column.dataIndex),
+                    ).adText
+                  }}</span>
                 </div>
                 <div class="traffic-bar">
                   <span
                     class="traffic-bar-na"
                     :style="{
-                      width: `${trafficDistributionInfo(record).naturalWidth}%`,
+                      width: `${
+                        trafficDistributionInfo(
+                          record,
+                          trafficDistributionScope(column.dataIndex),
+                        ).naturalWidth
+                      }%`,
                     }"
                   ></span>
                   <span
                     class="traffic-bar-ad"
                     :style="{
-                      width: `${trafficDistributionInfo(record).adWidth}%`,
+                      width: `${
+                        trafficDistributionInfo(
+                          record,
+                          trafficDistributionScope(column.dataIndex),
+                        ).adWidth
+                      }%`,
                     }"
                   ></span>
+                </div>
+              </div>
+            </template>
+            <template
+              v-else-if="isAbaTop3ConcentrationColumn(column.dataIndex)"
+            >
+              <div class="aba-top3-cell">
+                <div>
+                  点击:
+                  <strong>{{
+                    abaTop3ConcentrationInfo(record).clickText
+                  }}</strong>
+                </div>
+                <div>
+                  转化:
+                  <strong>{{
+                    abaTop3ConcentrationInfo(record).conversionText
+                  }}</strong>
                 </div>
               </div>
             </template>
@@ -1468,9 +1774,19 @@ function exportCsv() {
 
 <style scoped>
 .keyword-reverse-page {
+  --keyword-blue: #2563eb;
+  --keyword-cyan: #0891b2;
+  --keyword-emerald: #059669;
+  --keyword-amber: #d97706;
+  --keyword-indigo: #4f46e5;
+  --keyword-border: #d7e0ea;
+  --keyword-panel: rgb(255 255 255 / 94%);
+
   min-height: calc(100vh - 112px);
   padding: 18px;
-  background: #eef3f8;
+  background:
+    linear-gradient(135deg, rgb(37 99 235 / 10%), transparent 34%),
+    linear-gradient(225deg, rgb(5 150 105 / 8%), transparent 32%), #eef4f8;
 }
 
 .page-head {
@@ -1478,32 +1794,74 @@ function exportCsv() {
   gap: 16px;
   align-items: flex-start;
   justify-content: space-between;
+  padding: 16px 18px;
   margin-bottom: 14px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f2a44, #155e75 58%, #047857);
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgb(15 42 68 / 16%);
 }
 
-.page-head h1,
 .panel-title h2 {
   margin: 0;
+  font-size: 18px;
   font-weight: 700;
+  line-height: 26px;
   color: #12233f;
   letter-spacing: 0;
 }
 
 .page-head h1 {
+  margin: 0;
   font-size: 24px;
+  font-weight: 700;
   line-height: 32px;
+  color: #fff;
+  letter-spacing: 0;
 }
 
-.page-head p,
 .panel-title p {
   margin: 4px 0 0;
   color: #64748b;
 }
 
+.page-head p {
+  margin: 4px 0 0;
+  color: rgb(255 255 255 / 78%);
+}
+
+.page-head :deep(.ant-btn) {
+  border-color: rgb(255 255 255 / 34%);
+}
+
+.page-head :deep(.ant-btn:not(.ant-btn-primary)) {
+  color: #e0f2fe;
+  background: rgb(255 255 255 / 12%);
+}
+
+.page-head :deep(.ant-btn-primary) {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  box-shadow: 0 8px 18px rgb(245 158 11 / 22%);
+}
+
 .query-card {
   margin-bottom: 14px;
-  border: 1px solid #d7e0ea;
+  background: var(--keyword-panel);
+  border: 1px solid var(--keyword-border);
   border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 6%);
+}
+
+.query-card :deep(.ant-card-body) {
+  border-top: 3px solid var(--keyword-blue);
+  border-radius: 8px;
+}
+
+.query-card :deep(.ant-form-item-label > label) {
+  font-weight: 600;
+  color: #334155;
 }
 
 .query-grid {
@@ -1530,10 +1888,39 @@ function exportCsv() {
 }
 
 .metric-item {
+  position: relative;
   padding: 14px 16px;
-  background: #fff;
-  border: 1px solid #d7e0ea;
+  overflow: hidden;
+  background: var(--keyword-panel);
+  border: 1px solid var(--keyword-border);
   border-radius: 8px;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 5%);
+}
+
+.metric-item::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  content: '';
+  background: var(--metric-color, var(--keyword-blue));
+}
+
+.metric-item:nth-child(1) {
+  --metric-color: var(--keyword-blue);
+}
+
+.metric-item:nth-child(2) {
+  --metric-color: var(--keyword-emerald);
+}
+
+.metric-item:nth-child(3) {
+  --metric-color: var(--keyword-amber);
+}
+
+.metric-item:nth-child(4) {
+  --metric-color: var(--keyword-indigo);
 }
 
 .metric-label {
@@ -1547,23 +1934,26 @@ function exportCsv() {
   display: block;
   font-size: 24px;
   line-height: 30px;
-  color: #0f766e;
+  color: var(--metric-color, var(--keyword-blue));
 }
 
 .result-section {
   padding: 14px 16px;
   margin-bottom: 14px;
-  background: #fff;
-  border: 1px solid #d7e0ea;
+  background: var(--keyword-panel);
+  border: 1px solid var(--keyword-border);
   border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
 }
 
 .frequency-section {
   padding-bottom: 18px;
+  border-top: 3px solid var(--keyword-amber);
 }
 
 .table-section {
   padding-bottom: 0;
+  border-top: 3px solid var(--keyword-cyan);
 }
 
 .panel-title {
@@ -1572,11 +1962,6 @@ function exportCsv() {
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 12px;
-}
-
-.panel-title h2 {
-  font-size: 18px;
-  line-height: 26px;
 }
 
 .compact-title {
@@ -1589,27 +1974,35 @@ function exportCsv() {
 .word-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px;
   max-height: 260px;
   padding: 8px 2px 2px;
   overflow: auto;
 }
 
 .word-item {
-  padding: 0;
-  color: #1f2937;
+  padding: 5px 10px;
+  color: #155e75;
   text-align: left;
   white-space: normal;
   cursor: pointer;
-  background: transparent;
-  border: 0;
+  background: #ecfeff;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
 }
 
 .word-item:hover {
-  color: #2563eb;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
 }
 
 .word-item span {
+  margin-left: 0;
+  color: inherit;
+}
+
+.word-item span + span {
   margin-left: 2px;
   color: #64748b;
 }
@@ -1624,8 +2017,12 @@ function exportCsv() {
 }
 
 .result-count {
+  padding: 4px 10px;
   font-weight: 600;
-  color: #334155;
+  color: #155e75;
+  background: #ecfeff;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
 }
 
 .sort-select {
@@ -1653,11 +2050,12 @@ function exportCsv() {
 
 .keyword-cell {
   min-width: 200px;
+  text-align: center;
 }
 
 .keyword-main {
   font-weight: 600;
-  color: #111827;
+  color: #1d4ed8;
 }
 
 .keyword-cn {
@@ -1668,6 +2066,7 @@ function exportCsv() {
 .row-actions {
   display: flex;
   gap: 6px;
+  justify-content: center;
   margin-top: 8px;
 }
 
@@ -1675,6 +2074,7 @@ function exportCsv() {
   display: flex;
   gap: 6px;
   align-items: center;
+  justify-content: center;
   min-height: 48px;
   overflow: auto hidden;
 }
@@ -1732,6 +2132,31 @@ function exportCsv() {
 .product-item:hover .product-token {
   color: #1d4ed8;
   border-color: #93c5fd;
+}
+
+.table-section :deep(.ant-table) {
+  color: #172033;
+  background: transparent;
+}
+
+.table-section :deep(.ant-table-thead > tr > th) {
+  color: #334155;
+  text-align: center;
+  background: linear-gradient(180deg, #f8fbff, #eef6ff);
+  border-bottom-color: #cfe1f3;
+}
+
+.table-section :deep(.ant-table-tbody > tr > td) {
+  vertical-align: middle;
+  text-align: center;
+}
+
+.table-section :deep(.ant-table-tbody > tr:nth-child(even) > td) {
+  background: #fbfdff;
+}
+
+.table-section :deep(.ant-table-tbody > tr:hover > td) {
+  background: #f0f9ff;
 }
 
 .compact-header {
@@ -1808,11 +2233,11 @@ function exportCsv() {
 }
 
 .rank-card-na {
-  color: #16a34a;
+  color: #059669;
 }
 
 .rank-card-ad {
-  color: #64748b;
+  color: #4f46e5;
 }
 
 .rank-card-empty {
@@ -1847,11 +2272,30 @@ function exportCsv() {
 }
 
 .traffic-bar-na {
-  background: #22c55e;
+  background: #10b981;
 }
 
 .traffic-bar-ad {
   background: #f59e0b;
+}
+
+.aba-top3-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.aba-top3-cell strong {
+  font-weight: 700;
+  color: #0f766e;
 }
 
 .bid-cell {
@@ -1868,7 +2312,7 @@ function exportCsv() {
 .bid-main {
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: #b45309;
 }
 
 .bid-bound {
@@ -1879,6 +2323,7 @@ function exportCsv() {
 .trend-cell {
   width: 284px;
   min-height: 98px;
+  margin: 0 auto;
 }
 
 .trend-header {
@@ -1890,6 +2335,7 @@ function exportCsv() {
 
 .trend-header-title {
   font-weight: 600;
+  color: #1e3a8a;
 }
 
 .trend-header-legend {
@@ -1941,7 +2387,7 @@ function exportCsv() {
 .numeric-cell {
   display: block;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: center;
 }
 
 .raw-json {
