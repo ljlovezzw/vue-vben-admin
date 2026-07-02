@@ -34,7 +34,7 @@ import type {
   TargetTrackerOverview,
 } from './types';
 
-import { requestClient } from '#/api/request';
+import { requestClient, silentRequestClient } from '#/api/request';
 
 export type {
   AlertLevel,
@@ -207,7 +207,9 @@ export async function fetchInAppCardNotifications(
     limit?: number;
   } = {},
 ): Promise<InAppCardNotification[]> {
-  return requestClient.get('/kanban/card-notifications/in-app', { params });
+  return silentRequestClient.get('/kanban/card-notifications/in-app', {
+    params,
+  });
 }
 
 export async function acknowledgeInAppCardNotification(

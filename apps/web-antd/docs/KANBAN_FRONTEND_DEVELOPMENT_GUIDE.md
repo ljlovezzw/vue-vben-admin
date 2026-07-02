@@ -203,7 +203,7 @@ Authorization: Bearer <accessToken>
 
 个人中心 `/profile` 只保留“基本设置”。页面展示 `/user/info` 返回的姓名、账号、邮箱、角色、部门、直属上级和登录方式，所有字段只读，不提供密码、安全设置或通知设置入口。直属上级来自后端登录时同步的飞书通讯录字段 `directLeaderName`；如果飞书开放平台未开通组织架构权限，则显示为空。
 
-全局站内卡片通知由 `src\layouts\basic.vue` 负责：登录后立即请求 `/kanban/card-notifications/in-app`，之后每 30 秒轮询一次。后端返回的是飞书卡片事件中的 `card` JSON，前端提取 header 标题、markdown 正文和 note 内容渲染 Modal，同时同步到右上角通知列表。用户必须点击“已收到”，前端调用 `/kanban/card-notifications/in-app/{event_id}/ack` 后才会关闭弹窗并从通知列表移除；刷新页面后未确认通知仍会继续弹出。冷启动 FBA 到货测试阶段默认发给费李君，只有对应飞书账号登录前端时能看到同内容站内弹窗。
+全局站内卡片通知由 `src\layouts\basic.vue` 负责：登录后立即请求 `/kanban/card-notifications/in-app`，之后仅在页面可见时每 60 秒轮询一次。通知查询使用静默请求客户端，遇到 401 只停止通知轮询并清空本地通知，不触发全局退出；真正页面接口遇到 401 仍按登录失效处理。后端返回的是飞书卡片事件中的 `card` JSON，前端提取 header 标题、markdown 正文和 note 内容渲染 Modal，同时同步到右上角通知列表。用户必须点击“已收到”，前端调用 `/kanban/card-notifications/in-app/{event_id}/ack` 后才会关闭弹窗并从通知列表移除；刷新页面后未确认通知仍会继续弹出。冷启动 FBA 到货测试阶段默认发给费李君，只有对应飞书账号登录前端时能看到同内容站内弹窗。
 
 ### 4.2 页面权限
 
@@ -477,8 +477,9 @@ public\tools\upload-tool.html
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
 - `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
 - 关键词反查页输入 ASIN、市场、时间范围、排序字段和排序方向。`marketPlaceId` 当前已知映射不完整，只确认 `美国=1、英国=5、德国=6、法国=7、意大利=8、西班牙=9`，页面用下拉选择这 6 个市场，不再让用户手输 ID。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
-- 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Products/top10Product/topProducts/productList/imageList` 作为“前10产品”图片条，`rankTrends/searchTrends/trends` 合并为“趋势”小折线图，`naRank/adRank` 展示最新排名、页码位置和采集日期，`naTrafficRatio/adTrafficRatio` 合并为“流量分布”，`ppcBid/ppcBidMin/ppcBidMax` 合并为建议竞价，`trafficRatio/searchVolume/asinTrafficRatio/asinTrafficDistribution/abaWeek` 等按后端中文列名和数值类型渲染；未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。
-- `abaWeek` 前端显示为 `2026第25周` 这类短格式；`abaStartTime/abaEndTime` 不单独占表格列，只在鼠标 hover `ABA周` 单元格时展示详细周期。`searchUrl` 只展示“打开搜索页”入口，列宽保持紧凑，避免亚马逊搜索链接拉宽表格。
+- 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Asin/top10Product/top10Products/topProducts/productList/imageList/first10Product/first10Products` 作为 Top10 ASIN/产品图片条；`rankTrends/searchTrends/trends` 合并为“趋势”小折线图；`naRank/adRank` 展示最新排名、页码位置和采集日期；`naTrafficRatio/adTrafficRatio` 合并为“流量分布”；`parentNaTrafficRatio/parentAdTrafficRatio` 合并为“父体流量分布”；`marketNaTrafficRatio/marketAdTrafficRatio` 合并为“市场流量分布”；`top3ClickRate/top3ConversionRate` 合并为“ABA Top3集中度”；`ppcBid/ppcBidMin/ppcBidMax` 合并为建议竞价。未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。注意 `products` 是竞争商品数，必须按普通数字列展示，不能放进 Top10 产品图片条。
+- 关键词反查明细表由前端主导核心列排序，当前优先顺序为：`序号、关键词、趋势、亚马逊搜索链接、Top10 ASIN、流量占比、流量分布、最新自然排名、最新SP(常规)排名、ABA关键词周排名、ABA Top3集中度、搜索转化率、点击成交转化率、建议竞价`。剩余字段按相关性追加在后面：ABA周期、父体流量/曝光、市场流量/曝光、可售 ASIN 流量/曝光、当前 ASIN 曝光、搜索/销量/点击、竞争商品数、新品数量等。组合组件是高优先级列，新增组合列时应同步更新 `PRIMARY_COLUMN_ORDER/RELATED_COLUMN_ORDER`、CSV 导出和字段隐藏集合。
+- `abaWeek` 前端显示为 `2026第25周` 这类短格式；`abaStartTime/abaEndTime` 不单独占表格列，只在鼠标 hover `ABA周` 单元格时展示详细周期。`searchUrl` 只展示“打开搜索页”入口，列宽保持紧凑，避免亚马逊搜索链接拉宽表格。表格表头和数据单元格默认居中对齐，关键词、产品图条、趋势图、排名卡片和组合分布列都需要保持与表头中心对齐。
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 按店铺 + SPU 查询父 ASIN 候选，调用 `createSearchTermReportTask()` 提交后端生成任务，再用 `fetchSearchTermReportTask()` 每 30 秒轮询任务状态；任务成功后用 `downloadSearchTermReport()` 按 blob 下载文件，避免裸链接下载丢失登录态。
 - 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期、一级分类、二级分类和匹配行数。候选表的店铺列以后端返回为准，当前后端按 `店铺 -> 品牌+站点 -> 全店铺` 真实匹配到父 ASIN 后才把筛选店铺作为展示店铺返回。父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。页面用 localStorage 缓存店铺、SPU、日期范围、候选行、已选父 ASIN 和当前 `taskId`，刷新后恢复并继续查询任务状态。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。

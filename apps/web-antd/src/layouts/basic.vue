@@ -161,6 +161,20 @@ function syncNotificationDropdown() {
   }));
 }
 
+function isNotificationAuthFailure(error: unknown) {
+  const detail =
+    typeof error === 'object' && error
+      ? String(
+          (error as Record<string, unknown>).detail ||
+            (error as Record<string, unknown>).message ||
+            '',
+        )
+      : String(error || '');
+  return ['未登录', '登录已过期', '无效登录凭证', 'unauthorized'].some((item) =>
+    detail.toLowerCase().includes(item.toLowerCase()),
+  );
+}
+
 async function loadInAppCardNotifications(silent = true) {
   if (!accessStore.accessToken) {
     inAppCardNotifications.value = [];
@@ -173,6 +187,12 @@ async function loadInAppCardNotifications(silent = true) {
     });
     syncNotificationDropdown();
   } catch (error) {
+    if (isNotificationAuthFailure(error)) {
+      stopNotificationPolling();
+      inAppCardNotifications.value = [];
+      syncNotificationDropdown();
+      return;
+    }
     if (!silent) {
       const detail = error instanceof Error ? error.message : String(error);
       message.error(`查询站内通知失败：${detail}`);
