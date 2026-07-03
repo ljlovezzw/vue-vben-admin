@@ -1183,6 +1183,9 @@
       return { id: uid("slot"), kind, platform, role, file, aiGenerated: false, aiGeneratedPerson: false };
     }
 
+    const APLUS_CAROUSEL_IMAGE_COUNT = 6;
+    const FEISHU_SMALL_UPLOAD_LIMIT = 20 * 1024 * 1024;
+
     function addAplusFull() {
       state.aPlus.push({
         id: uid("full"),
@@ -1202,14 +1205,12 @@
         type: "carousel",
         title: "图像轮播",
         slots: [
-          makeSlot({ kind: "carousel", platform: "手机端" }),
-          makeSlot({ kind: "carousel", platform: "手机端" }),
-          makeSlot({ kind: "carousel", platform: "手机端" }),
-          makeSlot({ kind: "carousel", platform: "手机端" }),
-          makeSlot({ kind: "carousel", platform: "电脑端" }),
-          makeSlot({ kind: "carousel", platform: "电脑端" }),
-          makeSlot({ kind: "carousel", platform: "电脑端" }),
-          makeSlot({ kind: "carousel", platform: "电脑端" }),
+          ...Array.from({ length: APLUS_CAROUSEL_IMAGE_COUNT }, () =>
+            makeSlot({ kind: "carousel", platform: "手机端" }),
+          ),
+          ...Array.from({ length: APLUS_CAROUSEL_IMAGE_COUNT }, () =>
+            makeSlot({ kind: "carousel", platform: "电脑端" }),
+          ),
         ],
       });
       render();
@@ -1363,7 +1364,7 @@
           <div class="rule-head">
             <div>
               <h3 class="rule-title">${component.title}</h3>
-              <div class="mini">${component.type === "carousel" ? "手机端、电脑端各 4 张，序号沿用前面图片组计数，输出为 _序号-轮播序号" : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"}</div>
+              <div class="mini">${component.type === "carousel" ? `手机端、电脑端各 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"}</div>
             </div>
             <button class="icon-btn" type="button" title="删除">×</button>
           </div>
@@ -1695,13 +1696,27 @@
       return [...new Set(selectedListingRows().map(asinOf).filter(Boolean))].sort();
     }
 
-    function blobToBase64(blob) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || "").split(",", 2)[1] || "");
-        reader.onerror = () => reject(reader.error || new Error("读取 ZIP 失败"));
-        reader.readAsDataURL(blob);
-      });
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+      const units = ["B", "KB", "MB", "GB"];
+      let value = bytes;
+      let unitIndex = 0;
+      while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+      }
+      return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+    }
+
+    function adler32(bytes) {
+      let a = 1;
+      let b = 0;
+      const mod = 65521;
+      for (let index = 0; index < bytes.length; index += 1) {
+        a = (a + bytes[index]) % mod;
+        b = (b + a) % mod;
+      }
+      return String(((b << 16) | a) >>> 0);
     }
 
     async function buildUploadZip(entries, root) {
@@ -1710,7 +1725,7 @@
       return {
         filename: `${root}.zip`,
         contentType: "application/zip",
-        contentBase64: await blobToBase64(zip),
+        blob: zip,
       };
     }
 
@@ -1720,8 +1735,12 @@
         : "https://api.junlee.top/api/feishu/image-upload-tasks";
     }
 
-    function sleep(ms) {
-      return new Promise((resolve) => setTimeout(resolve, ms));
+    function feishuTicketApiUrl() {
+      return feishuTaskApiBaseUrl().replace("/image-upload-tasks", "/image-upload-ticket");
+    }
+
+    function feishuTokenTaskApiUrl() {
+      return `${feishuTaskApiBaseUrl()}/from-tokens`;
     }
 
     async function readJsonResponse(response) {
@@ -1738,29 +1757,109 @@
       return payload;
     }
 
-    async function pollFeishuUploadTask(taskId, token) {
-      const statusUrl = `${feishuTaskApiBaseUrl()}/${encodeURIComponent(taskId)}`;
-      for (let attempt = 1; attempt <= 360; attempt += 1) {
-        await sleep(attempt <= 3 ? 1500 : 3000);
-        const response = await fetch(statusUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const payload = await readJsonResponse(response);
-        const task = payload?.data || {};
-        if (task.status === "succeeded") {
-          const recordId = task.result?.recordId || "";
-          setFeishuTaskStatus(recordId ? `已上传到飞书任务：${recordId}` : "已上传到飞书任务。");
-          return task;
-        }
-        if (task.status === "failed") {
-          throw new Error(task.error || "飞书上传任务失败");
-        }
-        const label = task.status === "running" ? "正在上传到飞书并创建任务" : "等待上传任务开始";
-        setFeishuTaskStatus(`${label}，请稍候...`);
+    async function requestFeishuEdgeTicket(metadata, zipFiles, token) {
+      const files = zipFiles.map((item) => ({
+        contentType: item.contentType,
+        filename: item.filename,
+        key: item.key,
+        size: item.blob.size,
+      }));
+      const response = await fetch(feishuTicketApiUrl(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ files, metadata }),
+      });
+      const payload = await readJsonResponse(response);
+      const ticketData = payload?.data || {};
+      if (!ticketData.ticket || !ticketData.uploadBaseUrl) {
+        throw new Error("后端未返回边缘上传凭证");
       }
-      throw new Error("飞书上传任务等待超时，请稍后在飞书任务表确认是否已创建");
+      return ticketData;
+    }
+
+    async function uploadSmallFileToFeishuEdge(uploadBaseUrl, ticket, item) {
+      setFeishuTaskStatus(`正在通过边缘节点上传 ${item.filename}（${formatBytes(item.blob.size)}）...`);
+      const response = await fetch(`${uploadBaseUrl}/upload-small`, {
+        method: "POST",
+        headers: {
+          "Content-Type": item.contentType,
+          "X-File-Key": item.key,
+          "X-Upload-Ticket": ticket,
+        },
+        body: item.blob,
+      });
+      const payload = await readJsonResponse(response);
+      if (!payload.receipt) throw new Error(`${item.filename} 未返回上传回执`);
+      return payload.receipt;
+    }
+
+    async function uploadLargeFileToFeishuEdge(uploadBaseUrl, ticket, item) {
+      setFeishuTaskStatus(`正在准备飞书分片上传：${item.filename}...`);
+      const preparePayload = await readJsonResponse(await fetch(`${uploadBaseUrl}/prepare`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fileKey: item.key, ticket }),
+      }));
+      const { blockNum, blockSize, uploadState } = preparePayload;
+      if (!uploadState || !Number.isInteger(blockNum) || !Number.isInteger(blockSize)) {
+        throw new Error("边缘节点未返回有效分片参数");
+      }
+      for (let chunkIndex = 0; chunkIndex < blockNum; chunkIndex += 1) {
+        const start = chunkIndex * blockSize;
+        const end = Math.min(item.blob.size, start + blockSize);
+        const chunkBytes = new Uint8Array(await item.blob.slice(start, end).arrayBuffer());
+        setFeishuTaskStatus(`正在上传 ${item.filename} 分片 ${chunkIndex + 1}/${blockNum}...`);
+        await readJsonResponse(await fetch(`${uploadBaseUrl}/part`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Chunk-Checksum": adler32(chunkBytes),
+            "X-Chunk-Index": String(chunkIndex),
+            "X-Upload-State": uploadState,
+            "X-Upload-Ticket": ticket,
+          },
+          body: chunkBytes,
+        }));
+      }
+      setFeishuTaskStatus(`正在完成飞书分片上传：${item.filename}...`);
+      const finishPayload = await readJsonResponse(await fetch(`${uploadBaseUrl}/finish`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ticket, uploadState }),
+      }));
+      if (!finishPayload.receipt) throw new Error(`${item.filename} 未返回上传回执`);
+      return finishPayload.receipt;
+    }
+
+    async function uploadFeishuTaskViaEdge(metadata, aplusZip, brandZip, token) {
+      const zipFiles = [
+        aplusZip ? { ...aplusZip, key: "aplusZip" } : null,
+        brandZip ? { ...brandZip, key: "brandZip" } : null,
+      ].filter(Boolean);
+      setFeishuTaskStatus("正在申请安全上传凭证...");
+      const ticketData = await requestFeishuEdgeTicket(metadata, zipFiles, token);
+      const receipts = {};
+      for (const item of zipFiles) {
+        receipts[item.key] = item.blob.size <= FEISHU_SMALL_UPLOAD_LIMIT
+          ? await uploadSmallFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item)
+          : await uploadLargeFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item);
+      }
+      setFeishuTaskStatus("文件已直传飞书，正在创建任务记录...");
+      return readJsonResponse(await fetch(feishuTokenTaskApiUrl(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ receipts, ticket: ticketData.ticket }),
+      }));
     }
 
     async function uploadFeishuTask() {
@@ -1790,31 +1889,19 @@
       els.uploadFeishuTask.disabled = true;
       setFeishuTaskStatus("正在生成 ZIP...");
       try {
-        const body = {
-          metadata,
-          aplusZip: await buildUploadZip(aPlusFiles, aPlusRoot()),
-          brandZip: await buildUploadZip(brandFiles, brandRoot()),
-          asyncMode: true,
-        };
-        setFeishuTaskStatus("ZIP 已生成，正在提交飞书上传任务...");
-        const response = await fetch(feishuTaskApiBaseUrl(), {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(body),
-        });
-        const payload = await readJsonResponse(response);
-        const taskId = payload?.data?.taskId || "";
+        const aplusZip = await buildUploadZip(aPlusFiles, aPlusRoot());
+        const brandZip = await buildUploadZip(brandFiles, brandRoot());
+        const zipLabels = [aplusZip, brandZip]
+          .filter(Boolean)
+          .map((item) => `${item.filename} ${formatBytes(item.blob.size)}`)
+          .join("，");
+        setFeishuTaskStatus(`ZIP 已生成（${zipLabels}），正在提交飞书上传任务...`);
+        const payload = await uploadFeishuTaskViaEdge(metadata, aplusZip, brandZip, token);
         const recordId = payload?.data?.recordId || "";
         if (recordId) {
           setFeishuTaskStatus(`已上传到飞书任务：${recordId}`);
-        } else if (taskId) {
-          setFeishuTaskStatus(`任务已提交，后台上传中：${taskId}`);
-          await pollFeishuUploadTask(taskId, token);
         } else {
-          setFeishuTaskStatus("已提交飞书上传任务。");
+          setFeishuTaskStatus("文件已上传并创建飞书任务。");
         }
       } catch (error) {
         setFeishuTaskStatus(`上传失败：${error.message}`, "warn");

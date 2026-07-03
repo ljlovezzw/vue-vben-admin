@@ -116,6 +116,8 @@ apps\web-antd\dist
 apps\web-antd\dist.zip
 ```
 
+正式环境直接读取 `dist`，因此 `vite.config.ts` 设置 `build.emptyOutDir=false`：构建时保留上一版哈希资源，待新资源全部写入后再更新入口，避免在线用户在构建窗口内请求旧分片出现 404。旧哈希文件会累积，清理时必须避开在线构建和发布窗口。
+
 本机运行生产构建产物：
 
 ```powershell
@@ -475,6 +477,7 @@ public\tools\upload-tool.html
 
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
+- A+ 图像轮播组件固定生成 6 组图片，即手机端 6 张、电脑端 6 张；完整图和轮播共用 A+ 图片组序号，轮播输出文件名格式为 `SPU-端_图片组序号-轮播序号`。
 - `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
 - 关键词反查页输入 ASIN、市场、时间范围、排序字段和排序方向。`marketPlaceId` 当前已知映射不完整，只确认 `美国=1、英国=5、德国=6、法国=7、意大利=8、西班牙=9`，页面用下拉选择这 6 个市场，不再让用户手输 ID。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
 - 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Asin/top10Product/top10Products/topProducts/productList/imageList/first10Product/first10Products` 作为 Top10 ASIN/产品图片条；`rankTrends/searchTrends/trends` 合并为“趋势”小折线图；`naRank/adRank` 展示最新排名、页码位置和采集日期；`naTrafficRatio/adTrafficRatio` 合并为“流量分布”；`parentNaTrafficRatio/parentAdTrafficRatio` 合并为“父体流量分布”；`marketNaTrafficRatio/marketAdTrafficRatio` 合并为“市场流量分布”；`top3ClickRate/top3ConversionRate` 合并为“ABA Top3集中度”；`ppcBid/ppcBidMin/ppcBidMax` 合并为建议竞价。未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。注意 `products` 是竞争商品数，必须按普通数字列展示，不能放进 Top10 产品图片条。
@@ -488,7 +491,9 @@ public\tools\upload-tool.html
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
 - 在线 Listing 查询完成后，从返回行提取父 ASIN 下拉选项，并按所选父 ASIN 展示对应 ASIN 列表和 Listing 明细。查询前父 ASIN 下拉保留可操作状态，只显示提示项。
 - Listing 明细表固定展示：父ASIN、ASIN、图片、MSKU、SKU、品名、店铺、国家、品牌、状态、负责人；Listing 代理当前返回中文列名，图片列优先读取 `图片`，兼容 `small_image_url`、对象、数组、JSON 字符串和 `//` 协议相对地址，并在候选字段未命中时从图片类字段名兜底提取 URL；品牌读取 `亚马逊品牌`，状态 1/true 显示在售，0/false 显示停售。图片加载失败显示空占位。
-- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。飞书任务上传同样按环境切换，本地使用 `/api/feishu/image-upload-tasks`，线上使用 `https://api.junlee.top/api/feishu/image-upload-tasks`。
+- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。申请飞书上传票据和提交上传回执同样按环境切换，本地走 `/api/feishu/*`，线上走 `https://api.junlee.top/api/feishu/*`。
+- 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用 `v=20260703-edge-upload` 避免生产浏览器继续命中旧静态 HTML。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
