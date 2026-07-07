@@ -2807,7 +2807,7 @@ onBeforeUnmount(() => {
                 <div class="blue-kpi-glass">
                   <span class="blue-kpi-dot" aria-hidden="true"></span>
                   <div class="blue-kpi-heading">
-                    <span>推广费用占比</span>
+                    <span>广告占比</span>
                   </div>
                   <strong>{{ formatPercent(promotionRate) }}</strong>
                 </div>
@@ -2939,7 +2939,7 @@ onBeforeUnmount(() => {
             <div class="panel-heading responsible-heading">
               <h2>
                 {{ metricPrefix }}销量完成率 -
-                运营负责人维度--毛利润数据来自利润表(已发放)
+                运营负责人维度   --除利润外，其他数据均来自产品表现(实时数据)
               </h2>
               <div class="responsible-heading-actions">
                 <span>
