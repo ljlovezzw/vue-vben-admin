@@ -28,10 +28,13 @@ import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
 const IN_APP_NOTIFICATION_POLL_MS = 60_000;
+const UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY =
+  'kanban:update-tips:search-term-report-ad-analyzer:v1';
 
 const notifications = ref<NotificationItem[]>([]);
 const inAppCardNotifications = ref<InAppCardNotification[]>([]);
 const ackLoadingId = ref<null | number>(null);
+const updateTipsVisible = ref(false);
 let notificationPollTimer: ReturnType<typeof setInterval> | undefined;
 let notificationVisibilityListenerBound = false;
 
@@ -46,6 +49,9 @@ const showDot = computed(() =>
 );
 const activeInAppCardNotification = computed(
   () => inAppCardNotifications.value[0] ?? null,
+);
+const updateTipsModalOpen = computed(
+  () => updateTipsVisible.value && !activeInAppCardNotification.value,
 );
 
 const menus = computed(() => [
@@ -64,6 +70,32 @@ const avatar = computed(() => {
 
 async function handleLogout() {
   await authStore.logout(false);
+}
+
+function shouldShowSearchTermAdAnalyzerTips() {
+  if (!accessStore.accessToken) return false;
+  try {
+    return (
+      localStorage.getItem(UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY) !== '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+function maybeShowSearchTermAdAnalyzerTips() {
+  if (shouldShowSearchTermAdAnalyzerTips()) {
+    updateTipsVisible.value = true;
+  }
+}
+
+function acknowledgeSearchTermAdAnalyzerTips() {
+  try {
+    localStorage.setItem(UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY, '1');
+  } catch {
+    // Ignore storage failures; closing the modal should still work this time.
+  }
+  updateTipsVisible.value = false;
 }
 
 async function handleNoticeClear() {
@@ -121,10 +153,19 @@ function cardTitle(item: InAppCardNotification | null) {
 function cardPlainText(item: InAppCardNotification) {
   const blocks = cardContentBlocks(item);
   return blocks
-    .map((block) => block.text.replaceAll('**', '').trim())
+    .map((block) => block.text.trim())
     .filter(Boolean)
     .join('\n')
     .slice(0, 160);
+}
+
+function normalizeCardMarkdown(value: unknown) {
+  return String(value || '')
+    .replaceAll('**', '')
+    .replaceAll(/\n{3,}/g, '\n\n')
+    .replaceAll(/(?:^|\n)- /g, '\n- ')
+    .replaceAll(/(?:^|\n)(\d+)\. /g, '\n$1. ')
+    .trim();
 }
 
 function cardContentBlocks(item: InAppCardNotification | null) {
@@ -134,7 +175,7 @@ function cardContentBlocks(item: InAppCardNotification | null) {
   return elements
     .map((element: Record<string, any>) => {
       if (element.tag === 'markdown') {
-        const text = String(element.content || '').replaceAll('**', '');
+        const text = normalizeCardMarkdown(element.content);
         return { kind: 'markdown', text };
       }
       if (element.tag === 'note' && Array.isArray(element.elements)) {
@@ -340,11 +381,13 @@ watch(
     if (token) {
       bindNotificationVisibilityListener();
       startNotificationPolling();
+      maybeShowSearchTermAdAnalyzerTips();
     } else {
       stopNotificationPolling();
       unbindNotificationVisibilityListener();
       inAppCardNotifications.value = [];
       syncNotificationDropdown();
+      updateTipsVisible.value = false;
     }
   },
   { immediate: true },
@@ -418,6 +461,41 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </Modal>
+      <Modal
+        :closable="false"
+        :footer="null"
+        :keyboard="false"
+        :mask-closable="false"
+        :open="updateTipsModalOpen"
+        width="560px"
+      >
+        <div class="update-tips-modal">
+          <div class="update-tips-title">搜索词报告词库更新</div>
+          <div class="update-tips-body">
+            <p>搜索词报告词库新增“附加广告分析 xlsx”能力。</p>
+            <ol>
+              <li>进入工具下的搜索词报告词库。</li>
+              <li>选择店铺、输入 SPU、选择主报告日期。</li>
+              <li>查询并选择父 ASIN。</li>
+              <li>
+                如需额外广告分析文件，打开“附加广告商品和 SKU
+                广告分析 xlsx”。
+              </li>
+              <li>广告分析日期默认跟主报告日期一致，也可以单独修改。</li>
+              <li>点击生成后，完成页会额外出现两个下载文件。</li>
+            </ol>
+            <div class="update-tips-files">
+              <div>店铺-SPU-ASIN转化报告.xlsx</div>
+              <div>店铺-SPU-时间-全部广告.xlsx</div>
+            </div>
+          </div>
+          <div class="update-tips-actions">
+            <Button type="primary" @click="acknowledgeSearchTermAdAnalyzerTips">
+              知道了
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </template>
     <template #lock-screen>
       <LockScreen :avatar @to-login="handleLogout" />
@@ -442,6 +520,7 @@ onBeforeUnmount(() => {
   padding: 12px 0;
   font-size: 14px;
   line-height: 1.75;
+  white-space: pre-line;
   border-top: 1px solid #e5e7eb;
 }
 
@@ -460,6 +539,48 @@ onBeforeUnmount(() => {
 }
 
 .in-app-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 18px;
+}
+
+.update-tips-modal {
+  color: #0f172a;
+}
+
+.update-tips-title {
+  margin-bottom: 12px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.update-tips-body {
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.update-tips-body p {
+  margin: 0 0 10px;
+}
+
+.update-tips-body ol {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.update-tips-files {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+}
+
+.update-tips-actions {
   display: flex;
   justify-content: flex-end;
   padding-top: 18px;

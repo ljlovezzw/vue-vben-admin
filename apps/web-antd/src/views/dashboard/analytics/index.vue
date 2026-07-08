@@ -2668,15 +2668,14 @@ onBeforeUnmount(() => {
                     <button type="button">{{ item.name }} &gt;</button>
                     <strong>{{ formatPercent(item.completionRate) }}</strong>
                     <p>
-                      目标销量
+                      实际 <b>{{ formatInteger(item.salesQty) }}</b> / 目标
+                      <b>{{ formatInteger(item.dailyTargetUnits) }}</b>
+                    </p>
+                    <p>
+                      差额
                       <b
                         :class="
                           comparisonClass(item.salesQty, item.dailyTargetUnits)
-                        "
-                        :title="
-                          formatSignedInteger(
-                            groupGap(item.salesQty, item.dailyTargetUnits),
-                          )
                         "
                       >
                         {{
@@ -2716,17 +2715,16 @@ onBeforeUnmount(() => {
                       formatPercent(item.salesCompletionRate)
                     }}</strong>
                     <p>
-                      目标销售额
+                      实际 <b>{{ formatSalesMoney(item.salesAmount) }}</b> /
+                      目标 <b>{{ formatSalesMoney(item.dailyTargetSales) }}</b>
+                    </p>
+                    <p>
+                      差额
                       <b
                         :class="
                           comparisonClass(
                             item.salesAmount,
                             item.dailyTargetSales,
-                          )
-                        "
-                        :title="
-                          formatSignedSalesMoney(
-                            groupGap(item.salesAmount, item.dailyTargetSales),
                           )
                         "
                       >
@@ -2768,17 +2766,16 @@ onBeforeUnmount(() => {
                       formatPercent(item.grossProfitCompletionRate)
                     }}</strong>
                     <p>
-                      目标毛利
+                      实际 <b>{{ formatCny(item.grossProfit) }}</b> / 目标
+                      <b>{{ formatCny(item.dailyTargetProfit) }}</b>
+                    </p>
+                    <p>
+                      差额
                       <b
                         :class="
                           comparisonClass(
                             item.grossProfit,
                             item.dailyTargetProfit,
-                          )
-                        "
-                        :title="
-                          formatSignedCny(
-                            groupGap(item.grossProfit, item.dailyTargetProfit),
                           )
                         "
                       >
@@ -2938,8 +2935,8 @@ onBeforeUnmount(() => {
           <div class="white-panel responsible-panel">
             <div class="panel-heading responsible-heading">
               <h2>
-                {{ metricPrefix }}销量完成率 -
-                运营负责人维度   --除利润外，其他数据均来自产品表现(实时数据)
+                {{ metricPrefix }}销量完成率 - 运营负责人维度
+                --除利润外，其他数据均来自产品表现(实时数据)
               </h2>
               <div class="responsible-heading-actions">
                 <span>

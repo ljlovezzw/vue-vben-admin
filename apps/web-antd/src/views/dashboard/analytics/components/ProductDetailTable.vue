@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type {
-  Spin,
   TableColumnsType,
   TablePaginationConfig,
 } from 'ant-design-vue';
@@ -35,6 +34,7 @@ import {
   Popover,
   Select,
   Space,
+  Spin,
   Table,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';

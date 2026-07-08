@@ -32,6 +32,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -66,12 +67,16 @@ const selectedParentAsins = ref<string[]>([]);
 const result = ref<null | SearchTermReportResult>(null);
 const activeSheetKey = ref('');
 const dateRange = ref<[Dayjs, Dayjs]>(DEFAULT_DATE_RANGE);
+const includeAdAnalyzer = ref(false);
+const adAnalyzerDateRange = ref<[Dayjs, Dayjs]>(DEFAULT_DATE_RANGE);
+const adAnalyzerSearchField = ref<'asin' | 'msku'>('msku');
 const currentTaskId = ref('');
 const taskStatus = ref('');
 const taskError = ref('');
 let taskPollTimer: null | ReturnType<typeof setTimeout> = null;
 let restoringState = false;
 let restoredDateRange = false;
+let adAnalyzerDateTouched = false;
 
 const query = reactive({
   shopName: '',
@@ -88,6 +93,9 @@ const canGenerate = computed(
     Boolean(query.spu.trim()) &&
     Boolean(dateRange.value?.[0]) &&
     Boolean(dateRange.value?.[1]) &&
+    (!includeAdAnalyzer.value ||
+      (Boolean(adAnalyzerDateRange.value?.[0]) &&
+        Boolean(adAnalyzerDateRange.value?.[1]))) &&
     (parentRows.value.length === 0 || selectedParentAsins.value.length > 0),
 );
 
@@ -168,6 +176,22 @@ function formattedDateRange() {
   };
 }
 
+function formattedAdAnalyzerDateRange() {
+  const [start, end] = adAnalyzerDateRange.value ?? [];
+  return {
+    endDate: end?.format('YYYY-MM-DD') ?? '',
+    startDate: start?.format('YYYY-MM-DD') ?? '',
+  };
+}
+
+function syncAdAnalyzerDateRange() {
+  if (adAnalyzerDateTouched) return;
+  const [start, end] = dateRange.value ?? [];
+  if (start && end) {
+    adAnalyzerDateRange.value = [start, end];
+  }
+}
+
 function restoreCachedState() {
   try {
     const raw = localStorage.getItem(STATE_CACHE_KEY);
@@ -182,6 +206,19 @@ function restoreCachedState() {
         dayjs(String(state.dateRange.endDate)),
       ];
       restoredDateRange = true;
+    }
+    includeAdAnalyzer.value = Boolean(state.includeAdAnalyzer);
+    adAnalyzerSearchField.value =
+      state.adAnalyzerSearchField === 'asin' ? 'asin' : 'msku';
+    if (
+      state.adAnalyzerDateRange?.startDate &&
+      state.adAnalyzerDateRange?.endDate
+    ) {
+      adAnalyzerDateRange.value = [
+        dayjs(String(state.adAnalyzerDateRange.startDate)),
+        dayjs(String(state.adAnalyzerDateRange.endDate)),
+      ];
+      adAnalyzerDateTouched = Boolean(state.adAnalyzerDateTouched);
     }
     parentRows.value = Array.isArray(state.parentRows) ? state.parentRows : [];
     selectedParentAsins.value = Array.isArray(state.selectedParentAsins)
@@ -204,13 +241,21 @@ function restoreCachedState() {
 function persistCachedState() {
   if (restoringState) return;
   const { startDate, endDate } = formattedDateRange();
+  const adDate = formattedAdAnalyzerDateRange();
   try {
     localStorage.setItem(
       STATE_CACHE_KEY,
       JSON.stringify({
         activeSheetKey: activeSheetKey.value,
+        adAnalyzerDateRange: {
+          endDate: adDate.endDate,
+          startDate: adDate.startDate,
+        },
+        adAnalyzerDateTouched,
+        adAnalyzerSearchField: adAnalyzerSearchField.value,
         currentTaskId: currentTaskId.value,
         dateRange: { endDate, startDate },
+        includeAdAnalyzer: includeAdAnalyzer.value,
         parentRows: parentRows.value,
         query: {
           shopName: query.shopName,
@@ -228,6 +273,20 @@ function persistCachedState() {
 
 function applyPreset(startDate: string, endDate: string) {
   dateRange.value = [dayjs(startDate), dayjs(endDate)];
+  syncAdAnalyzerDateRange();
+}
+
+function handleMainDateChange() {
+  syncAdAnalyzerDateRange();
+}
+
+function handleAdAnalyzerDateChange() {
+  adAnalyzerDateTouched = true;
+  resetResultState();
+}
+
+function handleAdAnalyzerConfigChange() {
+  resetResultState();
 }
 
 function formatCell(value: unknown) {
@@ -333,12 +392,17 @@ async function searchParentAsins() {
 async function generateReport() {
   normalizeSpu();
   const { startDate, endDate } = formattedDateRange();
+  const adDate = formattedAdAnalyzerDateRange();
   if (!query.shopName.trim() || !query.spu.trim()) {
     message.warning('店铺和 SPU 不能为空');
     return;
   }
   if (!startDate || !endDate) {
     message.warning('请选择报告日期范围');
+    return;
+  }
+  if (includeAdAnalyzer.value && (!adDate.startDate || !adDate.endDate)) {
+    message.warning('请选择广告分析日期范围');
     return;
   }
   if (parentRows.value.length > 0 && selectedParentAsins.value.length === 0) {
@@ -350,7 +414,11 @@ async function generateReport() {
   resetResultState();
   try {
     const task = await createSearchTermReportTask({
+      adAnalyzerEndDate: includeAdAnalyzer.value ? adDate.endDate : null,
+      adAnalyzerSearchField: adAnalyzerSearchField.value,
+      adAnalyzerStartDate: includeAdAnalyzer.value ? adDate.startDate : null,
       endDate,
+      includeAdAnalyzer: includeAdAnalyzer.value,
       parentAsin: selectedParentAsins.value[0] || null,
       parentAsins: selectedParentAsins.value,
       shopName: query.shopName.trim(),
@@ -419,13 +487,17 @@ async function downloadReport() {
     message.warning('请先生成报告');
     return;
   }
+  await downloadFile(result.value.fileName);
+}
+
+async function downloadFile(fileName: string) {
   downloading.value = true;
   try {
-    const blob = await downloadSearchTermReport(result.value.fileName);
+    const blob = await downloadSearchTermReport(fileName);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = result.value.fileName;
+    link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
@@ -438,9 +510,13 @@ async function downloadReport() {
 watch(
   () => ({
     activeSheetKey: activeSheetKey.value,
+    adAnalyzerDateEnd: formattedAdAnalyzerDateRange().endDate,
+    adAnalyzerDateStart: formattedAdAnalyzerDateRange().startDate,
+    adAnalyzerSearchField: adAnalyzerSearchField.value,
     currentTaskId: currentTaskId.value,
     dateEnd: formattedDateRange().endDate,
     dateStart: formattedDateRange().startDate,
+    includeAdAnalyzer: includeAdAnalyzer.value,
     parentRows: parentRows.value,
     queryShopName: query.shopName,
     querySpu: query.spu,
@@ -514,6 +590,7 @@ onBeforeUnmount(clearTaskPoll);
                 class="full-control"
                 format="YYYY-MM-DD"
                 value-format=""
+                @change="handleMainDateChange"
               />
             </Form.Item>
           </div>
@@ -527,6 +604,33 @@ onBeforeUnmount(clearTaskPoll);
             >
               {{ preset.label }}
             </Button>
+          </div>
+          <div class="ad-analyzer-row">
+            <div class="ad-analyzer-switch">
+              <Switch
+                v-model:checked="includeAdAnalyzer"
+                @change="handleAdAnalyzerConfigChange"
+              />
+              <span>附加广告ASIN和广告活动 xlsx</span>
+            </div>
+            <Select
+              v-model:value="adAnalyzerSearchField"
+              :disabled="!includeAdAnalyzer"
+              class="ad-search-field"
+              :options="[
+                { label: 'MSKU', value: 'msku' },
+                { label: 'ASIN', value: 'asin' },
+              ]"
+              @change="handleAdAnalyzerConfigChange"
+            />
+            <DatePicker.RangePicker
+              v-model:value="adAnalyzerDateRange"
+              :disabled="!includeAdAnalyzer"
+              class="ad-date-range"
+              format="YYYY-MM-DD"
+              value-format=""
+              @change="handleAdAnalyzerDateChange"
+            />
           </div>
         </Form>
       </Card>
@@ -625,6 +729,34 @@ onBeforeUnmount(clearTaskPoll);
             {{ result.fileName }}
           </Descriptions.Item>
         </Descriptions>
+
+        <div
+          v-if="result.extraFiles?.length"
+          class="extra-files"
+        >
+          <h3>附加文件</h3>
+          <div class="extra-file-list">
+            <div
+              v-for="file in result.extraFiles"
+              :key="file.key"
+              class="extra-file-item"
+            >
+              <div>
+                <strong>{{ file.label }}</strong>
+                <span>
+                  {{ file.reportDate }} · {{ file.searchField.toUpperCase() }}
+                  {{ file.searchTextCount }} 个 · {{ file.rowCount }} 行
+                </span>
+              </div>
+              <Button
+                size="small"
+                @click="downloadFile(file.fileName)"
+              >
+                下载
+              </Button>
+            </div>
+          </div>
+        </div>
 
         <div v-if="result.summaryRows.length > 0" class="summary-table">
           <h3>汇总</h3>
@@ -758,17 +890,69 @@ onBeforeUnmount(clearTaskPoll);
   color: #64748b;
 }
 
+.ad-analyzer-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) 180px minmax(280px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.ad-analyzer-switch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #334155;
+}
+
+.ad-search-field,
+.ad-date-range {
+  width: 100%;
+}
+
 .result-desc,
+.extra-files,
 .summary-table,
 .sheet-tabs {
   margin-top: 14px;
 }
 
+.extra-files h3,
 .summary-table h3 {
   margin: 0 0 10px;
   font-size: 15px;
   line-height: 22px;
   color: #12233f;
+}
+
+.extra-file-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.extra-file-item {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+}
+
+.extra-file-item strong {
+  display: block;
+  color: #12233f;
+}
+
+.extra-file-item span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
 }
 
 .sheet-summary {
@@ -793,6 +977,7 @@ onBeforeUnmount(clearTaskPoll);
 }
 
 @media (max-width: 960px) {
+  .ad-analyzer-row,
   .query-grid {
     grid-template-columns: 1fr;
   }

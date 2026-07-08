@@ -290,7 +290,11 @@ export interface SearchTermReportParentAsinsResult {
 }
 
 export interface SearchTermReportPayload {
+  adAnalyzerEndDate?: null | string;
+  adAnalyzerSearchField?: 'asin' | 'msku';
+  adAnalyzerStartDate?: null | string;
   endDate: string;
+  includeAdAnalyzer?: boolean;
   parentAsin?: null | string;
   parentAsins?: string[];
   shopName: string;
@@ -308,6 +312,7 @@ export interface SearchTermReportSheet {
 
 export interface SearchTermReportResult {
   downloadUrl: string;
+  extraFiles?: SearchTermReportExtraFile[];
   fileName: string;
   parentAsin: string;
   parentAsins: string[];
@@ -316,6 +321,20 @@ export interface SearchTermReportResult {
   shopName: string;
   spu: string;
   summaryRows: Record<string, any>[];
+}
+
+export interface SearchTermReportExtraFile {
+  downloadUrl: string;
+  fileName: string;
+  key: string;
+  label: string;
+  matchedParentAsins?: string[];
+  reportDate: string;
+  requestedSearchField?: string;
+  rowCount: number;
+  searchField: string;
+  searchText?: string[];
+  searchTextCount: number;
 }
 
 export type SearchTermReportTaskStatus =
