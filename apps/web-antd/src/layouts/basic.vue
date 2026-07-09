@@ -28,15 +28,24 @@ import { useAuthStore } from '#/store';
 import LoginForm from '#/views/_core/authentication/login.vue';
 
 const IN_APP_NOTIFICATION_POLL_MS = 60_000;
-const UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY =
-  'kanban:update-tips:search-term-report-ad-analyzer:v1';
+const IN_APP_NOTIFICATION_MIN_REQUEST_MS = 58_000;
+const IN_APP_NOTIFICATION_OWNER_RETRY_MS = 15_000;
+const IN_APP_NOTIFICATION_OWNER_TTL_MS = 75_000;
+const IN_APP_NOTIFICATION_OWNER_KEY = 'kanban:card-notifications:poll-owner';
+const IN_APP_NOTIFICATION_LAST_REQUEST_KEY =
+  'kanban:card-notifications:last-request';
 
 const notifications = ref<NotificationItem[]>([]);
 const inAppCardNotifications = ref<InAppCardNotification[]>([]);
 const ackLoadingId = ref<null | number>(null);
-const updateTipsVisible = ref(false);
-let notificationPollTimer: ReturnType<typeof setInterval> | undefined;
+let notificationPollTimer: ReturnType<typeof setTimeout> | undefined;
 let notificationVisibilityListenerBound = false;
+let notificationBeforeUnloadListenerBound = false;
+let notificationRequestPending = false;
+
+const notificationTabId = `${Date.now()}-${Math.random()
+  .toString(16)
+  .slice(2)}`;
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -49,9 +58,6 @@ const showDot = computed(() =>
 );
 const activeInAppCardNotification = computed(
   () => inAppCardNotifications.value[0] ?? null,
-);
-const updateTipsModalOpen = computed(
-  () => updateTipsVisible.value && !activeInAppCardNotification.value,
 );
 
 const menus = computed(() => [
@@ -70,32 +76,6 @@ const avatar = computed(() => {
 
 async function handleLogout() {
   await authStore.logout(false);
-}
-
-function shouldShowSearchTermAdAnalyzerTips() {
-  if (!accessStore.accessToken) return false;
-  try {
-    return (
-      localStorage.getItem(UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY) !== '1'
-    );
-  } catch {
-    return false;
-  }
-}
-
-function maybeShowSearchTermAdAnalyzerTips() {
-  if (shouldShowSearchTermAdAnalyzerTips()) {
-    updateTipsVisible.value = true;
-  }
-}
-
-function acknowledgeSearchTermAdAnalyzerTips() {
-  try {
-    localStorage.setItem(UPDATE_TIPS_SEARCH_TERM_AD_ANALYZER_KEY, '1');
-  } catch {
-    // Ignore storage failures; closing the modal should still work this time.
-  }
-  updateTipsVisible.value = false;
 }
 
 async function handleNoticeClear() {
@@ -138,7 +118,6 @@ const handleClick = (item: NotificationItem) => {
     }
     return;
   }
-  // 如果通知项有链接，点击时跳转
   if (item.link) {
     navigateTo(item.link, item.query, item.state);
   }
@@ -216,12 +195,91 @@ function isNotificationAuthFailure(error: unknown) {
   );
 }
 
+function readNotificationOwner(): null | { expiresAt: number; tabId: string } {
+  try {
+    const raw = localStorage.getItem(IN_APP_NOTIFICATION_OWNER_KEY);
+    if (!raw) return null;
+    const owner = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      expiresAt: Number(owner.expiresAt || 0),
+      tabId: String(owner.tabId || ''),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function acquireNotificationPollOwnership() {
+  const now = Date.now();
+  const owner = readNotificationOwner();
+  if (owner && owner.tabId !== notificationTabId && owner.expiresAt > now) {
+    return false;
+  }
+  try {
+    localStorage.setItem(
+      IN_APP_NOTIFICATION_OWNER_KEY,
+      JSON.stringify({
+        expiresAt: now + IN_APP_NOTIFICATION_OWNER_TTL_MS,
+        tabId: notificationTabId,
+      }),
+    );
+    return readNotificationOwner()?.tabId === notificationTabId;
+  } catch {
+    return true;
+  }
+}
+
+function releaseNotificationPollOwnership() {
+  const owner = readNotificationOwner();
+  if (!owner || owner.tabId !== notificationTabId) {
+    return;
+  }
+  try {
+    localStorage.removeItem(IN_APP_NOTIFICATION_OWNER_KEY);
+  } catch {
+    // Storage cleanup is best effort only.
+  }
+}
+
+function notificationRequestThrottleKey() {
+  const userInfo = userStore.userInfo as Record<string, unknown> | undefined;
+  const userKey = String(
+    userInfo?.id || userInfo?.userId || userInfo?.username || 'current',
+  );
+  return `${IN_APP_NOTIFICATION_LAST_REQUEST_KEY}:${userKey}`;
+}
+
+function reserveNotificationRequestSlot() {
+  const key = notificationRequestThrottleKey();
+  const now = Date.now();
+  try {
+    const lastRequestAt = Number(localStorage.getItem(key) || 0);
+    if (
+      lastRequestAt > 0 &&
+      now - lastRequestAt < IN_APP_NOTIFICATION_MIN_REQUEST_MS
+    ) {
+      return false;
+    }
+    localStorage.setItem(key, String(now));
+    return localStorage.getItem(key) === String(now);
+  } catch {
+    return true;
+  }
+}
+
 async function loadInAppCardNotifications(silent = true) {
   if (!accessStore.accessToken) {
     inAppCardNotifications.value = [];
     syncNotificationDropdown();
     return;
   }
+  if (notificationRequestPending) {
+    return;
+  }
+  if (!reserveNotificationRequestSlot()) {
+    return;
+  }
+  notificationRequestPending = true;
   try {
     inAppCardNotifications.value = await fetchInAppCardNotifications({
       limit: 5,
@@ -238,25 +296,48 @@ async function loadInAppCardNotifications(silent = true) {
       const detail = error instanceof Error ? error.message : String(error);
       message.error(`查询站内通知失败：${detail}`);
     }
+  } finally {
+    notificationRequestPending = false;
   }
 }
 
-function stopNotificationPolling() {
+function clearNotificationPollTimer() {
   if (notificationPollTimer) {
-    clearInterval(notificationPollTimer);
+    clearTimeout(notificationPollTimer);
     notificationPollTimer = undefined;
   }
 }
 
-function startNotificationPolling() {
-  stopNotificationPolling();
-  if (document.hidden) {
+function scheduleNotificationPoll(delay = IN_APP_NOTIFICATION_POLL_MS) {
+  clearNotificationPollTimer();
+  if (!accessStore.accessToken || document.hidden) {
     return;
   }
-  void loadInAppCardNotifications();
-  notificationPollTimer = setInterval(() => {
-    void loadInAppCardNotifications();
-  }, IN_APP_NOTIFICATION_POLL_MS);
+  notificationPollTimer = setTimeout(async () => {
+    notificationPollTimer = undefined;
+    if (!accessStore.accessToken || document.hidden) {
+      releaseNotificationPollOwnership();
+      return;
+    }
+    if (!acquireNotificationPollOwnership()) {
+      scheduleNotificationPoll(IN_APP_NOTIFICATION_OWNER_RETRY_MS);
+      return;
+    }
+    await loadInAppCardNotifications();
+    scheduleNotificationPoll(IN_APP_NOTIFICATION_POLL_MS);
+  }, delay);
+}
+
+function stopNotificationPolling() {
+  clearNotificationPollTimer();
+  releaseNotificationPollOwnership();
+}
+
+function startNotificationPolling() {
+  if (!accessStore.accessToken || document.hidden || notificationPollTimer) {
+    return;
+  }
+  scheduleNotificationPoll(0);
 }
 
 function handleNotificationVisibilityChange() {
@@ -270,26 +351,32 @@ function handleNotificationVisibilityChange() {
   }
 }
 
-function bindNotificationVisibilityListener() {
-  if (notificationVisibilityListenerBound) {
-    return;
+function bindNotificationListeners() {
+  if (!notificationVisibilityListenerBound) {
+    document.addEventListener(
+      'visibilitychange',
+      handleNotificationVisibilityChange,
+    );
+    notificationVisibilityListenerBound = true;
   }
-  document.addEventListener(
-    'visibilitychange',
-    handleNotificationVisibilityChange,
-  );
-  notificationVisibilityListenerBound = true;
+  if (!notificationBeforeUnloadListenerBound) {
+    window.addEventListener('beforeunload', releaseNotificationPollOwnership);
+    notificationBeforeUnloadListenerBound = true;
+  }
 }
 
-function unbindNotificationVisibilityListener() {
-  if (!notificationVisibilityListenerBound) {
-    return;
+function unbindNotificationListeners() {
+  if (notificationVisibilityListenerBound) {
+    document.removeEventListener(
+      'visibilitychange',
+      handleNotificationVisibilityChange,
+    );
+    notificationVisibilityListenerBound = false;
   }
-  document.removeEventListener(
-    'visibilitychange',
-    handleNotificationVisibilityChange,
-  );
-  notificationVisibilityListenerBound = false;
+  if (notificationBeforeUnloadListenerBound) {
+    window.removeEventListener('beforeunload', releaseNotificationPollOwnership);
+    notificationBeforeUnloadListenerBound = false;
+  }
 }
 
 async function acknowledgeInAppNotification(eventId: number) {
@@ -324,10 +411,8 @@ function navigateTo(
   state?: Record<string, any>,
 ) {
   if (link.startsWith('http://') || link.startsWith('https://')) {
-    // 外部链接，在新标签页打开
     window.open(link, '_blank');
   } else {
-    // 内部路由链接，支持 query 参数和 state
     router.push({
       path: link,
       query: query || {},
@@ -379,15 +464,13 @@ watch(
   () => accessStore.accessToken,
   (token) => {
     if (token) {
-      bindNotificationVisibilityListener();
+      bindNotificationListeners();
       startNotificationPolling();
-      maybeShowSearchTermAdAnalyzerTips();
     } else {
       stopNotificationPolling();
-      unbindNotificationVisibilityListener();
+      unbindNotificationListeners();
       inAppCardNotifications.value = [];
       syncNotificationDropdown();
-      updateTipsVisible.value = false;
     }
   },
   { immediate: true },
@@ -395,7 +478,7 @@ watch(
 
 onBeforeUnmount(() => {
   stopNotificationPolling();
-  unbindNotificationVisibilityListener();
+  unbindNotificationListeners();
 });
 </script>
 
@@ -414,10 +497,10 @@ onBeforeUnmount(() => {
         :dot="showDot"
         :notifications="notifications"
         @clear="handleNoticeClear"
-        @read="(item) => item.id && markRead(item.id)"
-        @remove="(item) => item.id && remove(item.id)"
         @make-all="handleMakeAll"
         @on-click="handleClick"
+        @read="(item) => item.id && markRead(item.id)"
+        @remove="(item) => item.id && remove(item.id)"
         @view-all="viewAll"
       />
     </template>
@@ -457,41 +540,6 @@ onBeforeUnmount(() => {
               @click="acknowledgeActiveInAppNotification"
             >
               已收到
-            </Button>
-          </div>
-        </div>
-      </Modal>
-      <Modal
-        :closable="false"
-        :footer="null"
-        :keyboard="false"
-        :mask-closable="false"
-        :open="updateTipsModalOpen"
-        width="560px"
-      >
-        <div class="update-tips-modal">
-          <div class="update-tips-title">搜索词报告词库更新</div>
-          <div class="update-tips-body">
-            <p>搜索词报告词库新增“附加广告分析 xlsx”能力。</p>
-            <ol>
-              <li>进入工具下的搜索词报告词库。</li>
-              <li>选择店铺、输入 SPU、选择主报告日期。</li>
-              <li>查询并选择父 ASIN。</li>
-              <li>
-                如需额外广告分析文件，打开“附加广告商品和 SKU
-                广告分析 xlsx”。
-              </li>
-              <li>广告分析日期默认跟主报告日期一致，也可以单独修改。</li>
-              <li>点击生成后，完成页会额外出现两个下载文件。</li>
-            </ol>
-            <div class="update-tips-files">
-              <div>店铺-SPU-ASIN转化报告.xlsx</div>
-              <div>店铺-SPU-时间-全部广告.xlsx</div>
-            </div>
-          </div>
-          <div class="update-tips-actions">
-            <Button type="primary" @click="acknowledgeSearchTermAdAnalyzerTips">
-              知道了
             </Button>
           </div>
         </div>
@@ -539,48 +587,6 @@ onBeforeUnmount(() => {
 }
 
 .in-app-card-actions {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 18px;
-}
-
-.update-tips-modal {
-  color: #0f172a;
-}
-
-.update-tips-title {
-  margin-bottom: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-.update-tips-body {
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-.update-tips-body p {
-  margin: 0 0 10px;
-}
-
-.update-tips-body ol {
-  padding-left: 20px;
-  margin: 0;
-}
-
-.update-tips-files {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-top: 12px;
-  color: #334155;
-  background: #f8fafc;
-  border: 1px solid #dbe5ef;
-  border-radius: 8px;
-}
-
-.update-tips-actions {
   display: flex;
   justify-content: flex-end;
   padding-top: 18px;

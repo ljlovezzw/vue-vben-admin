@@ -3137,6 +3137,7 @@ onBeforeUnmount(() => {
         <div class="report-heading">
           <div>
             <h2>商品维度明细报表</h2>
+            <em class="report-dimension">父ASIN维度</em>
             <span>
               {{ reportDateRangeLabel(report?.query.dateRangeType) }}：{{
                 report?.query.startDate
@@ -5108,10 +5109,27 @@ h2 {
   margin-bottom: 8px;
 }
 
+.report-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1.2;
+  color: var(--analytics-title);
+}
+
 .report-heading span,
 .report-actions label,
 .report-empty {
   font-size: 11px;
+  color: var(--analytics-subtle);
+}
+
+.report-dimension {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
   color: var(--analytics-subtle);
 }
 

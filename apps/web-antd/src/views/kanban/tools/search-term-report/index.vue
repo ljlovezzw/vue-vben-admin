@@ -730,10 +730,7 @@ onBeforeUnmount(clearTaskPoll);
           </Descriptions.Item>
         </Descriptions>
 
-        <div
-          v-if="result.extraFiles?.length"
-          class="extra-files"
-        >
+        <div v-if="result.extraFiles?.length" class="extra-files">
           <h3>附加文件</h3>
           <div class="extra-file-list">
             <div
@@ -748,10 +745,7 @@ onBeforeUnmount(clearTaskPoll);
                   {{ file.searchTextCount }} 个 · {{ file.rowCount }} 行
                 </span>
               </div>
-              <Button
-                size="small"
-                @click="downloadFile(file.fileName)"
-              >
+              <Button size="small" @click="downloadFile(file.fileName)">
                 下载
               </Button>
             </div>

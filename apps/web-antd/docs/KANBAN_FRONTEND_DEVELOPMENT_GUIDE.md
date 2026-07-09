@@ -205,7 +205,7 @@ Authorization: Bearer <accessToken>
 
 个人中心 `/profile` 只保留“基本设置”。页面展示 `/user/info` 返回的姓名、账号、邮箱、角色、部门、直属上级和登录方式，所有字段只读，不提供密码、安全设置或通知设置入口。直属上级来自后端登录时同步的飞书通讯录字段 `directLeaderName`；如果飞书开放平台未开通组织架构权限，则显示为空。
 
-全局站内卡片通知由 `src\layouts\basic.vue` 负责：登录后立即请求 `/kanban/card-notifications/in-app`，之后仅在页面可见时每 60 秒轮询一次。通知查询使用静默请求客户端，遇到 401 只停止通知轮询并清空本地通知，不触发全局退出；真正页面接口遇到 401 仍按登录失效处理。后端返回的是飞书卡片事件中的 `card` JSON，前端提取 header 标题、markdown 正文和 note 内容渲染 Modal，同时同步到右上角通知列表。用户必须点击“已收到”，前端调用 `/kanban/card-notifications/in-app/{event_id}/ack` 后才会关闭弹窗并从通知列表移除；刷新页面后未确认通知仍会继续弹出。冷启动 FBA 到货测试阶段默认发给费李君，只有对应飞书账号登录前端时能看到同内容站内弹窗。
+全局站内卡片通知前端入口已暂时停用，`src\layouts\basic.vue` 不再轮询 `/kanban/card-notifications/in-app`，也不再展示功能更新提醒弹窗。后端卡片通知接口和 API 封装仍保留，后续需要恢复站内提醒时再重新接入入口。
 
 ### 4.2 页面权限
 

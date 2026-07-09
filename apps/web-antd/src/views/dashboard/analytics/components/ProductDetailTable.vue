@@ -113,6 +113,8 @@ let productSummaryScrollElement: HTMLElement | null = null;
 let productHeaderEventRoot: HTMLElement | null = null;
 let productResizeHoverCell: HTMLElement | null = null;
 let productScrollSyncing = false;
+let productDetailMetaRequestSeq = 0;
+let productDetailRowsRequestSeq = 0;
 let productResizeSuppressClickUntil = 0;
 let productResizeSuppressSortUntil = 0;
 let productResizeMoved = false;
@@ -495,6 +497,7 @@ async function loadProductDetailData() {
   if (productDetailMetaInFlight.value === metaRequestKey) {
     return;
   }
+  const requestSeq = ++productDetailMetaRequestSeq;
   productDetailMetaInFlight.value = metaRequestKey;
   productDetailLoading.value = true;
   try {
@@ -506,13 +509,16 @@ async function loadProductDetailData() {
       responsibles: effectiveProductResponsibles.value,
       startDate: productDetailQuery.startDate,
     });
+    if (requestSeq !== productDetailMetaRequestSeq) return;
+    productDetailPageRows.value = [];
+    productDetailSummary.value = {};
     productDetailPagination.total = detailMeta.totalRows;
     productDetail.value = {
       ...detailMeta,
       page: productDetailPagination.current ?? 1,
       pageSize: productDetailPagination.pageSize ?? 15,
       rows: [],
-      summary: productDetailSummary.value,
+      summary: {},
     };
     ensureProductColumnsInitialized(productDetail.value);
     const availableKeys = new Set(
@@ -529,7 +535,8 @@ async function loadProductDetailData() {
   } finally {
     if (productDetailMetaInFlight.value === metaRequestKey)
       productDetailMetaInFlight.value = '';
-    productDetailLoading.value = false;
+    if (requestSeq === productDetailMetaRequestSeq)
+      productDetailLoading.value = false;
   }
 }
 
@@ -555,6 +562,7 @@ async function loadProductDetailRows() {
   if (productDetailRowsInFlight.value === rowsRequestKey) {
     return;
   }
+  const requestSeq = ++productDetailRowsRequestSeq;
   productDetailRowsInFlight.value = rowsRequestKey;
   productDetailRowsLoading.value = true;
   try {
@@ -565,6 +573,7 @@ async function loadProductDetailRows() {
       sortField: productDetailSort.field || undefined,
       sortOrder: productDetailSort.order || undefined,
     });
+    if (requestSeq !== productDetailRowsRequestSeq) return;
     productDetailPageRows.value = rowsResult.rows;
     productDetailSummary.value = rowsResult.summary ?? {};
     productDetailPagination.current = rowsResult.page;
@@ -585,7 +594,8 @@ async function loadProductDetailRows() {
   } finally {
     if (productDetailRowsInFlight.value === rowsRequestKey)
       productDetailRowsInFlight.value = '';
-    productDetailRowsLoading.value = false;
+    if (requestSeq === productDetailRowsRequestSeq)
+      productDetailRowsLoading.value = false;
   }
 }
 
@@ -1136,8 +1146,18 @@ async function refreshProductScrollSync() {
   );
 }
 
-function productDetailRowKey(row: Record<string, any>) {
-  return `${row.key}-${row.site}-${row.country}`;
+function productDetailRowKey(row: Record<string, any>, index?: number) {
+  return [
+    row.key,
+    row.c001,
+    row.c002,
+    row.site,
+    row.country,
+    index ?? 0,
+  ]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join('|');
 }
 
 function productColumnKind(key: string) {
@@ -1785,7 +1805,10 @@ onBeforeUnmount(() => {
       <div class="product-detail-toolbar">
         <div class="product-detail-heading">
           <span class="product-title-dot"></span>
-          <strong>2026年新品详情表</strong>
+          <div class="product-title-stack">
+            <strong>2026年新品详情表</strong>
+            <span>SPU维度</span>
+          </div>
         </div>
         <Space class="product-detail-controls" wrap>
           <span class="product-detail-meta">
@@ -2288,10 +2311,23 @@ onBeforeUnmount(() => {
 }
 
 .product-title-dot {
+  flex: none;
   width: 13px;
   height: 13px;
   border: 2px solid #94a3b8;
   border-radius: 50%;
+}
+
+.product-title-stack {
+  display: grid;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.product-title-stack span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--product-subtle, #64748b);
 }
 
 .product-detail-controls {

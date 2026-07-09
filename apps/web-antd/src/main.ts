@@ -21,8 +21,13 @@ async function initApplication() {
   });
   updatePreferences({
     app: {
+      defaultAvatar: '/assets/default-avatar.svg',
       enableCheckUpdates: false,
       name: import.meta.env.VITE_APP_TITLE,
+    },
+    logo: {
+      source: '/assets/app-logo.svg',
+      sourceDark: '/assets/app-logo.svg',
     },
     theme: {
       mode: 'light',
