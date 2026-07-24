@@ -3347,6 +3347,7 @@ onBeforeUnmount(() => {
         :departments="query.departments"
         :end-date="productDetailBaseParams.endDate"
         :follow-summary="adMonitorFollowSummary"
+        :project-tags="query.projectTags"
         :responsibles="dashboardResponsibleScopeForTables()"
         :start-date="productDetailBaseParams.startDate"
       />

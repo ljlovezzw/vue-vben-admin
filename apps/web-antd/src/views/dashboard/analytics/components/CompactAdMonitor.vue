@@ -47,6 +47,7 @@ const props = withDefaults(
     departments?: string[];
     endDate?: string;
     followSummary?: AdMonitorFollowSummary | null;
+    projectTags?: string[];
     responsibles?: string[];
     startDate?: string;
   }>(),
@@ -55,6 +56,7 @@ const props = withDefaults(
     departments: () => [],
     endDate: '',
     followSummary: null,
+    projectTags: () => [],
     responsibles: () => [],
     startDate: '',
   },
@@ -189,6 +191,7 @@ async function loadData() {
     countries: props.countries.toSorted(),
     departments: props.departments.toSorted(),
     ...periodParams,
+    projectTags: props.projectTags.toSorted(),
     responsibles: props.responsibles.toSorted(),
     shops: query.shops.toSorted(),
   });
@@ -207,6 +210,7 @@ async function loadData() {
           countries: [...props.countries],
           departments: [...props.departments],
           ...periodParams,
+          projectTags: [...props.projectTags],
           responsibles: [...props.responsibles],
           shops: [...query.shops],
         },
@@ -306,6 +310,7 @@ watch(
   () => [
     props.countries.join('|'),
     props.departments.join('|'),
+    props.projectTags.join('|'),
     props.responsibles.join('|'),
   ],
   () => {

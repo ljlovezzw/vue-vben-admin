@@ -73,6 +73,7 @@ export type KanbanOverviewParams = Partial<KanbanFilters>;
 
 export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
   endDate?: string;
+  projectTags?: string[];
   rangePreset?: '7d' | '30d' | 'month';
   responsibles?: string[];
   startDate?: string;

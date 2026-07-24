@@ -1,0 +1,1 @@
+import{Zo as e,ks as t}from"../jse/index-index-rF6XiL1M.js";var n=()=>{let n=t(new Map);return e(()=>{n.value=new Map}),[e=>t=>{n.value.set(e,t)},n]};export{n as t};
