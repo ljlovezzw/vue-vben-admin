@@ -1,8 +1,5 @@
 <script setup lang="ts">
-import type {
-  TableColumnsType,
-  TablePaginationConfig,
-} from 'ant-design-vue';
+import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
   AlertLevel,
@@ -296,15 +293,14 @@ const productColumnGroupTitles: Record<string, string> = {
   profit: '利润费用',
   sales: '销售',
 };
-const productColumnTableGroupOrder = [
-  'base',
-  'sales',
-  'profit',
-  'ad',
-  'performance',
-  'inventory',
-  'other',
-] as const;
+const productConfiguredGroupKeys: Record<string, string> = {
+  基础信息: 'base',
+  表现: 'performance',
+  库存: 'inventory',
+  广告: 'ad',
+  利润费用: 'profit',
+  销售: 'sales',
+};
 const productBasicInfoLabels = new Set([
   'SPU',
   '一级类目',
@@ -320,9 +316,7 @@ const productBasicInfoLabels = new Set([
   '销售均价',
 ]);
 const productDisplayColumns = computed(() =>
-  productVisibleColumns.value.some((column) => column.group?.trim())
-    ? productVisibleColumns.value
-    : sortProductColumnsByTableGroup(productVisibleColumns.value),
+  sortProductColumnsByTableGroup(productVisibleColumns.value),
 );
 const productVisibleColumnsTotalWidth = computed(() => {
   let total = 0;
@@ -1147,14 +1141,7 @@ async function refreshProductScrollSync() {
 }
 
 function productDetailRowKey(row: Record<string, any>, index?: number) {
-  return [
-    row.key,
-    row.c001,
-    row.c002,
-    row.site,
-    row.country,
-    index ?? 0,
-  ]
+  return [row.key, row.c001, row.c002, row.site, row.country, index ?? 0]
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)
     .join('|');
@@ -1224,7 +1211,12 @@ function amazonParentAsinUrl(row: Record<string, any>, value: any) {
 }
 
 function productColumnGroupKey(column: KanbanProductDetailColumn) {
-  if (column.group?.trim()) return `xlsx:${column.group.trim()}`;
+  const configuredGroup = column.group?.trim();
+  if (configuredGroup) {
+    return (
+      productConfiguredGroupKeys[configuredGroup] ?? `xlsx:${configuredGroup}`
+    );
+  }
   const label = column.label;
   const source = column.source.toLowerCase();
   if (productBasicInfoLabels.has(label.trim())) return 'base';
@@ -1293,7 +1285,6 @@ function productColumnGroupKey(column: KanbanProductDetailColumn) {
 }
 
 function productColumnTableGroupKey(column: KanbanProductDetailColumn) {
-  if (column.group?.trim()) return `xlsx:${column.group.trim()}`;
   const groupKey = productColumnGroupKey(column);
   if (groupKey === 'other') return 'performance';
   return groupKey;
@@ -1307,14 +1298,17 @@ function productColumnTableGroupTitle(
 }
 
 function sortProductColumnsByTableGroup(columns: KanbanProductDetailColumn[]) {
-  const order = new Map<string, number>(
-    productColumnTableGroupOrder.map((groupKey, index) => [groupKey, index]),
-  );
-  return [...columns].toSorted((left, right) => {
-    const leftOrder = order.get(productColumnTableGroupKey(left)) ?? 999;
-    const rightOrder = order.get(productColumnTableGroupKey(right)) ?? 999;
-    return leftOrder - rightOrder;
-  });
+  const groupedColumns = new Map<string, KanbanProductDetailColumn[]>();
+  for (const column of columns) {
+    const groupKey = productColumnTableGroupKey(column);
+    const group = groupedColumns.get(groupKey);
+    if (group) {
+      group.push(column);
+    } else {
+      groupedColumns.set(groupKey, [column]);
+    }
+  }
+  return [...groupedColumns.values()].flat();
 }
 
 function isProductMetricKind(kind: string) {
@@ -1642,7 +1636,12 @@ function productMetricDeltaText(
 }
 
 function formatSignedMetricDelta(value: number, symbol = '') {
-  const sign = value > 0 ? '+' : (value < 0 ? '-' : '');
+  let sign = '';
+  if (value > 0) {
+    sign = '+';
+  } else if (value < 0) {
+    sign = '-';
+  }
   return `${sign}${symbol}${formatCompactNumber(Math.abs(value))}`;
 }
 
@@ -1671,9 +1670,15 @@ function isProductPercentColumn(key: string) {
   const label = productColumnLabel(key).toUpperCase();
   return (
     ['率', '占比', '完成率'].some((flag) => label.includes(flag)) ||
-    ['ACOS', 'ACOAS', 'TACOS', 'ROAS', 'ROI', 'CVR', 'CTR'].some((flag) =>
+    ['ACOS', 'ACOAS', 'TACOS', 'CVR', 'CTR'].some((flag) =>
       label.includes(flag),
     )
+  );
+}
+
+function isProductRatioNumberColumn(key: string) {
+  return ['RIO', 'ROAS', 'ROI'].includes(
+    productColumnLabel(key).trim().toUpperCase(),
   );
 }
 
@@ -1686,6 +1691,9 @@ function formatProductDetailValue(
   const rawValue = productMetricRawValue(value);
   if (rawValue === null || rawValue === undefined || rawValue === '')
     return '-';
+  if (isProductRatioNumberColumn(key)) {
+    return formatFixedNumber(rawValue, 2);
+  }
   if (kind === 'percent' || isProductPercentColumn(key)) {
     return formatPercent(Number(rawValue || 0), 0);
   }
@@ -1759,6 +1767,15 @@ function formatCompactNumber(value: any, fractionDigits = 2) {
   return numeric.toLocaleString('zh-CN', {
     maximumFractionDigits: fractionDigits,
     minimumFractionDigits: 0,
+  });
+}
+
+function formatFixedNumber(value: any, fractionDigits = 2) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '-';
+  return numeric.toLocaleString('zh-CN', {
+    maximumFractionDigits: fractionDigits,
+    minimumFractionDigits: fractionDigits,
   });
 }
 
@@ -2350,10 +2367,10 @@ onBeforeUnmount(() => {
 .product-detail-card {
   --product-panel: #fff;
   --product-panel-muted: #f8fafc;
-  --product-text: #334155;
-  --product-heading: #334155;
-  --product-muted: #94a3b8;
-  --product-subtle: #64748b;
+  --product-text: #1e293b;
+  --product-heading: #0f172a;
+  --product-muted: #64748b;
+  --product-subtle: #475569;
   --product-border: #e2e8f0;
   --product-border-strong: #cbd5e1;
   --product-hover: #eff6ff;
@@ -2364,13 +2381,21 @@ onBeforeUnmount(() => {
   border: 1px solid var(--product-border);
 }
 
+.product-detail-card,
+.product-detail-card :deep(*) {
+  font-family:
+    'Inter Variable', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    'Noto Sans CJK SC', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif !important;
+  font-weight: 400 !important;
+}
+
 :global(.dark) .product-detail-card {
   --product-panel: #0f172a;
   --product-panel-muted: #111827;
-  --product-text: #cbd5e1;
-  --product-heading: #e5e7eb;
+  --product-text: #e2e8f0;
+  --product-heading: #f8fafc;
   --product-muted: #94a3b8;
-  --product-subtle: #a3b2c7;
+  --product-subtle: #cbd5e1;
   --product-border: #1e293b;
   --product-border-strong: #334155;
   --product-hover: #172554;
@@ -2695,7 +2720,8 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--product-text);
   text-align: center;
   white-space: nowrap;
@@ -2772,7 +2798,8 @@ onBeforeUnmount(() => {
 }
 
 .product-detail-card :deep(.ant-table) {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--product-text);
   background: var(--product-panel);
   border-color: var(--product-border-strong);
@@ -2789,7 +2816,7 @@ onBeforeUnmount(() => {
 
 .product-detail-card :deep(.ant-table-thead > tr > th) {
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--product-heading);
   text-align: center;
@@ -2799,7 +2826,7 @@ onBeforeUnmount(() => {
 
 .product-detail-card :deep(.product-detail-group) {
   padding: 9px 10px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 850;
   text-align: center;
   letter-spacing: 0;
@@ -2811,7 +2838,10 @@ onBeforeUnmount(() => {
 .product-detail-card :deep(.ant-table-tbody > tr > td) {
   height: 56px;
   padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
   vertical-align: middle;
+  color: var(--product-text);
   border-color: var(--product-border-strong) !important;
 }
 
@@ -2858,7 +2888,7 @@ onBeforeUnmount(() => {
 
 .product-code-text,
 .product-code-link {
-  font-weight: 700;
+  font-weight: 800;
   color: #2563eb;
 }
 
@@ -2926,7 +2956,8 @@ onBeforeUnmount(() => {
 }
 
 .product-metric-value {
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: var(--product-heading);
   direction: ltr;
   unicode-bidi: isolate;

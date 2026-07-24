@@ -10,6 +10,7 @@ import type {
   ConfigUserAuthPayload,
   ConfigUserRow,
   InAppCardNotification,
+  InAppCardNotificationHistory,
   KanbanDailyMetric,
   KanbanFbaInventorySkuBreakdown,
   KanbanFilters,
@@ -20,6 +21,8 @@ import type {
   KeywordReversePayload,
   KeywordReverseResult,
   LoginLogRow,
+  NetProfitDetails,
+  NetProfitOverview,
   OperationGroupPayload,
   OperationGroupRow,
   SearchTermReportOptions,
@@ -39,6 +42,7 @@ import { requestClient, silentRequestClient } from '#/api/request';
 export type {
   AlertLevel,
   InAppCardNotification,
+  InAppCardNotificationHistory,
   KanbanCoreKpi,
   KanbanDailyMetric,
   KanbanFbaInventorySkuBreakdown,
@@ -69,6 +73,8 @@ export type KanbanOverviewParams = Partial<KanbanFilters>;
 
 export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
   endDate?: string;
+  rangePreset?: '7d' | '30d' | 'month';
+  responsibles?: string[];
   startDate?: string;
 }
 
@@ -102,6 +108,25 @@ export interface AnalyticsOverviewParams {
   siteDate?: string;
   sites?: string[];
   startDate?: string;
+}
+
+export interface NetProfitOverviewParams {
+  brands?: string[];
+  countries?: string[];
+  departments?: string[];
+  dimension?: string;
+  limit?: number;
+  operators?: string[];
+  period?: string;
+}
+
+export interface NetProfitDetailsParams extends NetProfitOverviewParams {
+  metric?: string;
+  page?: number;
+  pageSize?: number;
+  sortField?: string;
+  sortOrder?: string;
+  value?: string;
 }
 
 export type SpuManagerParams = Partial<SpuManagerFilters>;
@@ -199,7 +224,40 @@ export async function downloadSearchTermReport(
 ): Promise<Blob> {
   return requestClient.download(
     `/kanban/tools/search-term-report/download/${encodeURIComponent(fileName)}`,
+    { timeout: 300_000 },
   );
+}
+
+export interface SearchTermReportDownloadChunk {
+  blob: Blob;
+  end: number;
+  fileSize: number;
+  start: number;
+  contentType: string;
+  status: number;
+}
+
+export async function downloadSearchTermReportChunk(
+  fileName: string,
+  start: number,
+  end: number,
+): Promise<SearchTermReportDownloadChunk> {
+  const response = await requestClient.download<any>(
+    `/kanban/tools/search-term-report/download-chunk/${encodeURIComponent(fileName)}`,
+    {
+      params: { end, start },
+      responseReturn: 'raw',
+      timeout: 60_000,
+    },
+  );
+  return {
+    blob: response.data,
+    end: Number(response.headers?.['x-chunk-end']),
+    fileSize: Number(response.headers?.['x-file-size']),
+    start: Number(response.headers?.['x-chunk-start']),
+    contentType: String(response.headers?.['content-type'] ?? ''),
+    status: Number(response.status),
+  };
 }
 
 export async function fetchInAppCardNotifications(
@@ -208,6 +266,19 @@ export async function fetchInAppCardNotifications(
   } = {},
 ): Promise<InAppCardNotification[]> {
   return silentRequestClient.get('/kanban/card-notifications/in-app', {
+    params,
+  });
+}
+
+export async function fetchInAppCardNotificationHistory(
+  params: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+    status?: 'acked' | 'pending';
+  } = {},
+): Promise<InAppCardNotificationHistory> {
+  return requestClient.get('/kanban/card-notifications/in-app/history', {
     params,
   });
 }
@@ -234,6 +305,18 @@ export async function fetchAnalyticsReport(
   params: AnalyticsReportParams = {},
 ): Promise<AnalyticsReportOverview> {
   return requestClient.get('/kanban/analytics/report', { params });
+}
+
+export async function fetchNetProfitOverview(
+  params: NetProfitOverviewParams = {},
+): Promise<NetProfitOverview> {
+  return requestClient.get('/kanban/net-profit/overview', { params });
+}
+
+export async function fetchNetProfitDetails(
+  params: NetProfitDetailsParams = {},
+): Promise<NetProfitDetails> {
+  return requestClient.get('/kanban/net-profit/details', { params });
 }
 
 export async function fetchKanbanProductDetail(
@@ -301,8 +384,9 @@ export async function updateSpu(
 
 export async function fetchAdMonitorOverview(
   params: AdMonitorOverviewParams = {},
+  signal?: AbortSignal,
 ): Promise<AdMonitorOverview> {
-  return requestClient.get('/kanban/ads/overview', { params });
+  return requestClient.get('/kanban/ads/overview', { params, signal });
 }
 
 export async function fetchTargetTrackerOverview(

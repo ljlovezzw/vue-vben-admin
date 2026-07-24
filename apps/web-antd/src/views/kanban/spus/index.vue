@@ -138,13 +138,6 @@ const responsibleFilterOptions = computed(() =>
   })),
 );
 
-const userOptions = computed(() =>
-  (spuOptions.value?.users ?? []).map((user) => ({
-    label: user.username,
-    value: user.id,
-  })),
-);
-
 function rowKey(row: SpuManagerRow) {
   return `${row.spu}-${row.site}`;
 }
@@ -295,12 +288,11 @@ onMounted(loadData);
   <div class="spu-page">
     <section class="page-head">
       <div>
-        <h1>SPU 管理</h1>
-        <p>维护新品主数据和人工字段，供新品监控快照与下钻明细使用。</p>
+        <h1>新品范围配置</h1>
       </div>
       <Space>
         <Button :loading="loading" @click="loadData">刷新</Button>
-        <Button type="primary" @click="openCreate">新增 SPU</Button>
+        <Button type="primary" @click="openCreate">纳入新品范围</Button>
       </Space>
     </section>
 
@@ -394,7 +386,7 @@ onMounted(loadData);
 
     <Drawer
       v-model:open="drawerOpen"
-      :title="formMode === 'create' ? '新增 SPU' : `编辑 ${formState.spu}`"
+      :title="formMode === 'create' ? '纳入新品范围' : `编辑 ${formState.spu}`"
       width="720"
     >
       <Form layout="vertical">
@@ -414,43 +406,9 @@ onMounted(loadData);
               show-search
             />
           </Form.Item>
-          <Form.Item label="父 ASIN">
-            <Input
-              v-model:value="formState.parentAsin"
-              placeholder="如 B0GVYHN8FW"
-            />
-          </Form.Item>
-          <Form.Item label="类目">
-            <Select
-              v-model:value="formState.category"
-              :options="categoryOptions"
-              allow-clear
-              show-search
-              placeholder="选择类目"
-            />
-          </Form.Item>
-          <Form.Item label="负责人">
-            <Select
-              v-model:value="formState.responsibleUid"
-              :options="userOptions"
-              allow-clear
-              show-search
-              placeholder="选择负责人"
-            />
-          </Form.Item>
-          <Form.Item label="状态">
-            <Select v-model:value="formState.status" :options="statusOptions" />
-          </Form.Item>
           <Form.Item label="开发时间">
             <DatePicker
               v-model:value="formState.devDate"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-            />
-          </Form.Item>
-          <Form.Item label="Listing 创建时间">
-            <DatePicker
-              v-model:value="formState.listingCreated"
               format="YYYY-MM-DD"
               value-format="YYYY-MM-DD"
             />
@@ -465,13 +423,6 @@ onMounted(loadData);
           <Form.Item label="传图时间">
             <DatePicker
               v-model:value="formState.firstArrivalDate"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-            />
-          </Form.Item>
-          <Form.Item label="首单时间">
-            <DatePicker
-              v-model:value="formState.firstOrderDate"
               format="YYYY-MM-DD"
               value-format="YYYY-MM-DD"
             />

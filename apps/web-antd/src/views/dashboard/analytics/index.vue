@@ -29,6 +29,7 @@ import {
   Dropdown,
   Empty,
   Input,
+  message,
   Modal,
   Select,
   Spin,
@@ -43,6 +44,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchAnalyticsOverview, fetchAnalyticsReport } from '#/api/kanban';
 
+import CompactAdMonitor from './components/CompactAdMonitor.vue';
 import ProductDetailTable from './components/ProductDetailTable.vue';
 
 use([CanvasRenderer, GaugeChart, TooltipComponent]);
@@ -50,7 +52,8 @@ use([CanvasRenderer, GaugeChart, TooltipComponent]);
 const { isDark } = usePreferences();
 
 interface ResponsibleCard {
-  adAcoas: number;
+  adCvr: number;
+  adSpendRate: number;
   completionRate: number;
   dailyTargetProfit: number;
   dailyTargetSales: number;
@@ -63,7 +66,6 @@ interface ResponsibleCard {
   grossProfitCompletionRate: number;
   inventoryQty: number;
   name: string;
-  promotionRate: number;
   salesAmount: number;
   salesQty: number;
   targetGrossMarginRate: number;
@@ -234,7 +236,10 @@ const secondaryLabel = computed(
 );
 const metricPrefix = computed(() => {
   if (isMonthMode.value) return '月度';
-  if (source.value?.mode === 'live_api' && source.value.status === 'ok') {
+  if (
+    source.value?.mode === 'live_api' &&
+    source.value.status !== 'unavailable'
+  ) {
     return '实时';
   }
   return periodDays.value > 1 ? '区间' : '站点日';
@@ -299,6 +304,22 @@ const responsibleOptions = computed(() =>
 const dashboardOperationGroups = computed(
   () => overview.value?.filters.operationGroups ?? [],
 );
+const ungroupedOwnerGroupId = '__UNGROUPED__';
+const dashboardUngroupedResponsibles = computed(() => {
+  const groupedNames = new Set(
+    dashboardOperationGroups.value.flatMap((group) => group.memberNames),
+  );
+  return responsibleOptions.value
+    .map((option) => option.value)
+    .filter((name) => !groupedNames.has(name));
+});
+function defaultDashboardOwnerGroupId() {
+  const groupId = dashboardOperationGroups.value[0]?.id;
+  if (groupId !== undefined) return String(groupId);
+  return dashboardUngroupedResponsibles.value.length > 0
+    ? ungroupedOwnerGroupId
+    : '';
+}
 const dashboardCountryOptionDefs = [
   {
     label: '泛欧',
@@ -428,6 +449,9 @@ const reportColumnGroups = computed(() => {
         'parentAsin',
         'responsible',
         'productType',
+        'lifecycle',
+        'profitGrade',
+        'projectTag',
         'spu',
         'site',
         'country',
@@ -557,13 +581,39 @@ const salesCompletion = computed(() =>
 const grossProfitCompletion = computed(() =>
   nullableRatio(latest.value?.grossProfit, targets.value?.dailyTargetProfit),
 );
-const promotionRate = computed(() => latest.value?.promotionRate ?? 0);
-const adAcoas = computed(() => latest.value?.adAcoas ?? 0);
-const previousPromotionRate = computed(
-  () => previous.value?.promotionRate ?? 0,
+const adSpendRate = computed(
+  () =>
+    latest.value?.adSpendRate ??
+    ratio(
+      advertising.value?.summary.totalSpend,
+      advertising.value?.summary.totalSales,
+    ),
 );
-const weekBeforePromotionRate = computed(
-  () => weekBefore.value?.promotionRate ?? 0,
+const adCvr = computed(() => latest.value?.adCvr ?? 0);
+const adMonitorFollowSummary = computed(() => {
+  if (!latest.value || !previous.value || !advertising.value?.summary) {
+    return null;
+  }
+  return {
+    adCvr: adCvr.value,
+    adOrders: latest.value.adOrders ?? 0,
+    adSpendRate: adSpendRate.value,
+    previousAdCvr: previous.value.adCvr ?? 0,
+    previousSpend:
+      previous.value.productExpressionAdSpend ?? previous.value.adSpend ?? 0,
+    totalSalesQty: latest.value.salesQty ?? 0,
+    totalSpend: advertising.value.summary.totalSpend ?? 0,
+  };
+});
+const previousAdSpendRate = computed(
+  () =>
+    previous.value?.adSpendRate ??
+    ratio(previous.value?.adSpend, previous.value?.salesAmount),
+);
+const weekBeforeAdSpendRate = computed(
+  () =>
+    weekBefore.value?.adSpendRate ??
+    ratio(weekBefore.value?.adSpend, weekBefore.value?.salesAmount),
 );
 const previousCompareLabel = computed(() =>
   periodDays.value > 1 ? previousLabel.value : '前一天',
@@ -575,7 +625,8 @@ const weekCompareLabel = computed(() =>
 const allResponsibleCards = computed<ResponsibleCard[]>(() => {
   return (operations.value?.responsibleRows ?? [])
     .map((row) => ({
-      adAcoas: row.adAcoas ?? 0,
+      adCvr: row.adCvr ?? 0,
+      adSpendRate: row.adSpendRate ?? 0,
       completionRate: ratio(row.salesQty, row.dailyTargetUnits),
       dailyTargetProfit: row.dailyTargetProfit ?? 0,
       dailyTargetSales: row.dailyTargetSales ?? 0,
@@ -590,22 +641,16 @@ const allResponsibleCards = computed<ResponsibleCard[]>(() => {
       grossProfit: row.grossProfit,
       inventoryQty: row.inventoryQty,
       name: row.responsible,
-      promotionRate: row.promotionRate ?? 0,
       salesAmount: row.salesAmount,
       salesQty: row.salesQty,
       targetGrossMarginRate: row.targetGrossMarginRate ?? 0,
       turnoverFbaAvailableMonths: row.turnoverFbaAvailableMonths ?? 0,
       turnoverMonths: row.turnoverMonths,
     }))
-    .toSorted((a, b) => {
-      const aHasSales = a.salesQty > 0 ? 1 : 0;
-      const bHasSales = b.salesQty > 0 ? 1 : 0;
-      return (
-        bHasSales - aHasSales ||
-        a.completionRate - b.completionRate ||
-        b.salesQty - a.salesQty
-      );
-    });
+    .toSorted(
+      (a, b) =>
+        b.salesQty - a.salesQty || a.name.localeCompare(b.name, 'zh-CN'),
+    );
 });
 
 const responsibleCards = computed(() => allResponsibleCards.value);
@@ -616,7 +661,7 @@ const activeResponsibleCount = computed(
 const departmentCards = computed(() =>
   (operations.value?.departmentRows ?? [])
     .map((row) => ({
-      adAcoas: row.adAcoas ?? 0,
+      adCvr: row.adCvr ?? 0,
       completionRate: ratio(row.salesQty, row.dailyTargetUnits),
       dailyTargetProfit: row.dailyTargetProfit ?? 0,
       dailyTargetSales: row.dailyTargetSales ?? 0,
@@ -630,7 +675,6 @@ const departmentCards = computed(() =>
       grossProfitCompletionRate: ratio(row.grossProfit, row.dailyTargetProfit),
       inventoryQty: row.inventoryQty,
       name: row.department || '未配置部门',
-      promotionRate: row.promotionRate ?? 0,
       salesAmount: row.salesAmount,
       salesCompletionRate: ratio(row.salesAmount, row.dailyTargetSales),
       salesQty: row.salesQty,
@@ -771,8 +815,7 @@ async function reloadAll(resetReportPage = true) {
   if (resetReportPage) {
     reportQuery.page = 1;
   }
-  await loadData();
-  await loadReportData();
+  await Promise.all([loadData(), loadReportData()]);
 }
 
 function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
@@ -783,11 +826,12 @@ function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
   dashboardAutoReloadTimer = setTimeout(() => {
     dashboardAutoReloadTimer = null;
     void (async () => {
-      await loadData();
       if (options.reloadReport) {
         reportQuery.page = 1;
-        await loadReportData();
+        await Promise.all([loadData(), loadReportData()]);
+        return;
       }
+      await loadData();
     })();
   }, 1000);
 }
@@ -886,9 +930,16 @@ function toggleDashboardCountryDraftAll() {
 }
 
 function applyDashboardCountryFilter() {
-  query.sites = isDashboardCountryDraftAllSelected()
+  const nextSites = isDashboardCountryDraftAllSelected()
     ? []
     : dashboardSitesFromCountryValues(dashboardCountryDraft.value);
+  if (!sameStringSet(nextSites, query.sites)) {
+    query.operationGroupIds = [];
+    query.responsibles = [];
+    reportQuery.operationGroupIds = [];
+    reportQuery.responsibles = [];
+  }
+  query.sites = nextSites;
   dashboardCountryDropdownOpen.value = false;
 }
 
@@ -914,12 +965,16 @@ const dashboardOwnerButtonText = computed(() => {
   return `已选${selectedGroupCount}组/${selectedResponsibleCount}人`;
 });
 
-const activeDashboardOwnerGroup = computed(
-  () =>
+const activeDashboardOwnerMembers = computed(() => {
+  if (activeDashboardOwnerGroupId.value === ungroupedOwnerGroupId) {
+    return dashboardUngroupedResponsibles.value;
+  }
+  return (
     dashboardOperationGroups.value.find(
       (group) => String(group.id) === activeDashboardOwnerGroupId.value,
-    ) ?? dashboardOperationGroups.value[0],
-);
+    )?.memberNames ?? []
+  );
+});
 
 function syncDashboardOwnerDraft() {
   dashboardOwnerDraftGroups.value = query.operationGroupIds.map(String);
@@ -930,9 +985,7 @@ function handleDashboardOwnerOpenChange(open: boolean) {
   dashboardOwnerDropdownOpen.value = open;
   if (!open) return;
   syncDashboardOwnerDraft();
-  activeDashboardOwnerGroupId.value = String(
-    dashboardOperationGroups.value[0]?.id ?? '',
-  );
+  activeDashboardOwnerGroupId.value = defaultDashboardOwnerGroupId();
 }
 
 function isDashboardOwnerGroupChecked(group: AnalyticsOperationGroup) {
@@ -960,6 +1013,37 @@ function toggleDashboardOwnerGroup(group: AnalyticsOperationGroup) {
       ];
 }
 
+function isDashboardUngroupedChecked() {
+  return (
+    dashboardUngroupedResponsibles.value.length > 0 &&
+    dashboardUngroupedResponsibles.value.every((name) =>
+      dashboardOwnerDraftResponsibles.value.includes(name),
+    )
+  );
+}
+
+function isDashboardUngroupedIndeterminate() {
+  const selectedCount = dashboardUngroupedResponsibles.value.filter((name) =>
+    dashboardOwnerDraftResponsibles.value.includes(name),
+  ).length;
+  return (
+    selectedCount > 0 &&
+    selectedCount < dashboardUngroupedResponsibles.value.length
+  );
+}
+
+function toggleDashboardUngrouped() {
+  const names = new Set(dashboardUngroupedResponsibles.value);
+  dashboardOwnerDraftResponsibles.value = isDashboardUngroupedChecked()
+    ? dashboardOwnerDraftResponsibles.value.filter((name) => !names.has(name))
+    : [
+        ...new Set([
+          ...dashboardOwnerDraftResponsibles.value,
+          ...dashboardUngroupedResponsibles.value,
+        ]),
+      ];
+}
+
 function toggleDashboardResponsible(name: string) {
   dashboardOwnerDraftResponsibles.value = isDashboardResponsibleChecked(name)
     ? dashboardOwnerDraftResponsibles.value.filter((item) => item !== name)
@@ -974,7 +1058,7 @@ function isDashboardOwnerDraftAllSelected() {
     (option) => option.value,
   );
   return (
-    allGroups.length > 0 &&
+    allResponsibles.length > 0 &&
     allGroups.every((id) => dashboardOwnerDraftGroups.value.includes(id)) &&
     allResponsibles.every((name) =>
       dashboardOwnerDraftResponsibles.value.includes(name),
@@ -1030,16 +1114,16 @@ const responsibleOwnerButtonText = computed(() => {
   return `已选${selectedGroupCount}组/${selectedResponsibleCount}人`;
 });
 
-const activeResponsibleOwnerGroup = computed(
-  () =>
+const activeResponsibleOwnerMembers = computed(() => {
+  if (activeResponsibleOwnerGroupId.value === ungroupedOwnerGroupId) {
+    return dashboardUngroupedResponsibles.value;
+  }
+  return (
     dashboardOperationGroups.value.find(
       (group) => String(group.id) === activeResponsibleOwnerGroupId.value,
-    ) ?? dashboardOperationGroups.value[0],
-);
-
-const activeResponsibleOwnerMembers = computed(
-  () => activeResponsibleOwnerGroup.value?.memberNames ?? [],
-);
+    )?.memberNames ?? []
+  );
+});
 
 function syncResponsibleOwnerDraft() {
   responsibleOwnerDraftGroups.value = query.operationGroupIds.map(String);
@@ -1050,9 +1134,7 @@ function handleResponsibleOwnerOpenChange(open: boolean) {
   responsibleOwnerDropdownOpen.value = open;
   if (!open) return;
   syncResponsibleOwnerDraft();
-  activeResponsibleOwnerGroupId.value = String(
-    dashboardOperationGroups.value[0]?.id ?? '',
-  );
+  activeResponsibleOwnerGroupId.value = defaultDashboardOwnerGroupId();
 }
 
 function isResponsibleOwnerGroupChecked(group: AnalyticsOperationGroup) {
@@ -1082,6 +1164,37 @@ function toggleResponsibleOwnerGroup(group: AnalyticsOperationGroup) {
       ];
 }
 
+function isResponsibleUngroupedChecked() {
+  return (
+    dashboardUngroupedResponsibles.value.length > 0 &&
+    dashboardUngroupedResponsibles.value.every((name) =>
+      responsibleOwnerDraftResponsibles.value.includes(name),
+    )
+  );
+}
+
+function isResponsibleUngroupedIndeterminate() {
+  const selectedCount = dashboardUngroupedResponsibles.value.filter((name) =>
+    responsibleOwnerDraftResponsibles.value.includes(name),
+  ).length;
+  return (
+    selectedCount > 0 &&
+    selectedCount < dashboardUngroupedResponsibles.value.length
+  );
+}
+
+function toggleResponsibleUngrouped() {
+  const names = new Set(dashboardUngroupedResponsibles.value);
+  responsibleOwnerDraftResponsibles.value = isResponsibleUngroupedChecked()
+    ? responsibleOwnerDraftResponsibles.value.filter((name) => !names.has(name))
+    : [
+        ...new Set([
+          ...responsibleOwnerDraftResponsibles.value,
+          ...dashboardUngroupedResponsibles.value,
+        ]),
+      ];
+}
+
 function toggleResponsibleOwner(name: string) {
   responsibleOwnerDraftResponsibles.value = isResponsibleOwnerChecked(name)
     ? responsibleOwnerDraftResponsibles.value.filter((item) => item !== name)
@@ -1096,7 +1209,7 @@ function isResponsibleOwnerDraftAllSelected() {
     (option) => option.value,
   );
   return (
-    allGroups.length > 0 &&
+    allResponsibles.length > 0 &&
     allGroups.every((id) => responsibleOwnerDraftGroups.value.includes(id)) &&
     allResponsibles.every((name) =>
       responsibleOwnerDraftResponsibles.value.includes(name),
@@ -1612,8 +1725,11 @@ function reportColumnDefaultWidth(key: string) {
     category2: 116,
     country: 84,
     imageUrl: 70,
+    lifecycle: 104,
     parentAsin: 122,
+    profitGrade: 92,
     productType: 88,
+    projectTag: 116,
     responsible: 96,
     salesTrend: 148,
     shopName: 132,
@@ -2029,21 +2145,60 @@ function csvCell(value: any) {
 
 async function downloadReportCsv() {
   if (reportDownloading.value) return;
+  if (reportLoading.value || !report.value) {
+    message.warning('报表正在更新，请等待当前筛选结果加载完成');
+    return;
+  }
+
   reportDownloading.value = true;
   try {
+    const displayedReport = report.value;
+    const displayedQuery = displayedReport.query;
+    const expectedTotal = displayedReport.pagination.total;
+    const pageSize = 200;
+    const exportParams = {
+      countries: [...(displayedQuery.countries ?? [])],
+      dateRangeType: displayedQuery.dateRangeType,
+      departments: [...(displayedQuery.departments ?? [])],
+      endDate: displayedQuery.endDate,
+      operationGroupIds: [...(displayedQuery.operationGroupIds ?? [])],
+      productTypes: [...(displayedQuery.productTypes ?? [])],
+      projectTags: [...(displayedQuery.projectTags ?? [])],
+      responsibles: [...(displayedQuery.responsibles ?? [])],
+      siteDate: displayedQuery.endDate,
+      sites: [...(displayedQuery.sites ?? [])],
+      sortField: displayedQuery.sortField,
+      sortOrder: displayedQuery.sortOrder,
+      spus: [...(displayedQuery.spus ?? [])],
+      startDate: displayedQuery.startDate,
+    };
     const rows: AnalyticsReportRow[] = [];
-    let page = 1;
-    let total = 0;
-    do {
-      const data = await fetchAnalyticsReport(
-        buildReportParams({ page, pageSize: 200 }),
-      );
-      total = data.pagination.total;
+    const pageCount = Math.max(1, Math.ceil(expectedTotal / pageSize));
+    for (let page = 1; page <= pageCount; page += 1) {
+      const data = await fetchAnalyticsReport({
+        ...exportParams,
+        page,
+        pageSize,
+      });
+      if (data.pagination.total !== expectedTotal) {
+        throw new Error(
+          `筛选结果已变化（页面 ${expectedTotal} 条，导出查询 ${data.pagination.total} 条），请重新下载`,
+        );
+      }
+      if (data.rows.length === 0 && rows.length < expectedTotal) {
+        throw new Error(
+          `导出数据不完整（已获取 ${rows.length}/${expectedTotal} 条）`,
+        );
+      }
       for (const row of data.rows) {
         rows.push(row);
       }
-      page += 1;
-    } while (rows.length < total);
+    }
+    if (rows.length !== expectedTotal) {
+      throw new Error(
+        `导出数据不完整（已获取 ${rows.length}/${expectedTotal} 条）`,
+      );
+    }
 
     const headers: string[] = [];
     const keys: string[] = [];
@@ -2072,6 +2227,10 @@ async function downloadReportCsv() {
     link.download = `analytics-report-${reportQuery.startDate}-${reportQuery.endDate}.csv`;
     link.click();
     URL.revokeObjectURL(url);
+    message.success(`已导出 ${rows.length} 行、${keys.length} 列`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    message.error(`下载失败：${detail}`);
   } finally {
     reportDownloading.value = false;
   }
@@ -2263,10 +2422,32 @@ onBeforeUnmount(() => {
                   </Checkbox>
                   <b>›</b>
                 </div>
+                <div
+                  v-if="dashboardUngroupedResponsibles.length > 0"
+                  class="cascade-filter-row owner-group-row"
+                  :class="{
+                    active:
+                      activeDashboardOwnerGroupId === ungroupedOwnerGroupId,
+                  }"
+                  @mouseenter="
+                    activeDashboardOwnerGroupId = ungroupedOwnerGroupId
+                  "
+                  @click="activeDashboardOwnerGroupId = ungroupedOwnerGroupId"
+                >
+                  <Checkbox
+                    :checked="isDashboardUngroupedChecked()"
+                    :indeterminate="isDashboardUngroupedIndeterminate()"
+                    @click.stop
+                    @change="toggleDashboardUngrouped"
+                  >
+                    <span class="cascade-name">未分组</span>
+                  </Checkbox>
+                  <b>›</b>
+                </div>
               </div>
               <div class="cascade-filter-right">
                 <Checkbox
-                  v-for="name in activeDashboardOwnerGroup?.memberNames ?? []"
+                  v-for="name in activeDashboardOwnerMembers"
                   :key="name"
                   :checked="isDashboardResponsibleChecked(name)"
                   @change="toggleDashboardResponsible(name)"
@@ -2291,7 +2472,11 @@ onBeforeUnmount(() => {
         </Dropdown>
         <Button size="small" @click="resetFilters">重置</Button>
 
-        <Tag :color="source?.status === 'ok' ? 'green' : 'orange'">
+        <Tag
+          class="source-status-tag"
+          :color="source?.status === 'ok' ? 'green' : 'orange'"
+          :title="sourceMessage"
+        >
           {{ sourceMessage }}
         </Tag>
       </section>
@@ -2799,14 +2984,14 @@ onBeforeUnmount(() => {
             <div class="metric-stack">
               <div
                 class="hero-card blue-card blue-kpi-card"
-                :title="`${currentPeriodLabel} 内广告花费绝对值 / 总销售额`"
+                :title="`${currentPeriodLabel} 内产品表现广告花费 / 产品表现销售额`"
               >
                 <div class="blue-kpi-glass">
                   <span class="blue-kpi-dot" aria-hidden="true"></span>
                   <div class="blue-kpi-heading">
                     <span>广告占比</span>
                   </div>
-                  <strong>{{ formatPercent(promotionRate) }}</strong>
+                  <strong>{{ formatPercent(adSpendRate) }}</strong>
                 </div>
               </div>
               <div
@@ -2819,45 +3004,39 @@ onBeforeUnmount(() => {
                   }}</strong>
                 </div>
                 <div>
-                  <span>ACoAS</span>
-                  <strong>{{ formatPercent(adAcoas) }}</strong>
+                  <span>广告CVR</span>
+                  <strong title="广告订单量 / 点击">{{
+                    formatPercent(adCvr)
+                  }}</strong>
                 </div>
                 <div>
-                  <span>{{ previousCompareLabel }}推广费占比</span>
-                  <strong>{{ formatPercent(previousPromotionRate) }}</strong>
+                  <span>{{ previousCompareLabel }}广告占比</span>
+                  <strong>{{ formatPercent(previousAdSpendRate) }}</strong>
                   <small>{{ previousPeriodLabel }}</small>
                 </div>
                 <div>
                   <span>环比</span>
                   <strong
                     :class="
-                      comparisonClass(
-                        promotionRate,
-                        previousPromotionRate,
-                        true,
-                      )
+                      comparisonClass(adSpendRate, previousAdSpendRate, true)
                     "
                   >
-                    {{ comparisonText(promotionRate, previousPromotionRate) }}
+                    {{ comparisonText(adSpendRate, previousAdSpendRate) }}
                   </strong>
                 </div>
                 <div>
-                  <span>{{ weekCompareLabel }}推广费占比</span>
-                  <strong>{{ formatPercent(weekBeforePromotionRate) }}</strong>
+                  <span>{{ weekCompareLabel }}广告占比</span>
+                  <strong>{{ formatPercent(weekBeforeAdSpendRate) }}</strong>
                   <small>{{ secondaryPeriodLabel }}</small>
                 </div>
                 <div>
                   <span>周同比</span>
                   <strong
                     :class="
-                      comparisonClass(
-                        promotionRate,
-                        weekBeforePromotionRate,
-                        true,
-                      )
+                      comparisonClass(adSpendRate, weekBeforeAdSpendRate, true)
                     "
                   >
-                    {{ comparisonText(promotionRate, weekBeforePromotionRate) }}
+                    {{ comparisonText(adSpendRate, weekBeforeAdSpendRate) }}
                   </strong>
                 </div>
               </div>
@@ -2994,6 +3173,37 @@ onBeforeUnmount(() => {
                               {{ group.memberNames.length }}
                             </span>
                           </button>
+                          <button
+                            v-if="dashboardUngroupedResponsibles.length > 0"
+                            class="cascade-filter-row owner-group-row"
+                            :class="{
+                              active:
+                                activeResponsibleOwnerGroupId ===
+                                ungroupedOwnerGroupId,
+                            }"
+                            type="button"
+                            @mouseenter="
+                              activeResponsibleOwnerGroupId =
+                                ungroupedOwnerGroupId
+                            "
+                            @click="
+                              activeResponsibleOwnerGroupId =
+                                ungroupedOwnerGroupId
+                            "
+                          >
+                            <Checkbox
+                              :checked="isResponsibleUngroupedChecked()"
+                              :indeterminate="
+                                isResponsibleUngroupedIndeterminate()
+                              "
+                              @click.stop
+                              @change="toggleResponsibleUngrouped"
+                            />
+                            <span class="cascade-name">未分组</span>
+                            <span class="cascade-count">
+                              {{ dashboardUngroupedResponsibles.length }}
+                            </span>
+                          </button>
                         </div>
                         <div class="dashboard-owner-members">
                           <Checkbox
@@ -3114,12 +3324,16 @@ onBeforeUnmount(() => {
                   <b>{{ turnover(item.turnoverMonths) }}</b>
                 </p>
                 <p>
-                  广告ACoAS
-                  <b>{{ formatPercent(item.adAcoas) }}</b>
+                  广告占比
+                  <b title="广告花费 / 销售额">{{
+                    formatPercent(item.adSpendRate)
+                  }}</b>
                 </p>
                 <p>
-                  推广费占比
-                  <b>{{ formatPercent(item.promotionRate) }}</b>
+                  广告CVR
+                  <b title="广告订单量 / 点击">{{
+                    formatPercent(item.adCvr)
+                  }}</b>
                 </p>
               </article>
             </div>
@@ -3127,6 +3341,15 @@ onBeforeUnmount(() => {
           </div>
         </aside>
       </section>
+
+      <CompactAdMonitor
+        :countries="dashboardCountryLabelsFromSites(query.sites)"
+        :departments="query.departments"
+        :end-date="productDetailBaseParams.endDate"
+        :follow-summary="adMonitorFollowSummary"
+        :responsibles="dashboardResponsibleScopeForTables()"
+        :start-date="productDetailBaseParams.startDate"
+      />
 
       <ProductDetailTable
         :base-params="productDetailBaseParams"
@@ -3835,15 +4058,26 @@ onBeforeUnmount(() => {
 
 .screen-toolbar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 7px;
   align-items: center;
   min-height: 40px;
   padding: 5px 9px;
   margin-bottom: 8px;
+  overflow-x: auto;
   font-size: 11px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);
+}
+
+.source-status-tag {
+  flex: 1 1 180px;
+  min-width: 80px;
+  max-width: 360px;
+  margin-inline-end: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .toolbar-flag {
@@ -4805,8 +5039,9 @@ h2 {
 
 .group-track-grid {
   display: grid;
-  grid-auto-columns: minmax(150px, 1fr);
+  grid-auto-columns: calc((100% - 6px) / 2);
   grid-auto-flow: column;
+  column-gap: 6px;
   min-height: 0;
   padding: 1px 1px 4px;
   margin-top: 4px;
@@ -4820,7 +5055,7 @@ h2 {
   grid-template-columns: 22px minmax(0, 1fr);
   gap: 5px;
   align-items: center;
-  min-width: 150px;
+  min-width: 0;
   min-height: 52px;
   padding: 6px 8px;
   background: var(--analytics-panel);
@@ -4897,7 +5132,7 @@ h2 {
 .responsible-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
+  min-height: 392px;
 }
 
 .responsible-heading {
@@ -5003,7 +5238,8 @@ h2 {
 .responsible-grid {
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
   gap: 8px;
-  min-height: 0;
+  height: 348px;
+  min-height: 348px;
   max-height: 348px;
   padding-right: 4px;
   margin-top: 8px;
@@ -5014,6 +5250,7 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
+  height: 344px;
   min-height: 344px;
   padding: 10px 12px;
   background: var(--analytics-panel);
@@ -5095,6 +5332,14 @@ h2 {
 
 .report-panel {
   margin-top: 8px;
+}
+
+.report-panel,
+.report-panel :deep(*) {
+  font-family:
+    'Inter Variable', 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    'Noto Sans CJK SC', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif !important;
+  font-weight: 400 !important;
 }
 
 .report-heading,
@@ -5411,6 +5656,10 @@ h2 {
   background: var(--analytics-panel);
 }
 
+.report-table :deep(.ant-table-body) {
+  min-height: 520px;
+}
+
 .report-table :deep(.ant-table-thead > tr > th),
 .report-table :deep(.ant-table-tbody > tr > td),
 .report-table :deep(.ant-table-summary > tr > td) {
@@ -5418,8 +5667,8 @@ h2 {
 }
 
 .report-table :deep(.ant-table-thead > tr > th) {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: var(--analytics-heading);
   background: var(--analytics-panel-muted);
 }
@@ -5473,9 +5722,15 @@ h2 {
 }
 
 .report-table :deep(.ant-table-tbody > tr > td) {
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--analytics-text);
   background: var(--analytics-panel);
+}
+
+.report-table :deep(.ant-table-tbody .ant-tag) {
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .report-table :deep(.ant-table-tbody > tr:hover > td) {
@@ -5496,6 +5751,8 @@ h2 {
 
 .report-table :deep(.ant-pagination),
 .report-table :deep(.ant-table-title) {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--analytics-text);
   background: var(--analytics-panel);
 }
@@ -5534,7 +5791,7 @@ h2 {
 .report-summary-grid {
   display: flex;
   min-height: 38px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--analytics-strong);
   background: var(--analytics-summary-bg);
@@ -5590,7 +5847,9 @@ h2 {
 
 @media (width <= 1150px) {
   .top-board {
+    grid-template-rows: auto;
     grid-template-columns: 1fr;
+    min-height: 0;
   }
 
   .gauge-column,
@@ -5618,6 +5877,12 @@ h2 {
   .screen-toolbar {
     display: flex;
     flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .source-status-tag {
+    flex-basis: 280px;
+    max-width: 100%;
   }
 
   .group-track-grid {
@@ -5633,9 +5898,12 @@ h2 {
   .yellow-grid,
   .blue-grid,
   .gauge-column,
-  .responsible-grid,
-  .group-track-grid {
+  .responsible-grid {
     grid-template-columns: 1fr;
+  }
+
+  .group-track-grid {
+    grid-auto-columns: 100%;
   }
 
   .yellow-kpi-glass {

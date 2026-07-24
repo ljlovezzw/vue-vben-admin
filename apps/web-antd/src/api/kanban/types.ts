@@ -148,6 +148,156 @@ export interface KanbanOverview {
   trend: KanbanTrendPoint[];
 }
 
+export interface NetProfitBreakdownItem {
+  key: string;
+  label: string;
+  type: 'cost' | 'income';
+  value: number;
+}
+
+export interface NetProfitBreakdown {
+  detailRows: number;
+  items: NetProfitBreakdownItem[];
+  netProfit: number;
+  updatedAt: string;
+}
+
+export interface NetProfitDimensionOption {
+  key: string;
+  label: string;
+}
+
+export interface NetProfitGroupRow {
+  accountCount: number;
+  dimension: string;
+  dimensionLabel: string;
+  name: string;
+  negativeCount: number;
+  netProfit: number;
+  parentAsinCount: number;
+  rowCount: number;
+  ytdNetProfit: number;
+}
+
+export interface NetProfitPeriodOption {
+  key: string;
+  label: string;
+}
+
+export interface NetProfitProgressStep {
+  description: string;
+  key: string;
+  label: string;
+  status: 'complete' | 'warning';
+  updatedAt: string;
+}
+
+export interface NetProfitSummary {
+  accountCount: number;
+  latestNetProfit: number;
+  negativeCount: number;
+  negativeRate: number;
+  parentAsinCount: number;
+  positiveCount: number;
+  profitLabel: string;
+  rowCount: number;
+  selectedNetProfit: number;
+  updatedAt: string;
+  ytdNetProfit: number;
+}
+
+export interface NetProfitTrendPoint {
+  label: string;
+  netProfit: number;
+  period: string;
+}
+
+export interface NetProfitOverview {
+  breakdown: NetProfitBreakdown;
+  dimension: string;
+  dimensions: NetProfitDimensionOption[];
+  filters: {
+    brands: string[];
+    countries: string[];
+    departments: string[];
+    operators: string[];
+  };
+  groups: NetProfitGroupRow[];
+  period: string;
+  periodLabel: string;
+  periods: NetProfitPeriodOption[];
+  progress: NetProfitProgressStep[];
+  query: Record<string, any>;
+  risks: NetProfitGroupRow[];
+  summary: NetProfitSummary;
+  trend: NetProfitTrendPoint[];
+}
+
+export interface NetProfitDetailRow {
+  amount: number;
+  asin: string;
+  brand: string;
+  cashIncome: number;
+  country: string;
+  customCost: number;
+  department: string;
+  firstLegCost: number;
+  firstLegFee: number;
+  focusLabel?: string;
+  focusMetric?: string;
+  focusShare?: number;
+  focusValue?: number;
+  grossProfit: number;
+  key: string;
+  marketingFee: number;
+  msku: string;
+  netProfit: number;
+  operator: string;
+  otherFee: number;
+  packageCost: number;
+  parentAsin: string;
+  period: string;
+  productName: string;
+  purchaseCost: number;
+  purchaseQty: number;
+  shop: string;
+  sku: string;
+  spu: string;
+  standardFee: number;
+}
+
+export interface NetProfitDetailColumn {
+  key: string;
+  label: string;
+  role: 'context' | 'focus';
+}
+
+export interface NetProfitDetails {
+  columns: NetProfitDetailColumn[];
+  dimension: string;
+  display: {
+    mode: 'full-detail' | 'metric-focus';
+    note: string;
+  };
+  focus: {
+    description: string;
+    dimension: string;
+    dimensionLabel: string;
+    metric: string;
+    metricLabel: string;
+    sortField: string;
+    value: string;
+  };
+  focusAbsTotal: number;
+  page: number;
+  pageSize: number;
+  period: string;
+  periodLabel: string;
+  query: Record<string, any>;
+  rows: NetProfitDetailRow[];
+  total: number;
+}
+
 export interface KanbanProductDetailColumn {
   defaultVisible: boolean;
   group?: string;
@@ -412,120 +562,87 @@ export interface SpuPayload {
 }
 
 export interface AdMonitorFilters {
-  categories: string[];
-  responsibles: string[];
+  countries: string[];
+  departments: string[];
   shops: string[];
-  sites: string[];
 }
 
-export interface AdMonitorKpi {
-  delta?: null | number;
-  inverseDelta: boolean;
-  key: string;
-  label: string;
-  tone: 'amber' | 'blue' | 'cyan' | 'green' | 'purple' | 'red';
-  unit?: string;
-  value: number;
+export interface AdMonitorPeriod {
+  days: number;
+  endDate: string;
+  rangePreset: '7d' | '30d' | 'month';
+  startDate: string;
 }
 
 export interface AdMonitorSummary {
-  acos: number;
-  adSales: number;
-  campaignCount: number;
-  cpa: number;
-  cpc: number;
-  endDate: string;
-  productRows: number;
-  roas: number;
-  shopCount: number;
-  spuCount: number;
-  startDate: string;
-  tacos: number;
-  totalSales: number;
-  totalSpend: number;
-}
-
-export interface AdTrendPoint {
-  acos: number;
-  adSales: number;
-  cpa: number;
-  cpc: number;
-  date: string;
-  roas: number;
-  spend: number;
-  tacos: number;
-  totalSales: number;
-}
-
-export interface AdCategoryRow {
-  acos: number;
   adOrders: number;
-  adSales: number;
-  category: string;
-  cpa: number;
-  responsibleCount: number;
-  roas: number;
-  spend: number;
-  spuCount: number;
-  tacos: number;
-  totalSales: number;
+  adOrderShare: number;
+  adCvr: number;
+  acoas: number;
+  cvrChangePp: number;
+  previousAdCvr: number;
+  /** @deprecated Use previousAdCvr. */
+  last30AdCvr: number;
+  overTargetPp: number;
+  previousSpend: number;
+  spendChangeRate: number;
+  targetAcoas: number;
+  targetCoverage: number;
+  totalExcessSpend: number;
+  totalSalesQty: number;
+  totalSpend: number;
+  yoyAdCvr: number;
+  yoyChangePp: number;
 }
+
+export type AdMonitorStatus =
+  | 'flat'
+  | 'high_risk'
+  | 'rising'
+  | 'warning'
+  | 'watch';
 
 export interface AdResponsibleRow {
-  acos: number;
-  adSales: number;
-  cpa: number;
-  responsible: string;
-  roas: number;
-  spend: number;
-  spuCount: number;
-  tacos: number;
-  totalSales: number;
-}
-
-export interface AdTypeRow {
-  acos: number;
-  orders: number;
-  roas: number;
-  sales: number;
-  spend: number;
-  spendShare: number;
-  type: string;
-}
-
-export interface AdCampaignRow {
-  acos: number;
+  acoas: number;
+  adCvr: number;
   adOrders: number;
-  adSales: number;
-  budgetUtilization: number;
-  campaignName: string;
-  campaignType: string;
-  category: string;
-  clicks: number;
-  cpc: number;
-  ctr: number;
-  cvr: number;
-  impressions: number;
-  inBudgetMinutes: number;
-  maxDailyBudget: number;
-  overBudgetPeriods: string;
+  adOrderShare: number;
+  adSpend: number;
+  allowedAdSpend: number;
+  cvrChangePp: number;
+  department: string;
+  effectiveExcessSpend: number;
+  excessContribution: number;
+  excessSeverity: number;
+  excessSpend: number;
+  previousAdCvr: number;
+  /** @deprecated Use previousAdCvr. */
+  last30AdCvr: number;
+  previousAdSpend: number;
   responsible: string;
-  roas: number;
-  shopName: string;
-  site: string;
-  spend: number;
-  spu: string;
+  salesAmount: number;
+  status: AdMonitorStatus;
+  targetAcoas: number;
+  targetConfigured: boolean;
+  targetedSalesAmount: number;
+  totalSalesQty: number;
+  yoyAdCvr: number;
+}
+
+export interface AdMonitorInsight {
+  message: string;
+  topContribution: number;
+  topResponsibleNames: string[];
 }
 
 export interface AdMonitorOverview {
-  campaignRows: AdCampaignRow[];
-  categoryRows: AdCategoryRow[];
+  dataUpdatedAt: string;
   filters: AdMonitorFilters;
-  kpis: AdMonitorKpi[];
+  impactRows: AdResponsibleRow[];
+  insight: AdMonitorInsight;
+  period: AdMonitorPeriod;
   responsibleRows: AdResponsibleRow[];
   summary: AdMonitorSummary;
-  trend: AdTrendPoint[];
-  typeRows: AdTypeRow[];
 }
 
 export interface AnalyticsFilters {
@@ -545,8 +662,12 @@ export interface AnalyticsOperationGroup {
 
 export interface AnalyticsOperationMetric {
   adAcoas: number;
+  adCvr: number;
+  adOrders: number;
   adSales: number;
   adSpend: number;
+  adSpendRate: number;
+  clicks: number;
   date: string;
   dailyTargetProfit?: number;
   dailyTargetSales?: number;
@@ -557,7 +678,8 @@ export interface AnalyticsOperationMetric {
   grossMarginRate?: number;
   inventoryQty: number;
   inventoryRiskCount: number;
-  promotionRate: number;
+  productExpressionAdSpend: number;
+  productExpressionSalesAmount: number;
   salesAmount: number;
   salesQty: number;
   targetGrossMarginRate?: number;
@@ -579,7 +701,11 @@ export interface AnalyticsOverview {
     days: number;
     endDate: string;
     startDate: string;
-    summary: Pick<AdMonitorSummary, 'adSales' | 'totalSales' | 'totalSpend'>;
+    summary: {
+      adSales: number;
+      totalSales: number;
+      totalSpend: number;
+    };
   };
   filters: AnalyticsFilters;
   operations: {
@@ -622,8 +748,8 @@ export interface AnalyticsOverview {
   };
   source: {
     message: string;
-    mode: 'database' | 'live_api';
-    status: 'ok' | 'unavailable';
+    mode: 'database' | 'live_api' | 'mixed';
+    status: 'ok' | 'stale' | 'unavailable';
   };
   updatedAt: string;
 }
@@ -674,11 +800,14 @@ export interface AnalyticsReportRow {
   imageUrl: string;
   impressions: number;
   key: string;
+  lifecycle: string;
   netSalesAmount: number;
   orderProfit: number;
   orderQty: number;
   parentAsin: string;
+  profitGrade: string;
   productType: 'new' | 'old';
+  projectTag: string;
   pv: number;
   rating: number;
   refundQty: number;
@@ -965,15 +1094,24 @@ export interface LoginLogRow {
 }
 
 export interface InAppCardNotification {
+  acknowledgedAt: string;
   card: Record<string, any>;
   detectedAt: string;
   event: Record<string, any>;
   eventKey: string;
   id: number;
+  inAppStatus: 'acked' | 'pending';
   preview: boolean;
   scene: string;
   sentAt: string;
   title: string;
+}
+
+export interface InAppCardNotificationHistory {
+  items: InAppCardNotification[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export interface ConfigRuleGroup {

@@ -13,9 +13,7 @@ export default defineConfig(async ({ mode }) => {
     application: {},
     vite: {
       build: {
-        // Production serves this directory directly; keep previous hashed assets
-        // available until the new index and chunks have finished writing.
-        emptyOutDir: false,
+        emptyOutDir: true,
       },
       server: {
         allowedHosts: ['hub.junlee.top'],

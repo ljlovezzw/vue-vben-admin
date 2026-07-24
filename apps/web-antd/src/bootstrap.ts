@@ -2,6 +2,8 @@ import { createApp, watchEffect } from 'vue';
 
 import { registerAccessDirective } from '@vben/access';
 import { registerLoadingDirective } from '@vben/common-ui/es/loading';
+import { initTippy } from '@vben/common-ui/es/tippy';
+import { MotionPlugin } from '@vben/plugins/motion';
 import { preferences } from '@vben/preferences';
 import { initStores } from '@vben/stores';
 import '@vben/styles';
@@ -15,6 +17,8 @@ import { initComponentAdapter } from './adapter/component';
 import { initSetupVbenForm } from './adapter/form';
 import App from './app.vue';
 import { router } from './router';
+
+import '@fontsource-variable/inter/wght.css';
 
 async function bootstrap(namespace: string) {
   // 初始化组件适配器
@@ -50,14 +54,12 @@ async function bootstrap(namespace: string) {
   registerAccessDirective(app);
 
   // 初始化 tippy
-  const { initTippy } = await import('@vben/common-ui/es/tippy');
   initTippy(app);
 
   // 配置路由及路由守卫
   app.use(router);
 
   // 配置Motion插件
-  const { MotionPlugin } = await import('@vben/plugins/motion');
   app.use(MotionPlugin);
 
   // 动态更新标题

@@ -23,6 +23,16 @@ const routes: RouteRecordRaw[] = [
           title: $t('page.dashboard.analytics'),
         },
       },
+      {
+        name: 'DashboardNetProfit',
+        path: '/net-profit',
+        component: () => import('#/views/kanban/net-profit/index.vue'),
+        meta: {
+          authority: ['super'],
+          icon: 'lucide:landmark',
+          title: '纯利计算',
+        },
+      },
     ],
   },
 ];

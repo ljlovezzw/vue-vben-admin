@@ -1,6 +1,7 @@
 import { initPreferences, updatePreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
+import { bootstrap } from './bootstrap';
 import { overridesPreferences, preferencesExtension } from './preferences';
 
 /**
@@ -29,6 +30,10 @@ async function initApplication() {
       source: '/assets/app-logo.svg',
       sourceDark: '/assets/app-logo.svg',
     },
+    sidebar: {
+      collapsed: true,
+      width: 200,
+    },
     theme: {
       mode: 'light',
       semiDarkHeader: false,
@@ -39,7 +44,6 @@ async function initApplication() {
 
   // 启动应用并挂载
   // vue应用主要逻辑及视图
-  const { bootstrap } = await import('./bootstrap');
   await bootstrap(namespace);
 
   // 移除并销毁loading

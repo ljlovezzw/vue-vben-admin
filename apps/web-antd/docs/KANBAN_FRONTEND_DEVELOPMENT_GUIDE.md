@@ -1,6 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-06-26
+更新时间：2026-07-22
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
@@ -13,7 +13,7 @@ E:\junlee\Kanban\docs\BACKEND_DEVELOPMENT_GUIDE.md
 前端仓库：
 
 ```text
-C:\Users\Administrator\Desktop\vue-vben-admin
+E:\desktop\vue-vben-admin
 ```
 
 业务应用：
@@ -22,7 +22,7 @@ C:\Users\Administrator\Desktop\vue-vben-admin
 apps\web-antd
 ```
 
-这是基于 Vue Vben Admin 的运营看板前端。主要业务页面包括公司经营驾驶舱、新品监控、广告监控、目标跟踪、ASIN360、SPU 管理和配置中心；工具作为与运营看板同级的独立菜单。
+这是基于 Vue Vben Admin 的运营看板前端。主要业务页面包括概览分组下的公司经营驾驶舱和纯利计算，以及运营看板分组下的新品监控、广告监控、目标跟踪、ASIN360、SPU 管理和配置中心；工具作为与运营看板同级的独立菜单。
 
 技术栈：
 
@@ -47,7 +47,7 @@ cd E:\junlee\Kanban
 启动前端：
 
 ```powershell
-cd C:\Users\Administrator\Desktop\vue-vben-admin
+cd E:\desktop\vue-vben-admin
 pnpm dev
 ```
 
@@ -104,7 +104,7 @@ https://api.junlee.top
 常用验证：
 
 ```powershell
-cd C:\Users\Administrator\Desktop\vue-vben-admin
+cd E:\desktop\vue-vben-admin
 pnpm --filter @vben/web-antd run typecheck
 pnpm build:web
 ```
@@ -113,10 +113,9 @@ pnpm build:web
 
 ```text
 apps\web-antd\dist
-apps\web-antd\dist.zip
 ```
 
-正式环境直接读取 `dist`，因此 `vite.config.ts` 设置 `build.emptyOutDir=false`：构建时保留上一版哈希资源，待新资源全部写入后再更新入口，避免在线用户在构建窗口内请求旧分片出现 404。旧哈希文件会累积，清理时必须避开在线构建和发布窗口。
+`pnpm build:web` 的 `dist` 只用于本地构建验证和 `vite preview`。正式环境不直接读取该目录；发布必须执行 `pnpm deploy:web`，由脚本构建并切换蓝绿发布槽位。`build.emptyOutDir=true` 会清理当前构建目标，不再累计旧哈希文件。生产归档已关闭，默认不再生成 `dist.zip`。
 
 本机运行生产构建产物：
 
@@ -124,7 +123,7 @@ apps\web-antd\dist.zip
 pnpm preview:web
 ```
 
-`preview:web` 会执行 `vite preview --host 0.0.0.0 --port 5666`。如果通过 `https://hub.junlee.top` 映射访问生产构建产物，服务器或反向代理必须做 SPA fallback：所有非静态资源路径回退到 `index.html`，否则 history 模式下刷新 `/kanban/...` 会 404。生产 API 基地址为 `https://api.junlee.top`，后端必须允许该跨域来源并放行 `OPTIONS` 预检。
+`preview:web` 会执行 `vite preview --host 0.0.0.0 --port 5666`，只能用于本地验收，不能作为正式静态服务器。正式 Nginx 已做 SPA fallback：所有非静态资源路径回退到 `index.html`，避免 history 模式刷新 `/kanban/...` 时 404。生产 API 基地址为 `https://api.junlee.top`，后端必须允许该跨域来源并放行 `OPTIONS` 预检。
 
 ## 3. 业务目录
 
@@ -149,6 +148,7 @@ apps/web-antd/src/
   views/
     dashboard/analytics/        公司经营驾驶舱
       components/ProductDetailTable.vue  分析页内嵌新品详情表
+    kanban/net-profit/          纯利计算，菜单挂在概览分组
     kanban/monitor/             新品监控
     kanban/ads/                 广告监控
     kanban/targets/             目标跟踪
@@ -166,6 +166,7 @@ apps/web-antd/src/
 - `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额/毛利润卡片、推广与周转卡片、部门销量完成率、负责人完成率、商品维度明细报表和内嵌新品详情表。底部两个表格的负责人范围必须从顶部筛选后的最终负责人作用域继承；部门筛选本身不出现在子表 UI 中。
 - `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，继承顶部时间、站点、国家、项目标签和负责人作用域，同时拥有自己的国家、负责人、列配置、固定列、分页、汇总行、FBA SKU 库存弹窗和点击排序；本地负责人筛选只能在父级作用域内继续缩小。
 - `src\views\kanban\monitor\index.vue`：新品监控主页面，新品详情表已改成类似商品维度明细报表的确认式筛选和列配置，并增加时间范围、负责人筛选。
+- `src\views\kanban\net-profit\index.vue`：纯利计算页面，读取 `net_profit_summary` 汇总和 `net_profit` 明细，提供月度/YTD 概览、纯利形成路径、费用拆解、维度排行和点击下钻。
 - `src\layouts\basic.vue`：系统全局布局，包含用户菜单、水印、右上角通知入口，以及飞书卡片通知同步到前端后的站内弹窗确认。
 - `public\tools\upload-tool.html`：图片标准命名打包工具，负责本地预览、AI 标记、ZIP 生成、JSON 元数据打包和飞书任务上传。
 - `src\api\kanban\index.ts` 与 `src\api\kanban\types.ts`：补齐 `fetchKanbanProductDetail` 的时间范围参数和 `KanbanProductDetailOverview.query` 类型。
@@ -205,7 +206,7 @@ Authorization: Bearer <accessToken>
 
 个人中心 `/profile` 只保留“基本设置”。页面展示 `/user/info` 返回的姓名、账号、邮箱、角色、部门、直属上级和登录方式，所有字段只读，不提供密码、安全设置或通知设置入口。直属上级来自后端登录时同步的飞书通讯录字段 `directLeaderName`；如果飞书开放平台未开通组织架构权限，则显示为空。
 
-全局站内卡片通知前端入口已暂时停用，`src\layouts\basic.vue` 不再轮询 `/kanban/card-notifications/in-app`，也不再展示功能更新提醒弹窗。后端卡片通知接口和 API 封装仍保留，后续需要恢复站内提醒时再重新接入入口。
+全局站内卡片通知入口位于 `src\layouts\basic.vue`。前端轮询 `/kanban/card-notifications/in-app` 获取当前用户未读卡片，点击“已收到”只写已读状态，不删除通知。通知面板的“查看所有消息”会打开历史弹窗，通过 `/kanban/card-notifications/in-app/history` 分页查询全部通知，支持未读/已读和关键词筛选；点击历史记录可重新查看完整卡片内容。
 
 ### 4.2 页面权限
 
@@ -214,6 +215,7 @@ Authorization: Bearer <accessToken>
 | 公司经营驾驶舱 | `/analytics` | `kanban:analytics`，仅用于菜单展示 |
 | 新品监控 | `/kanban/monitor` | `kanban:monitor` |
 | 广告监控 | `/kanban/ads` | `kanban:ads` |
+| 纯利计算 | `/net-profit`，位于概览分组 | 仅 `super` 角色 |
 | 目标跟踪 | `/kanban/targets` | `kanban:targets` |
 | ASIN360 | `/kanban/asin360` | `kanban:asin360` |
 | SPU 管理 | `/kanban/spus` | `kanban:spus` |
@@ -233,7 +235,7 @@ Authorization: Bearer <accessToken>
 
 ## 4.4 公司经营驾驶舱交互口径
 
-分析页主筛选的负责人选项来自后端 `product_life.运营负责人`，不再依赖利润表或目标表。公司经营驾驶舱仍是公司级视角；负责人、部门、运营组和项目标签是用户主动筛选条件。若登录用户配置了国家范围或部门范围，后端会裁剪对应候选和查询参数，前端不要用本地选项绕过接口回显。
+分析页主筛选的负责人选项来自后端 `product_life.运营负责人`，不再依赖利润表或目标表，并会随顶部国家（站点）和部门筛选动态收窄。公司经营驾驶舱仍是公司级视角；负责人、部门、运营组和项目标签是用户主动筛选条件。若登录用户配置了国家范围或部门范围，后端会裁剪对应候选和查询参数，前端不要用本地选项绕过接口回显。负责人不要求加入运营组：不属于任何 `filters.operationGroups.memberNames` 的候选必须显示在级联菜单的“未分组”入口中。
 
 商品维度明细报表维护自己的分页、列配置、SPU、新品/老品等查询状态，但顶部时间、国家、部门、运营组和负责人是它的全局范围，会跟随顶部筛选自动刷新。明细报表支持国家、新品/老品、运营组、SPU、负责人、展示列、固定列和分页/排序筛选；SPU 选项来自后端 `filters.spus`，请求参数为 `spus[]`。运营组使用总览接口返回的 `filters.operationGroups`。国家、新品/老品、运营组、SPU、负责人使用 Dropdown + Checkbox 的确认式筛选，不直接用普通多选 Select，避免大选项列表频繁触发表格请求。筛选浮层必须使用实体背景和足够层级，避免透明叠字。注意：当前后端 `/kanban/analytics/report` 还没有接入 `projectTags` 参数，顶部项目标签只确定性作用于总览和内嵌新品详情表；若要让商品明细也按项目标签过滤，需要先补后端。
 
@@ -273,6 +275,8 @@ apps\web-antd\src\api\kanban\types.ts
 | `fetchKanbanProductDetailFbaInventory` | `GET /kanban/monitor/product-detail/fba-inventory`，按 `spu + site` 返回当前 FBA SKU 库存弹窗数据 |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
 | `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
+| `fetchNetProfitOverview` | `GET /kanban/net-profit/overview`，读取 `net_profit_summary` 汇总和 `net_profit` 明细费用拆解，支持月份/YTD、品牌、国家、部门、运营人员和维度排行筛选 |
+| `fetchNetProfitDetails` | `GET /kanban/net-profit/details`，按纯利计算排行行点击下钻，分页返回 `net_profit` 明细，并用 `net_profit_summary` 补齐部门口径 |
 | `fetchTargetTrackerOverview` | `GET /kanban/targets/overview` |
 | `fetchAsin360Overview` | `GET /kanban/asin360/overview` |
 | `fetchAsin360StoreOptions` | `GET /kanban/asin360/stores` |
@@ -314,7 +318,8 @@ src\views\dashboard\analytics\components\ProductDetailTable.vue
 - 底部报表快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，当前包含“泛欧”和非泛欧业务国家；欧洲国家在后端归并到“泛欧”。顶部国家筛选会映射为后端报表使用的中文国家标签，例如 `US -> 美国`、`PAN_EU -> 泛欧`。
 - 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。商品维度明细报表的“店铺”是后端聚合维度之一，导出后按店铺二次汇总应与同日期同店铺的原始产品表现销量对齐。
 - 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
-- 顶部不再展示“交易状态”筛选；分析页运营指标主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端默认仅把利润表“已发放”口径用于毛利润、广告费、广告销售额和推广费用等财务项，其中广告费、广告销售额和推广费用会从 CNY 转 USD，毛利润保持 CNY；销售额实际值保留产品表现口径。
+- 顶部不再展示“交易状态”筛选；分析页运营指标主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端默认仅把利润表“已发放”口径用于毛利润、广告销售额和相关比例分母，毛利润保持 CNY；销售额实际值及全部广告花费保留产品表现口径。
+- 顶部“广告占比”和 ACoAS 统一读取产品表现口径，公式固定为产品表现广告花费 / 产品表现销售额；后端 `adSpendRate/adAcoas` 返回相同数值，前端 ACoAS 优先复用 `adSpendRate`，避免两个名称展示出不同结果。历史来自 `productexpressionnew`/产品表现快照，实时来自 `productexpressionnew_live_cache`。
 - 日维度日期范围如果包含今天或昨天，后端会优先用 `productexpressionnew_live_cache` 覆盖这些近实时日期，再与其余历史日期的 `productexpressionnew` 数据合并；只有纯历史日期才完全读取 `productexpressionnew`。
 - 月维度固定使用 `productexpressionnew` 聚合，不触发实时产品表现缓存；当前月默认截止北京时间当前日期减 1。
 - 前端不提供手动数据源切换按钮，实际数据源以接口 `source.message` 为准。
@@ -326,14 +331,14 @@ src\views\dashboard\analytics\components\ProductDetailTable.vue
 - 三个完成率仪表盘中心通过 Vue 覆盖层展示具体完成值和完成率百分比：销量图展示实际销量，销售额图展示 USD 实际销售额，毛利润图展示 CNY 实际毛利润；下方继续展示实际值和目标值。不要依赖 ECharts `detail/graphic` 渲染中心文字。
 - 销量和销售额对比卡片按维度切换文案：日维度为前一周期/上周同期，月维度为上月/去年同期，并展示绝对差值和百分比差异。
 - 黄色销售指标区按视觉稿采用橙黄渐变背景、内层半透明 KPI 玻璃卡和 2x3 对比信息面板。对比面板标签和普通数值使用黑色系并比默认小字大一号；只调整 `yellow-grid` 的表现层，不改变 `latest/previous/weekBefore` 数据口径；涨跌值继续使用 `comparisonClass` 输出的 `good/bad/neutral` 状态着色。
-- 蓝色推广与周转指标区采用蓝紫渐变背景、点阵纹理、内层半透明 KPI 玻璃卡和信息对比面板。推广费用占比保留 6 项对比指标，周转周期保留 2x2 对比；只调整 `blue-grid` 表现层，不改变推广占比和周转周期计算口径。
+- 蓝色广告与周转指标区采用蓝紫渐变背景、点阵纹理、内层半透明 KPI 玻璃卡和信息对比面板。广告占比保留 6 项对比指标，周转周期保留 2x2 对比；只调整 `blue-grid` 表现层，不改变广告占比和周转周期计算口径。
 - 顶部大网格桌面端需要给右侧 `blue-grid` 保留足够宽度，当前右列宽度约 460px；后续调整 `yellow-grid` 时不要再次挤压蓝色指标区。
 - 部门维度 `group-panel` 当前需要比早期布局更宽，桌面端第 2 列最小宽度约 340px；负责人面板可以适度压缩，负责人卡片最小宽度约 196px。
-- 右侧推广占比、周转周期和对比卡片展示 `period.startDate/endDate/days` 对应的时间段信息；日维度区间模式下必须显示当前区间、前一同长度周期和上周同期区间，不能只展示单日语义。
-- 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；运营组筛选选项来自后端 `filters.operationGroups`，并会随部门选择收窄，部门、运营组、负责人多选由后端按交集过滤。前端不要自行用运营组成员替代后端最终名单；底部两个表格应优先使用 `overview.query.responsibles`，这样部门筛选也能影响没有部门控件的子表。
+- 右侧广告占比、周转周期和对比卡片展示 `period.startDate/endDate/days` 对应的时间段信息；日维度区间模式下必须显示当前区间、前一同长度周期和上周同期区间，不能只展示单日语义。
+- 部门筛选选项来自后端 `filters.departments`，请求参数为 `departments`；运营组和负责人选项来自后端 `filters.operationGroups/filters.responsibles`，会随国家和部门选择收窄，部门、运营组、负责人多选由后端按交集过滤。切换国家时要清空旧的运营组和负责人选择，再以新响应重建候选，避免残留负责人把新国家查成空数据。前端必须为未加入运营组的负责人提供“未分组”入口，例如澳洲和阿联酋当前只应出现胡金虹。前端不要自行用运营组成员替代后端最终名单；底部两个表格应优先使用 `overview.query.responsibles`，这样部门筛选也能影响没有部门控件的子表。
 - 原运营组区域已改为部门维度，三段横向指标卡分别展示“销量完成率 - 部门维度”“销售额完成率 - 部门维度”和“毛利润完成率 - 部门维度”。数据来自后端 `operations.departmentRows`，运营组仍只作为顶部和负责人面板右上角的筛选条件存在。
 - 负责人列表只展示后端返回的活跃负责人，优先排列实时销量大于 0 的运营；后端已过滤不在 `users` 表里的离职人员和区间目标销量为 0 的人员。标题显示总展示人数和其中有销量人数。
-- 负责人维度卡片区按独立小卡展示，桌面端使用 `auto-fit + minmax(210px, 1fr)`，不能用连续表格边框挤压文本；负责人姓名必须作为卡片顶部的主标题清晰展示。卡片内部使用两列指标，包含销售额完成率、目标销售额、销量完成率、目标销量、毛利润、目标毛利、毛利完成率、毛利率、目标毛利率、毛利率完成率、FBA 可售数量、周转周期（月）、广告 ACoAS 和推广费占比；右上角提供独立的运营组/负责人级联筛选状态，不要复用顶部筛选 Dropdown 的 open/draft 状态。该筛选下拉要通过 `getPopupContainer` 挂到 `document.body`，避免被 `responsible-panel/top-board` 网格或滚动区域裁切；弹层背景必须不透明，不能透出下方表格文字。忽略原图右侧收藏/评论/导出/告警侧栏和“每日运营完成率动态追踪”装饰字。
+- 负责人维度卡片区按独立小卡展示，桌面端使用 `auto-fit + minmax(210px, 1fr)`，不能用连续表格边框挤压文本；负责人姓名必须作为卡片顶部的主标题清晰展示。卡片内部使用两列指标，包含销售额完成率、目标销售额、销量完成率、目标销量、毛利润、目标毛利、毛利完成率、毛利率、目标毛利率、毛利率完成率、FBA 可售数量、周转周期（月）和广告 ACoAS；推广费占比已删除。右上角提供独立的运营组/负责人级联筛选状态，不要复用顶部筛选 Dropdown 的 open/draft 状态。该筛选下拉要通过 `getPopupContainer` 挂到 `document.body`，避免被 `responsible-panel/top-board` 网格或滚动区域裁切；弹层背景必须不透明，不能透出下方表格文字。忽略原图右侧收藏/评论/导出/告警侧栏和“每日运营完成率动态追踪”装饰字。
 - 新品详情表位于商品维度明细报表下方。表格不展示 `No.` 行号列，表头第一行按业务分组展示基础信息、销售、利润费用、广告、表现、库存；基础信息包含 `SPU`、`父ASIN`、`主图`、`店铺`、`等级`、`运营负责人`、`一级类目`、`二级分类`、`国家`、`创建时间`、`开售时间`、`上线天数` 和 `销售均价`，销售/广告/库存字段按各自业务组展示。列配置分组与表头分组保持一致。指标单元格使用左对齐填色表达占比或完成度，颜色使用更深的蓝/绿/橙/红；上线天数显示数字在前、红点在后。
 - 左侧三个完成率环形图内部比例单独维护：ECharts gauge 只画环形，中心数字用覆盖层；图表中心下移到 `55%`，图表区域随卡片伸展，避免底部说明上方出现大块空白。
 - 新品详情表所有字段都支持点击排序，排序取指标对象的真实 `value`，不是格式化后的文本；排序由后端 `/kanban/monitor/product-detail/rows` 对完整结果排序后再分页。表格底部汇总行读取后端 `summary`，不是当前页前端本地求和。
@@ -400,8 +405,37 @@ src\views\kanban\ads\index.vue
 
 用途：
 
-- 按日期、站点、店铺、类目和负责人查看广告 KPI。
-- 展示趋势、类目、负责人、广告类型和 Campaign 分析。
+- 按近7天、近30天或本月查看广告表现，并支持部门、国家和店铺筛选。
+- 四张 KPI 展示广告总花费及环比、广告销量/总销量及广告订单占比、广告 CVR 及近30天/同比、ACoAS 及目标/超标。
+- “负责人广告表现及超标归因”展示负责人、广告花费、广告销量、总销量、广告 CVR、近30天 CVR、变化、ACoAS、超标贡献和 CVR 风险状态。
+- “广告占比超标影响”按有效超标金额展示负责人贡献排名和 Top 归因结论。
+
+注意：
+
+- 页面不再展示旧版趋势图、类目榜、广告类型和 Campaign 大表，不要重新依赖旧响应字段 `trend/categoryRows/typeRows/campaignRows`。
+- 比例字段直接展示后端按汇总分子/分母重算的结果，前端不得平均负责人行。
+- `targetConfigured=false` 时显示“未配置目标”，不能把目标显示成 `0%` 后判定为超标。
+- 筛选变化后直接刷新；接口有 120 秒短缓存和同参数请求合并，前端不需要额外高频轮询。
+
+### 6.1.1 纯利计算 `/net-profit`
+
+文件：
+
+```text
+src\views\kanban\net-profit\index.vue
+```
+
+用途：
+
+- 给管理层查看纯利口径，默认展示最新月份，同时支持切换到 2026 年累计。
+- 顶部展示纯利、累计纯利、亏损占比和账号覆盖；中部展示资金从回款收入到最终纯利的形成路径、月度趋势和费用拆解。纯利形成路径按财务公式展示：`回款收入 = 领星毛利 + 采购成本 + 头程成本 + 自定义费用`，`纯利 = 回款收入 - ASIN标准费用 - ASIN营销相关费用 - ASIN其他费用`。采购成本、头程成本和自定义费用只作为回款收入构成展示，不作为纯利主链路扣减节点。
+- 维度排行支持按账号、品牌、国家、部门、运营人员和父 ASIN 切换；点击排行行打开明细抽屉，分页查看 `net_profit` 的 MSKU/SKU/SPU/父 ASIN/成本/纯利。
+
+口径：
+
+- 汇总来自 `net_profit_summary`，明细和费用拆解来自 `net_profit`。
+- `YTD` 明细限制在 `2026%` 月份范围内，避免未来或其他年份明细混入 2026 年累计口径。
+- 部门筛选和部门下钻使用 `net_profit_summary.所属部门`，通过 `店铺 + 父ASIN` 回补到明细。
 
 ### 6.4 目标跟踪 `/kanban/targets`
 
@@ -478,6 +512,11 @@ public\tools\upload-tool.html
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
 - A+ 图像轮播组件固定生成 6 组图片，即手机端 6 张、电脑端 6 张；完整图和轮播共用 A+ 图片组序号，轮播输出文件名格式为 `SPU-端_图片组序号-轮播序号`。
+- A+ 顶部批量拖放区会按默认文件名自动分配素材：`SPU-手机端_01` / `SPU-电脑端_01` 定位完整图，带轮播序号的 `SPU-手机端_05-1` 定位对应轮播文件位，视频文件和 `视频封面` 定位视频组件。空白组件类型可按文件名自动调整；无法识别、目标已有文件或校验失败的素材保留在文件池供人工分配。
+- 基础设置会从在线 Listing 返回数据中提取颜色，并支持单选或多选颜色过滤。showOnline 没有独立颜色字段时，前端从标准 MSKU 的中间段提取颜色代码，例如 `NY000282_B_L` 识别为 `B`；无法识别的非标准 MSKU 不强行归类。
+- 在线 Listing 表格以“店铺 + 父 ASIN”为任务选择单位，父行支持展开子记录。展开表展示图片、MSKU、子 ASIN、SKU、颜色、状态、品名、分类、国家、品牌和负责人；子记录按 MSKU、子 ASIN 排序。颜色筛选会直接缩小父组中的子记录集合，因此表格数量、已选数量以及飞书任务元数据中的 ASIN 保持一致。
+- A+ 图片组支持拖拽排序和在指定组后插入完整图、轮播或视频，重命名序号以组件顺序实时重算。每个文件预览提供直接添加入口。
+- 手机端和电脑端文件位会校验原文件名中的端类型标识，并比较成对图片移除端类型标识后的基础名称；明确放反或名称不成对时拒绝写入文件位。
 - `/tools/keyword-reverse` 为亚马逊关键词反查工具，是 Vue 原生页面，不走 iframe。页面调用 `#/api/kanban` 的 `fetchKeywordReverse()`，实际请求 `/api/kanban/tools/keyword-reverse`，由本机 FastAPI 代理第三方关键词反查接口。
 - 关键词反查页输入 ASIN、市场、时间范围、排序字段和排序方向。`marketPlaceId` 当前已知映射不完整，只确认 `美国=1、英国=5、德国=6、法国=7、意大利=8、西班牙=9`，页面用下拉选择这 6 个市场，不再让用户手输 ID。结果区按业务参考图组织为：顶部高频词矩阵，支持复制到剪切板、点击高频词筛选和收起/展开；下方结果工具栏展示复制、导出、结果数、`展示前10产品` 开关、排序字段、升降序和查询按钮；明细表固定补充序号列，关键词列展示英文关键词、中文解释和行内复制/筛选操作。
 - 后端返回 `columns` 动态列，前端不要写死第三方接口所有字段。当前只对常见字段做增强展示：`keyword/keywordText/searchKeyword/word` 作为关键词列，`top10Asin/top10Product/top10Products/topProducts/productList/imageList/first10Product/first10Products` 作为 Top10 ASIN/产品图片条；`rankTrends/searchTrends/trends` 合并为“趋势”小折线图；`naRank/adRank` 展示最新排名、页码位置和采集日期；`naTrafficRatio/adTrafficRatio` 合并为“流量分布”；`parentNaTrafficRatio/parentAdTrafficRatio` 合并为“父体流量分布”；`marketNaTrafficRatio/marketAdTrafficRatio` 合并为“市场流量分布”；`top3ClickRate/top3ConversionRate` 合并为“ABA Top3集中度”；`ppcBid/ppcBidMin/ppcBidMax` 合并为建议竞价。未识别字段仍按动态表格普通列展示，并可通过“原始字段”抽屉排查。注意 `products` 是竞争商品数，必须按普通数字列展示，不能放进 Top10 产品图片条。
@@ -489,11 +528,12 @@ public\tools\upload-tool.html
 - 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
-- 在线 Listing 查询完成后，从返回行提取父 ASIN 下拉选项，并按所选父 ASIN 展示对应 ASIN 列表和 Listing 明细。查询前父 ASIN 下拉保留可操作状态，只显示提示项。
-- Listing 明细表固定展示：父ASIN、ASIN、图片、MSKU、SKU、品名、店铺、国家、品牌、状态、负责人；Listing 代理当前返回中文列名，图片列优先读取 `图片`，兼容 `small_image_url`、对象、数组、JSON 字符串和 `//` 协议相对地址，并在候选字段未命中时从图片类字段名兜底提取 URL；品牌读取 `亚马逊品牌`，状态 1/true 显示在售，0/false 显示停售。图片加载失败显示空占位。
-- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。申请飞书上传票据和提交上传回执同样按环境切换，本地走 `/api/feishu/*`，线上走 `https://api.junlee.top/api/feishu/*`。
+- 店铺选项复用搜索词报告的 `/kanban/tools/search-term-report/options`，支持搜索、回车补充和多选。查询时以前端最多 3 路并发分别调用在线 Listing 代理，合并后按“实际店铺 + 父 ASIN”分组；领星无结果回退全店查询时必须按实际返回店铺去重，不能把查询店铺强行覆盖到其它店铺的数据。
+- Listing 结果表按“店铺 + 父 ASIN”一行展示，固定列为选择、店铺、父ASIN、子ASIN、数量、图片、国家、品牌、状态和负责人。父 ASIN 使用复选框多选，并提供当前结果全选；选中后自动汇总每组全部子 ASIN。提交时前端发送 `metadataList`，其中每项的 `shop/parentAsin/asins` 必须全部来自对应选中行，不能再从查询条件或独立父 ASIN 下拉拼装；后端按每个“店铺 + 父 ASIN”分别创建一条飞书任务，同一次生成的 ZIP 只上传一次。图片列优先读取 `图片`，兼容 `small_image_url`、对象、数组、JSON 字符串和 `//` 协议相对地址；品牌读取 `亚马逊品牌`，状态 1/true 显示在售，0/false 显示停售。
+- 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。店铺选项、申请飞书上传票据和提交上传回执同样按环境切换，本地分别走 `/api/kanban/*`、`/api/feishu/*`，线上走 `https://api.junlee.top/kanban/*`、`https://api.junlee.top/api/feishu/*`。
 - 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
-- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用 `v=20260703-edge-upload` 避免生产浏览器继续命中旧静态 HTML。
+- ZIP 生成后前端计算 SHA-256，并按当前登录 token、任务组合和 ZIP 内容生成会话缓存键。相同内容在 30 分钟内重复点击“上传到飞书任务”时直接复用原任务结果，不再次上传附件；页面会显示“已复用”及原 `recordIds`。服务端仍使用 Redis 幂等缓存作为跨页面、跨 Worker 的最终防线，前端缓存不可代替后端去重。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用 `v=20260723-multi-shop-selection` 避免生产浏览器继续命中旧静态 HTML。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
@@ -539,6 +579,26 @@ src\views\kanban\config\index.vue
 - 管理员权限维护页还可编辑“国家范围” `countryScope`。不选表示不限制国家；选择后后端会在 `main.py` 中把中文国家映射到站点或国家候选，并裁剪分析页、商品明细、新品详情和 FBA SKU 库存弹窗等接口的查询范围。
 - 成员范围维护支持姓名、邮箱、部门、飞书 ID 搜索，并支持按角色、状态和登录方式过滤。
 - `leader` 在成员范围维护页签只看到并保存自己的组员范围；`manager` 可以维护成员范围；`admin/super` 还能进入管理员权限维护页签修改角色、状态和可访问模块。
+
+### 6.9 正式环境静态部署与性能
+
+- Cloudflare Web Analytics 的 2026-07 性能分析见 `docs/CLOUDFLARE_WEB_ANALYTICS_2026-07.md`。
+- 正式环境不再使用 `vite preview` 提供静态资源。Nginx 监听 `5668`，Cloudflare Tunnel 的 `hub.junlee.top` 应指向 `http://127.0.0.1:5668`。
+- 发布必须执行 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚；普通账户无权直接 reload Nginx 时，会自动调用 `Kanban Nginx Frontend` SYSTEM 计划任务完成切换和健康检查。
+- `js/jse/css` 文件名包含内容哈希，可长期缓存；`index.html`、`_app.config.js` 和 SPA 路由响应禁止缓存，避免 HTML 引用已经下线的旧资源。
+- 不要重新把 `emptyOutDir` 改为 `false`。旧版本兼容由另一个蓝绿槽位承担，不再把所有历史哈希文件累积在同一个目录。
+
+正式发布命令：
+
+```powershell
+pnpm deploy:web
+```
+
+回滚命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apps/web-antd/deploy/deploy-production.ps1 -Rollback
+```
 
 ## 7. 已完成的主要开发
 

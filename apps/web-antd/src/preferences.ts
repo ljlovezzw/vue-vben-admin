@@ -26,6 +26,10 @@ export const overridesPreferences = defineOverridesPreferences({
     source: '/assets/app-logo.svg',
     sourceDark: '/assets/app-logo.svg',
   },
+  sidebar: {
+    collapsed: true,
+    width: 200,
+  },
   theme: {
     mode: 'light',
     semiDarkHeader: false,

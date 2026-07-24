@@ -42,6 +42,7 @@ import dayjs from 'dayjs';
 import {
   createSearchTermReportTask,
   downloadSearchTermReport,
+  downloadSearchTermReportChunk,
   fetchSearchTermReportOptions,
   fetchSearchTermReportParentAsins,
   fetchSearchTermReportTask,
@@ -74,6 +75,9 @@ const currentTaskId = ref('');
 const taskStatus = ref('');
 const taskError = ref('');
 let taskPollTimer: null | ReturnType<typeof setTimeout> = null;
+const DOWNLOAD_CHUNK_SIZE = 32 * 1024;
+const DOWNLOAD_CONCURRENCY = 4;
+const DOWNLOAD_RETRIES = 2;
 let restoringState = false;
 let restoredDateRange = false;
 let adAnalyzerDateTouched = false;
@@ -448,11 +452,13 @@ function handleTaskStatus(task: SearchTermReportTask) {
       return;
     }
     result.value = task.result;
-    selectedParentAsins.value = task.result.parentAsins?.length
-      ? task.result.parentAsins
-      : (task.result.parentAsin
-        ? [task.result.parentAsin]
-        : []);
+    if (task.result.parentAsins?.length) {
+      selectedParentAsins.value = task.result.parentAsins;
+    } else if (task.result.parentAsin) {
+      selectedParentAsins.value = [task.result.parentAsin];
+    } else {
+      selectedParentAsins.value = [];
+    }
     activeSheetKey.value = task.result.sheets[0]?.key ?? '';
     generating.value = false;
     message.success('搜索词报告已生成');
@@ -490,16 +496,93 @@ async function downloadReport() {
   await downloadFile(result.value.fileName);
 }
 
+async function downloadRangeWithRetry(
+  fileName: string,
+  start: number,
+  end: number,
+) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < DOWNLOAD_RETRIES; attempt += 1) {
+    try {
+      const chunk = await downloadSearchTermReportChunk(fileName, start, end);
+      const expectedEnd = Number.isFinite(chunk.fileSize)
+        ? Math.min(end, chunk.fileSize - 1)
+        : end;
+      const expectedSize = expectedEnd - start + 1;
+      if (
+        chunk.status !== 200 ||
+        chunk.start !== start ||
+        chunk.end !== expectedEnd ||
+        chunk.blob.size !== expectedSize
+      ) {
+        throw new Error(`文件分段校验失败：${start}-${end}`);
+      }
+      return chunk;
+    } catch (error) {
+      lastError = error;
+      if (attempt + 1 < DOWNLOAD_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(errorText(lastError));
+}
+
+async function downloadReportBlob(fileName: string) {
+  const first = await downloadRangeWithRetry(
+    fileName,
+    0,
+    DOWNLOAD_CHUNK_SIZE - 1,
+  );
+  if (!Number.isFinite(first.fileSize) || first.fileSize <= 0) {
+    return downloadSearchTermReport(fileName);
+  }
+  if (first.end + 1 >= first.fileSize) return first.blob;
+
+  const ranges: Array<[number, number]> = [];
+  for (
+    let start = first.end + 1;
+    start < first.fileSize;
+    start += DOWNLOAD_CHUNK_SIZE
+  ) {
+    ranges.push([
+      start,
+      Math.min(start + DOWNLOAD_CHUNK_SIZE - 1, first.fileSize - 1),
+    ]);
+  }
+
+  const parts: Blob[] = [first.blob];
+  for (let index = 0; index < ranges.length; index += DOWNLOAD_CONCURRENCY) {
+    const batch = ranges.slice(index, index + DOWNLOAD_CONCURRENCY);
+    const chunks = await Promise.all(
+      batch.map(([start, end]) => downloadRangeWithRetry(fileName, start, end)),
+    );
+    parts.push(...chunks.map((chunk) => chunk.blob));
+  }
+
+  const blob = new Blob(parts, {
+    type:
+      first.contentType ||
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  if (blob.size !== first.fileSize) {
+    throw new Error(`文件分段不完整：${blob.size}/${first.fileSize}`);
+  }
+  return blob;
+}
+
 async function downloadFile(fileName: string) {
   downloading.value = true;
   try {
-    const blob = await downloadSearchTermReport(fileName);
+    const blob = await downloadReportBlob(fileName);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
     link.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) {
     message.error(`下载失败：${errorText(error)}`);
   } finally {

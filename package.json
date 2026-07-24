@@ -29,6 +29,7 @@
     "dev:web": "pnpm --filter @vben/web-antd run dev",
     "build": "pnpm --filter @vben/web-antd run build",
     "build:web": "pnpm --filter @vben/web-antd run build",
+    "deploy:web": "pnpm --filter @vben/web-antd run deploy:production",
     "preview:web": "pnpm --filter @vben/web-antd run preview",
     "lint": "eslint .",
     "format": "oxfmt ."

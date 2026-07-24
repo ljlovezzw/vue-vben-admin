@@ -1,1281 +1,1129 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import type { TableColumnsType } from 'ant-design-vue';
 
 import type {
-  AdCampaignRow,
-  AdCategoryRow,
-  AdMonitorKpi,
   AdMonitorOverview,
+  AdMonitorStatus,
   AdResponsibleRow,
-  AdTypeRow,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref } from 'vue';
-import VChart from 'vue-echarts';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
 import {
   Button,
-  Card,
   DatePicker,
+  Empty,
+  Progress,
+  Segmented,
   Select,
   Spin,
   Table,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
-import { BarChart, LineChart, PieChart } from 'echarts/charts';
-import {
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-} from 'echarts/components';
-import { use } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchAdMonitorOverview } from '#/api/kanban';
 
-import { useTablePagination } from '../shared/pagination';
-
-use([
-  CanvasRenderer,
-  LineChart,
-  BarChart,
-  PieChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-]);
-
-interface AdCampaignViewRow extends AdCampaignRow {
-  clicksShare: number;
-  ordersShare: number;
-  salesShare: number;
-  spendShare: number;
-}
-
-type RangePreset = '7d' | '30d' | 'custom' | 'month' | 'today' | 'yesterday';
+type RangePreset = '7d' | '30d' | 'month' | 'range';
 
 const loading = ref(false);
 const overview = ref<AdMonitorOverview | null>(null);
-const rangePreset = ref<RangePreset>('7d');
-const customRange = ref<[string, string]>();
-const campaignPagination = useTablePagination(
-  15,
-  ['15', '30', '50', '100'],
-  (total) => `共 ${total} 条 Campaign`,
-);
-
+const rangePreset = ref<RangePreset>('30d');
+const dateRange = ref<[string, string]>([
+  dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
+  dayjs().format('YYYY-MM-DD'),
+]);
+let loadController: AbortController | null = null;
+let loadTimer: ReturnType<typeof setTimeout> | undefined;
+let activeLoadKey = '';
+let activeLoadPromise: null | Promise<void> = null;
 const query = reactive({
-  categories: [] as string[],
-  responsibles: [] as string[],
+  countries: [] as string[],
+  departments: [] as string[],
   shops: [] as string[],
-  sites: [] as string[],
 });
 
-function rangeParams() {
-  const today = dayjs();
+const rangeOptions = [
+  { label: '近7天', value: '7d' },
+  { label: '近30天', value: '30d' },
+  { label: '本月', value: 'month' },
+];
 
-  if (rangePreset.value === 'today') {
-    const date = today.format('YYYY-MM-DD');
-    return { endDate: date, startDate: date };
-  }
+const countrySiteMap: Record<string, string[]> = {
+  AE: ['AE'],
+  AU: ['AU'],
+  BE: ['BE'],
+  BR: ['BR'],
+  CA: ['CA'],
+  DE: ['DE'],
+  ES: ['ES'],
+  FR: ['FR'],
+  GB: ['UK'],
+  IE: ['IE'],
+  IT: ['IT'],
+  JP: ['JP'],
+  MX: ['MX'],
+  NL: ['NL'],
+  PL: ['PL'],
+  SE: ['SE'],
+  UK: ['UK'],
+  US: ['US'],
+  UNITEDARABEMIRATES: ['AE'],
+  UNITEDKINGDOM: ['UK'],
+  UNITEDSTATES: ['US'],
+  加拿大: ['CA'],
+  巴西: ['BR'],
+  德国: ['DE'],
+  意大利: ['IT'],
+  日本: ['JP'],
+  比利时: ['BE'],
+  法国: ['FR'],
+  波兰: ['PL'],
+  澳大利亚: ['AU'],
+  澳洲: ['AU'],
+  爱尔兰: ['IE'],
+  瑞典: ['SE'],
+  美国: ['US'],
+  英国: ['UK'],
+  荷兰: ['NL'],
+  西班牙: ['ES'],
+  阿联酋: ['AE'],
+  墨西哥: ['MX'],
+};
 
-  if (rangePreset.value === 'yesterday') {
-    const date = today.subtract(1, 'day').format('YYYY-MM-DD');
-    return { endDate: date, startDate: date };
-  }
+const shopSitePattern =
+  /(?:-|_|\s)(AE|AU|BE|BR|CA|DE|ES|FR|IE|IT|JP|MX|NL|PL|SE|UK|US)$/i;
 
-  if (rangePreset.value === '7d') {
-    return {
-      endDate: today.format('YYYY-MM-DD'),
-      startDate: today.subtract(6, 'day').format('YYYY-MM-DD'),
-    };
-  }
-
-  if (rangePreset.value === 'month') {
-    return {
-      endDate: today.format('YYYY-MM-DD'),
-      startDate: today.startOf('month').format('YYYY-MM-DD'),
-    };
-  }
-
-  if (rangePreset.value === 'custom') {
-    const [start, end] = customRange.value ?? [];
-    if (start && end) {
-      return { endDate: end, startDate: start };
-    }
-    return {};
-  }
-
-  return {
-    endDate: today.format('YYYY-MM-DD'),
-    startDate: today.subtract(29, 'day').format('YYYY-MM-DD'),
-  };
+function normalizeCountry(value: string) {
+  return String(value || '')
+    .trim()
+    .replaceAll(/[-_\s]/g, '')
+    .toUpperCase();
 }
 
-function selectRangePreset(value: RangePreset) {
-  rangePreset.value = value;
-  if (value !== 'custom') {
-    loadData();
-  }
+function countrySites(country: string) {
+  return countrySiteMap[normalizeCountry(country)] ?? [];
 }
 
-function handleCustomRangeChange() {
+function shopSite(shop: string) {
+  return (
+    String(shop || '')
+      .trim()
+      .match(shopSitePattern)?.[1]
+      ?.toUpperCase() ?? ''
+  );
+}
+
+function shopSiteTone(site: string) {
+  if (['CA', 'MX', 'US'].includes(site)) return 'americas';
+  if (['AE', 'AU', 'BR', 'JP'].includes(site)) return 'growth';
   if (
-    rangePreset.value === 'custom' &&
-    customRange.value?.[0] &&
-    customRange.value?.[1]
+    ['BE', 'DE', 'ES', 'FR', 'IE', 'IT', 'NL', 'PL', 'SE', 'UK'].includes(site)
   ) {
-    loadData();
+    return 'europe';
   }
+  return 'neutral';
+}
+
+const columns: TableColumnsType<AdResponsibleRow> = [
+  { dataIndex: 'responsible', fixed: 'left', title: '负责人', width: 110 },
+  { dataIndex: 'adSpend', title: '广告花费', width: 105 },
+  { dataIndex: 'adOrders', title: '广告销量', width: 90 },
+  { dataIndex: 'totalSalesQty', title: '总销量', width: 88 },
+  { dataIndex: 'adCvr', title: '广告CVR', width: 92 },
+  { dataIndex: 'previousAdCvr', title: '上一周期CVR', width: 112 },
+  { dataIndex: 'cvrChangePp', title: '转换率变化', width: 100 },
+  { dataIndex: 'acoas', title: 'ACoAS', width: 92 },
+  { dataIndex: 'excessContribution', title: '超标影响', width: 145 },
+  {
+    dataIndex: 'status',
+    fixed: 'right',
+    title: '转换率变化状态',
+    width: 136,
+  },
+];
+
+const statusMeta: Record<
+  AdMonitorStatus,
+  { color: string; label: string; symbol: string }
+> = {
+  flat: { color: 'default', label: '持平', symbol: '−' },
+  high_risk: { color: 'red', label: '高风险', symbol: '↓' },
+  rising: { color: 'green', label: '上升', symbol: '↑' },
+  warning: { color: 'orange', label: '预警', symbol: '↓' },
+  watch: { color: 'gold', label: '关注', symbol: '↓' },
+};
+
+const filters = computed(() => overview.value?.filters);
+const shopOptions = computed(() => {
+  const selectedSites = new Set(
+    query.countries.flatMap((country) => countrySites(country)),
+  );
+  const restrictByCountry =
+    query.countries.length > 0 && selectedSites.size > 0;
+
+  return (filters.value?.shops ?? [])
+    .map((shop) => {
+      const site = shopSite(shop);
+      return {
+        label: shop,
+        site,
+        tone: shopSiteTone(site),
+        value: shop,
+      };
+    })
+    .filter((option) => !restrictByCountry || selectedSites.has(option.site));
+});
+const summary = computed(() => overview.value?.summary);
+const periodText = computed(() => {
+  const period = overview.value?.period;
+  return period ? `${period.startDate} 至 ${period.endDate}` : '';
+});
+
+function requestPeriodParams() {
+  if (rangePreset.value === 'range') {
+    return {
+      endDate: dateRange.value[1],
+      rangePreset: '30d' as const,
+      startDate: dateRange.value[0],
+    };
+  }
+  return { rangePreset: rangePreset.value };
+}
+
+function disabledFutureDate(value: ReturnType<typeof dayjs>) {
+  return value.isAfter(dayjs(), 'day');
 }
 
 async function loadData() {
-  loading.value = true;
-  try {
-    overview.value = await fetchAdMonitorOverview({
-      ...rangeParams(),
-      categories: query.categories,
-      responsibles: query.responsibles,
-      shops: query.shops,
-      sites: query.sites,
-    });
-  } finally {
-    loading.value = false;
+  if (loadTimer) {
+    clearTimeout(loadTimer);
+    loadTimer = undefined;
   }
+  const periodParams = requestPeriodParams();
+  const loadKey = JSON.stringify({
+    countries: query.countries.toSorted(),
+    departments: query.departments.toSorted(),
+    ...periodParams,
+    shops: query.shops.toSorted(),
+  });
+  if (loadController && activeLoadKey === loadKey && activeLoadPromise) {
+    return activeLoadPromise;
+  }
+  loadController?.abort();
+  const controller = new AbortController();
+  loadController = controller;
+  activeLoadKey = loadKey;
+  loading.value = true;
+  const promise = (async () => {
+    try {
+      const result = await fetchAdMonitorOverview(
+        {
+          countries: query.countries,
+          departments: query.departments,
+          ...periodParams,
+          shops: query.shops,
+        },
+        controller.signal,
+      );
+      if (!controller.signal.aborted) {
+        overview.value = result;
+        dateRange.value = [result.period.startDate, result.period.endDate];
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      if (loadController === controller) {
+        loadController = null;
+        activeLoadKey = '';
+        activeLoadPromise = null;
+        loading.value = false;
+      }
+    }
+  })();
+  activeLoadPromise = promise;
+  return promise;
+}
+
+function scheduleLoadData() {
+  if (loadTimer) clearTimeout(loadTimer);
+  loadTimer = setTimeout(loadData, 180);
+}
+
+function handleRangeChange() {
+  scheduleLoadData();
+}
+
+function handleDateChange() {
+  if (dateRange.value.length !== 2) return;
+  rangePreset.value = 'range';
+  scheduleLoadData();
 }
 
 function resetFilters() {
-  query.categories = [];
-  query.responsibles = [];
+  query.countries = [];
+  query.departments = [];
   query.shops = [];
-  query.sites = [];
-  rangePreset.value = '7d';
-  customRange.value = undefined;
+  rangePreset.value = '30d';
+  dateRange.value = [
+    dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
+    dayjs().format('YYYY-MM-DD'),
+  ];
   loadData();
 }
 
-function drillCategory(record: AdCategoryRow) {
-  query.categories = [record.category];
-  loadData();
+function handleCountryChange() {
+  const allowedShops = new Set(shopOptions.value.map((option) => option.value));
+  query.shops = query.shops.filter((shop) => allowedShops.has(shop));
+  scheduleLoadData();
 }
 
-function formatMoney(value: number) {
-  return `$${Number(value || 0).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
+function formatMoney(value?: number) {
+  return `$${Number(value || 0).toLocaleString('en-US', {
+    maximumFractionDigits: 0,
   })}`;
 }
 
-function formatInteger(value: number) {
-  return Number(value || 0).toLocaleString(undefined, {
+function formatInteger(value?: number) {
+  return Number(value || 0).toLocaleString('zh-CN', {
     maximumFractionDigits: 0,
   });
 }
 
-function formatNumber(value: number) {
-  return Number(value || 0).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  });
+function formatPercent(value?: number, digits = 1) {
+  return `${(Number(value || 0) * 100).toFixed(digits)}%`;
 }
 
-function formatPercent(value: number) {
-  return `${(Number(value || 0) * 100).toFixed(2)}%`;
+function formatSignedPercent(value?: number) {
+  const normalized = Number(value || 0) * 100;
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(1)}%`;
 }
 
-function kpiValue(kpi: AdMonitorKpi) {
-  if (kpi.unit === '$') {
-    return formatMoney(kpi.value);
-  }
-  return `${Number(kpi.value || 0).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  })}${kpi.unit ?? ''}`;
+function formatSignedPp(value?: number) {
+  const normalized = Number(value || 0);
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(2)}pp`;
 }
 
-function deltaClass(kpi: AdMonitorKpi) {
-  const delta = kpi.delta ?? 0;
-  const isGood = kpi.inverseDelta ? delta <= 0 : delta >= 0;
-  return isGood ? 'good' : 'bad';
+function deltaClass(value?: number, inverse = false) {
+  const normalized = Number(value || 0);
+  if (Math.abs(normalized) < 0.000_001) return 'is-neutral';
+  const positive = inverse ? normalized < 0 : normalized > 0;
+  return positive ? 'is-positive' : 'is-negative';
 }
 
-const filterOptions = computed(() => overview.value?.filters);
+function contributionStroke(row: { excessSeverity?: number }) {
+  const severity = Number(row.excessSeverity || 0);
+  if (severity >= 1.5) return '#dc2626';
+  if (severity >= 1.2) return '#f97316';
+  return '#eab308';
+}
 
-const campaignTotals = computed(() => {
-  const rows = overview.value?.campaignRows ?? [];
-  const totals = {
-    clicks: 0,
-    impressions: 0,
-    orders: 0,
-    sales: 0,
-    spend: 0,
-  };
-  for (const row of rows) {
-    totals.impressions += row.impressions || 0;
-    totals.clicks += row.clicks || 0;
-    totals.spend += row.spend || 0;
-    totals.orders += row.adOrders || 0;
-    totals.sales += row.adSales || 0;
-  }
+function statusFor(row: { status?: AdMonitorStatus }) {
+  return statusMeta[row.status ?? 'flat'];
+}
 
-  return {
-    ...totals,
-    acos: totals.sales ? totals.spend / totals.sales : 0,
-    cpc: totals.clicks ? totals.spend / totals.clicks : 0,
-    ctr: totals.impressions ? totals.clicks / totals.impressions : 0,
-    cvr: totals.clicks ? totals.orders / totals.clicks : 0,
-    roas: totals.spend ? totals.sales / totals.spend : 0,
-  };
-});
-
-const campaignRows = computed<AdCampaignViewRow[]>(() => {
-  const totals = campaignTotals.value;
-  return (overview.value?.campaignRows ?? []).map((row) => ({
-    ...row,
-    clicksShare: totals.clicks ? row.clicks / totals.clicks : 0,
-    ordersShare: totals.orders ? row.adOrders / totals.orders : 0,
-    salesShare: totals.sales ? row.adSales / totals.sales : 0,
-    spendShare: totals.spend ? row.spend / totals.spend : 0,
-  }));
-});
-
-const moneyTrendOption = computed(() => ({
-  color: ['#ea580c', '#2563eb', '#64748b'],
-  grid: { bottom: 34, left: 58, right: 20, top: 42 },
-  legend: { data: ['广告花费', '广告销售额', '总销售额'], right: 8, top: 0 },
-  tooltip: {
-    trigger: 'axis',
-    valueFormatter: (value: number) => formatMoney(value),
-  },
-  xAxis: {
-    boundaryGap: false,
-    data: overview.value?.trend.map((item) => item.date.slice(5)) ?? [],
-    type: 'category',
-  },
-  yAxis: {
-    axisLabel: {
-      formatter: (value: number) => `$${Math.round(value / 1000)}k`,
-    },
-    type: 'value',
-  },
-  series: [
-    {
-      data: overview.value?.trend.map((item) => item.spend) ?? [],
-      name: '广告花费',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-    },
-    {
-      data: overview.value?.trend.map((item) => item.adSales) ?? [],
-      name: '广告销售额',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-    },
-    {
-      data: overview.value?.trend.map((item) => item.totalSales) ?? [],
-      name: '总销售额',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-    },
-  ],
-}));
-
-const efficiencyTrendOption = computed(() => ({
-  color: ['#dc2626', '#7c3aed', '#16a34a'],
-  grid: { bottom: 34, left: 48, right: 42, top: 42 },
-  legend: { data: ['ACOS', 'TACOS', 'ROAS'], right: 8, top: 0 },
-  tooltip: { trigger: 'axis' },
-  xAxis: {
-    boundaryGap: false,
-    data: overview.value?.trend.map((item) => item.date.slice(5)) ?? [],
-    type: 'category',
-  },
-  yAxis: [
-    { axisLabel: { formatter: (value: number) => `${value}%` }, type: 'value' },
-    { type: 'value' },
-  ],
-  series: [
-    {
-      data:
-        overview.value?.trend.map((item) =>
-          Number((item.acos * 100).toFixed(2)),
-        ) ?? [],
-      name: 'ACOS',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-    },
-    {
-      data:
-        overview.value?.trend.map((item) =>
-          Number((item.tacos * 100).toFixed(2)),
-        ) ?? [],
-      name: 'TACOS',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-    },
-    {
-      data:
-        overview.value?.trend.map((item) => Number(item.roas.toFixed(2))) ?? [],
-      name: 'ROAS',
-      smooth: true,
-      symbol: 'none',
-      type: 'line',
-      yAxisIndex: 1,
-    },
-  ],
-}));
-
-const typeOption = computed(() => ({
-  color: ['#2563eb', '#16a34a', '#7c3aed', '#ea580c'],
-  legend: { bottom: 0 },
-  tooltip: {
-    formatter: (item: { data: { name: string; value: number } }) =>
-      `${item.data.name}: ${formatMoney(item.data.value)}`,
-    trigger: 'item',
-  },
-  series: [
-    {
-      data:
-        overview.value?.typeRows.map((item) => ({
-          name: item.type,
-          value: item.spend,
-        })) ?? [],
-      name: '广告类型',
-      radius: ['48%', '72%'],
-      type: 'pie',
-    },
-  ],
-}));
-
-const categoryColumns: TableColumnsType<AdCategoryRow> = [
-  { dataIndex: 'category', fixed: 'left', title: '类目', width: 140 },
-  {
-    dataIndex: 'spend',
-    sorter: (a, b) => a.spend - b.spend,
-    title: '花费',
-    width: 110,
-  },
-  { dataIndex: 'adSales', title: '广告销售额', width: 120 },
-  { dataIndex: 'totalSales', title: '总销售额', width: 120 },
-  {
-    dataIndex: 'acos',
-    sorter: (a, b) => a.acos - b.acos,
-    title: 'ACOS',
-    width: 90,
-  },
-  {
-    dataIndex: 'tacos',
-    sorter: (a, b) => a.tacos - b.tacos,
-    title: 'TACOS',
-    width: 90,
-  },
-  { dataIndex: 'roas', title: 'ROAS', width: 90 },
-  { dataIndex: 'cpa', title: 'CPA', width: 90 },
-  { dataIndex: 'spuCount', title: 'SPU', width: 80 },
-  { dataIndex: 'action', fixed: 'right', title: '操作', width: 88 },
-];
-
-const responsibleColumns: TableColumnsType<AdResponsibleRow> = [
-  { dataIndex: 'responsible', fixed: 'left', title: '负责人', width: 120 },
-  {
-    dataIndex: 'spend',
-    sorter: (a, b) => a.spend - b.spend,
-    title: '花费',
-    width: 110,
-  },
-  { dataIndex: 'adSales', title: '广告销售额', width: 120 },
-  {
-    dataIndex: 'acos',
-    sorter: (a, b) => a.acos - b.acos,
-    title: 'ACOS',
-    width: 90,
-  },
-  { dataIndex: 'tacos', title: 'TACOS', width: 90 },
-  { dataIndex: 'roas', title: 'ROAS', width: 90 },
-  { dataIndex: 'cpa', title: 'CPA', width: 90 },
-  { dataIndex: 'spuCount', title: 'SPU', width: 80 },
-];
-
-const typeColumns: TableColumnsType<AdTypeRow> = [
-  { dataIndex: 'type', title: '类型', width: 80 },
-  { dataIndex: 'spend', title: '花费', width: 110 },
-  { dataIndex: 'spendShare', title: '占比', width: 90 },
-  { dataIndex: 'sales', title: '销售额', width: 110 },
-  { dataIndex: 'acos', title: 'ACOS', width: 90 },
-  { dataIndex: 'roas', title: 'ROAS', width: 90 },
-];
-
-const metricCell = () => ({ class: 'metric-cell' });
-const metricHeaderCell = () => ({ class: 'metric-header-cell' });
-const shareCell = () => ({ class: 'metric-cell share-cell' });
-const shareHeaderCell = () => ({
-  class: 'metric-header-cell share-header-cell',
-});
-
-const campaignColumns: TableColumnsType<AdCampaignViewRow> = [
-  { dataIndex: 'campaignName', fixed: 'left', title: 'Campaign', width: 300 },
-  {
-    children: [
-      { dataIndex: 'shopName', title: '店铺', width: 120 },
-      { dataIndex: 'site', title: '站点', width: 70 },
-      { dataIndex: 'campaignType', title: '类型', width: 80 },
-      { dataIndex: 'spu', title: 'SPU', width: 110 },
-      { dataIndex: 'category', title: '类目', width: 120 },
-      { dataIndex: 'responsible', title: '负责人', width: 100 },
-    ],
-    title: '基础信息',
-  },
-  {
-    children: [
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'impressions',
-        sorter: (a, b) => a.impressions - b.impressions,
-        title: 'Impression',
-        width: 112,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'clicks',
-        sorter: (a, b) => a.clicks - b.clicks,
-        title: 'Clicks',
-        width: 92,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'ctr',
-        sorter: (a, b) => a.ctr - b.ctr,
-        title: 'CTR',
-        width: 86,
-      },
-    ],
-    title: '流量',
-  },
-  {
-    children: [
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'spend',
-        sorter: (a, b) => a.spend - b.spend,
-        title: 'Spend',
-        width: 110,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'cpc',
-        sorter: (a, b) => a.cpc - b.cpc,
-        title: 'CPC',
-        width: 86,
-      },
-    ],
-    title: '成本',
-  },
-  {
-    children: [
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'adOrders',
-        sorter: (a, b) => a.adOrders - b.adOrders,
-        title: 'Orders',
-        width: 92,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'adSales',
-        sorter: (a, b) => a.adSales - b.adSales,
-        title: 'Sales',
-        width: 110,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'cvr',
-        sorter: (a, b) => a.cvr - b.cvr,
-        title: 'CVR',
-        width: 86,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'acos',
-        sorter: (a, b) => a.acos - b.acos,
-        title: 'ACOS',
-        width: 90,
-      },
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'roas',
-        sorter: (a, b) => a.roas - b.roas,
-        title: 'ROAS',
-        width: 86,
-      },
-    ],
-    title: '转化',
-  },
-  {
-    children: [
-      {
-        customCell: shareCell,
-        customHeaderCell: shareHeaderCell,
-        dataIndex: 'spendShare',
-        sorter: (a, b) => a.spendShare - b.spendShare,
-        title: 'Spend Share',
-        width: 112,
-      },
-      {
-        customCell: shareCell,
-        customHeaderCell: shareHeaderCell,
-        dataIndex: 'clicksShare',
-        sorter: (a, b) => a.clicksShare - b.clicksShare,
-        title: 'Clicks Share',
-        width: 112,
-      },
-      {
-        customCell: shareCell,
-        customHeaderCell: shareHeaderCell,
-        dataIndex: 'ordersShare',
-        sorter: (a, b) => a.ordersShare - b.ordersShare,
-        title: 'Orders Share',
-        width: 112,
-      },
-      {
-        customCell: shareCell,
-        customHeaderCell: shareHeaderCell,
-        dataIndex: 'salesShare',
-        sorter: (a, b) => a.salesShare - b.salesShare,
-        title: 'Sales Share',
-        width: 112,
-      },
-    ],
-    title: '份额',
-  },
-  {
-    children: [
-      {
-        customCell: metricCell,
-        customHeaderCell: metricHeaderCell,
-        dataIndex: 'budgetUtilization',
-        sorter: (a, b) => a.budgetUtilization - b.budgetUtilization,
-        title: '预算消耗',
-        width: 104,
-      },
-    ],
-    title: '预算',
-  },
-];
+function severityText(row: AdResponsibleRow) {
+  if (!row.targetConfigured) return '未配置目标';
+  if (row.excessSeverity >= 1.5) return '严重超标';
+  if (row.excessSeverity >= 1.2) return '明显超标';
+  return '轻度超标';
+}
 
 onMounted(loadData);
+onBeforeUnmount(() => {
+  if (loadTimer) clearTimeout(loadTimer);
+  loadController?.abort();
+});
 </script>
 
 <template>
-  <div class="ads-page">
-    <section class="page-head">
+  <div class="ad-monitor-page">
+    <header class="page-head">
       <div>
-        <h1>广告监控看板</h1>
-        <p>数据范围过滤未匹配 product_life 的产品，关键词模块暂时保留入口。</p>
+        <h1>广告监控</h1>
+        <p>
+          <span>{{ periodText }}</span>
+          <span v-if="overview?.dataUpdatedAt">
+            数据更新 {{ overview.dataUpdatedAt }}
+          </span>
+        </p>
       </div>
-      <div class="range-switch">
-        <Button
-          :type="rangePreset === 'today' ? 'primary' : 'default'"
-          @click="selectRangePreset('today')"
-        >
-          今日
-        </Button>
-        <Button
-          :type="rangePreset === 'yesterday' ? 'primary' : 'default'"
-          @click="selectRangePreset('yesterday')"
-        >
-          昨日
-        </Button>
-        <Button
-          :type="rangePreset === '7d' ? 'primary' : 'default'"
-          @click="selectRangePreset('7d')"
-        >
-          最近7天
-        </Button>
-        <Button
-          :type="rangePreset === '30d' ? 'primary' : 'default'"
-          @click="selectRangePreset('30d')"
-        >
-          最近30天
-        </Button>
-        <Button
-          :type="rangePreset === 'month' ? 'primary' : 'default'"
-          @click="selectRangePreset('month')"
-        >
-          本月
-        </Button>
-        <Button
-          :type="rangePreset === 'custom' ? 'primary' : 'default'"
-          @click="selectRangePreset('custom')"
-        >
-          自定义
-        </Button>
-        <DatePicker.RangePicker
-          v-if="rangePreset === 'custom'"
-          v-model:value="customRange"
-          class="custom-range-picker"
-          format="YYYY-MM-DD"
-          value-format="YYYY-MM-DD"
-          @change="handleCustomRangeChange"
-        />
-      </div>
-    </section>
+      <Button :loading="loading" @click="loadData">刷新</Button>
+    </header>
 
-    <Card class="filter-card" :body-style="{ padding: '14px 16px' }">
-      <div class="filters">
+    <section class="filter-bar" aria-label="广告监控筛选">
+      <div class="filter-item range-filter">
+        <label>区间</label>
+        <div class="range-control">
+          <Segmented
+            v-model:value="rangePreset"
+            :options="rangeOptions"
+            @change="handleRangeChange"
+          />
+          <DatePicker.RangePicker
+            v-model:value="dateRange"
+            :allow-clear="false"
+            :disabled-date="disabledFutureDate"
+            class="custom-date-range"
+            value-format="YYYY-MM-DD"
+            @change="handleDateChange"
+          />
+        </div>
+      </div>
+      <div class="filter-item">
+        <label>部门</label>
         <Select
-          v-model:value="query.sites"
-          :options="
-            filterOptions?.sites.map((value) => ({ label: value, value }))
-          "
+          v-model:value="query.departments"
           allow-clear
           max-tag-count="responsive"
           mode="multiple"
-          placeholder="站点"
+          placeholder="全部部门"
+          :options="
+            filters?.departments.map((value) => ({ label: value, value }))
+          "
+          @change="scheduleLoadData"
         />
+      </div>
+      <div class="filter-item">
+        <label>国家</label>
+        <Select
+          v-model:value="query.countries"
+          allow-clear
+          max-tag-count="responsive"
+          mode="multiple"
+          placeholder="全部国家"
+          show-search
+          :options="
+            filters?.countries.map((value) => ({ label: value, value }))
+          "
+          @change="handleCountryChange"
+        />
+      </div>
+      <div class="filter-item shop-filter">
+        <label>店铺</label>
         <Select
           v-model:value="query.shops"
-          :options="
-            filterOptions?.shops.map((value) => ({ label: value, value }))
-          "
           allow-clear
           max-tag-count="responsive"
           mode="multiple"
-          placeholder="店铺"
-        />
-        <Select
-          v-model:value="query.categories"
-          :options="
-            filterOptions?.categories.map((value) => ({ label: value, value }))
-          "
-          allow-clear
-          max-tag-count="responsive"
-          mode="multiple"
-          placeholder="类目"
-        />
-        <Select
-          v-model:value="query.responsibles"
-          :options="
-            filterOptions?.responsibles.map((value) => ({
-              label: value,
-              value,
-            }))
-          "
-          allow-clear
-          max-tag-count="responsive"
-          mode="multiple"
-          placeholder="负责人"
-        />
-        <div class="filter-actions">
-          <Button @click="resetFilters">重置</Button>
-          <Button :loading="loading" type="primary" @click="loadData">
-            应用筛选
-          </Button>
-        </div>
+          placeholder="全部店铺"
+          show-search
+          :options="shopOptions"
+          @change="scheduleLoadData"
+        >
+          <template #option="{ label, site, tone }">
+            <div class="shop-option">
+              <span class="shop-option-name">{{ label }}</span>
+              <span class="shop-site-badge" :class="`is-${tone}`">
+                {{ site || '其他' }}
+              </span>
+            </div>
+          </template>
+        </Select>
       </div>
-    </Card>
+      <Button class="reset-button" @click="resetFilters">重置</Button>
+    </section>
 
     <Spin :spinning="loading">
-      <template v-if="overview">
-        <div class="scope-line">
-          <span>{{ overview.summary.startDate }} 至
-            {{ overview.summary.endDate }}</span>
-          <span>{{ overview.summary.shopCount }} 个店铺</span>
-          <span>{{ overview.summary.spuCount }} 个 SPU</span>
-          <span>{{ overview.summary.campaignCount }} 个 Campaign</span>
-        </div>
-
-        <div class="kpi-grid">
-          <div
-            v-for="kpi in overview.kpis"
-            :key="kpi.key"
-            class="kpi-card"
-            :class="`tone-${kpi.tone}`"
-          >
-            <span>{{ kpi.label }}</span>
-            <strong>{{ kpiValue(kpi) }}</strong>
-            <em
-              v-if="kpi.delta !== null && kpi.delta !== undefined"
-              :class="deltaClass(kpi)"
-            >
-              {{ kpi.delta > 0 ? '+' : '' }}{{ kpi.delta }}%
-            </em>
+      <section class="kpi-grid" aria-label="广告核心指标">
+        <article class="kpi-card kpi-spend">
+          <div class="kpi-title">
+            <span>广告总花费</span>
+            <small>AD SPEND</small>
           </div>
-        </div>
+          <strong>{{ formatMoney(summary?.totalSpend) }}</strong>
+          <div class="kpi-foot">
+            <span>前一周期 {{ formatMoney(summary?.previousSpend) }}</span>
+            <b :class="deltaClass(summary?.spendChangeRate, true)">
+              环比 {{ formatSignedPercent(summary?.spendChangeRate) }}
+            </b>
+          </div>
+        </article>
 
-        <div class="chart-grid">
-          <Card
-            title="广告花费 vs 销售额"
-            :body-style="{ padding: '12px 14px' }"
-          >
-            <VChart :option="moneyTrendOption" autoresize class="chart" />
-          </Card>
-          <Card title="效率趋势" :body-style="{ padding: '12px 14px' }">
-            <VChart :option="efficiencyTrendOption" autoresize class="chart" />
-          </Card>
-        </div>
+        <article class="kpi-card kpi-orders">
+          <div class="kpi-title">
+            <span>广告销量 / 总销量</span>
+            <small>AD ORDER SHARE</small>
+          </div>
+          <strong>
+            {{ formatInteger(summary?.adOrders) }}
+            <i>/</i>
+            {{ formatInteger(summary?.totalSalesQty) }}
+          </strong>
+          <div class="kpi-foot">
+            <span>广告订单占比</span>
+            <b>{{ formatPercent(summary?.adOrderShare) }}</b>
+          </div>
+        </article>
 
-        <div class="middle-grid">
-          <Card title="广告类型占比" :body-style="{ padding: '10px 12px' }">
-            <VChart :option="typeOption" autoresize class="type-chart" />
-            <Table
-              :columns="typeColumns"
-              :data-source="overview.typeRows"
-              :pagination="false"
-              row-key="type"
-              size="small"
-            >
-              <template #bodyCell="{ column, text }">
-                <template
-                  v-if="['spend', 'sales'].includes(String(column.dataIndex))"
-                >
-                  {{ formatMoney(Number(text || 0)) }}
-                </template>
-                <template
-                  v-else-if="
-                    ['spendShare', 'acos'].includes(String(column.dataIndex))
-                  "
-                >
-                  {{ formatPercent(Number(text || 0)) }}
-                </template>
-              </template>
-            </Table>
-          </Card>
+        <article class="kpi-card kpi-cvr">
+          <div class="kpi-title">
+            <span>广告 CVR</span>
+            <small>AD CONVERSION</small>
+          </div>
+          <strong>{{ formatPercent(summary?.adCvr) }}</strong>
+          <div class="kpi-foot multi-metric">
+            <span>
+              上一周期 {{ formatPercent(summary?.previousAdCvr) }}
+              <b :class="deltaClass(summary?.cvrChangePp)">
+                {{ formatSignedPp(summary?.cvrChangePp) }}
+              </b>
+            </span>
+            <span>
+              同比 {{ formatPercent(summary?.yoyAdCvr) }}
+              <b :class="deltaClass(summary?.yoyChangePp)">
+                {{ formatSignedPp(summary?.yoyChangePp) }}
+              </b>
+            </span>
+          </div>
+        </article>
 
-          <Card title="类目效率" :body-style="{ padding: 0 }">
-            <Table
-              :columns="categoryColumns"
-              :data-source="overview.categoryRows"
-              :pagination="{ pageSize: 8, showSizeChanger: false }"
-              :scroll="{ x: 1120 }"
-              row-key="category"
-              size="small"
-            >
-              <template #bodyCell="{ column, record, text }">
-                <template
-                  v-if="
-                    ['spend', 'adSales', 'totalSales', 'cpa'].includes(
-                      String(column.dataIndex),
-                    )
-                  "
-                >
-                  {{ formatMoney(Number(text || 0)) }}
-                </template>
-                <template
-                  v-else-if="
-                    ['acos', 'tacos'].includes(String(column.dataIndex))
-                  "
-                >
-                  <span
-                    :class="
-                      column.dataIndex === 'acos' && record.acos > 0.28
-                        ? 'risk'
-                        : ''
-                    "
-                    >{{ formatPercent(Number(text || 0)) }}</span>
-                </template>
-                <template v-else-if="column.dataIndex === 'action'">
-                  <Button
-                    size="small"
-                    type="link"
-                    @click="drillCategory(record as AdCategoryRow)"
-                  >
-                    下钻
-                  </Button>
-                </template>
-              </template>
-            </Table>
-          </Card>
-        </div>
+        <article class="kpi-card kpi-acoas">
+          <div class="kpi-title">
+            <span>广告占比 ACoAS</span>
+            <small>AD SPEND / SALES</small>
+          </div>
+          <strong>{{ formatPercent(summary?.acoas) }}</strong>
+          <div class="kpi-foot multi-metric">
+            <span>目标 {{ formatPercent(summary?.targetAcoas) }}</span>
+            <span>
+              超标
+              <b :class="deltaClass(summary?.overTargetPp, true)">
+                {{ formatSignedPp(summary?.overTargetPp) }}
+              </b>
+            </span>
+          </div>
+        </article>
+      </section>
 
-        <div class="table-grid">
-          <Card title="负责人效率" :body-style="{ padding: 0 }">
-            <Table
-              :columns="responsibleColumns"
-              :data-source="overview.responsibleRows"
-              :pagination="{ pageSize: 8, showSizeChanger: false }"
-              :scroll="{ x: 820 }"
-              row-key="responsible"
-              size="small"
-            >
-              <template #bodyCell="{ column, text }">
-                <template
-                  v-if="
-                    ['spend', 'adSales', 'cpa'].includes(
-                      String(column.dataIndex),
-                    )
-                  "
-                >
-                  {{ formatMoney(Number(text || 0)) }}
-                </template>
-                <template
-                  v-else-if="
-                    ['acos', 'tacos'].includes(String(column.dataIndex))
-                  "
-                >
-                  {{ formatPercent(Number(text || 0)) }}
-                </template>
-              </template>
-            </Table>
-          </Card>
-
-          <Card title="低效关键词" :body-style="{ padding: '18px' }">
-            <div class="placeholder">
-              <strong>暂未启用</strong>
-              <p>
-                关键词数据源需要重新确认。当前版本先保留模块位置，不参与
-                Campaign 下钻和预警计算。
-              </p>
+      <div class="analysis-grid">
+        <section class="data-panel responsible-panel">
+          <div class="panel-head">
+            <div>
+              <h2>负责人广告表现及超标归因</h2>
+              <p>CVR 变化对比当前筛选周期与紧邻的上一等长周期</p>
             </div>
-          </Card>
-        </div>
+            <div class="panel-meta">
+              <span>目标覆盖 {{ formatPercent(summary?.targetCoverage) }}</span>
+              <b>有效超标 {{ formatMoney(summary?.totalExcessSpend) }}</b>
+            </div>
+          </div>
 
-        <Card
-          class="campaign-card strategy-table-card"
-          title="Campaign 经营分析"
-          :body-style="{ padding: 0 }"
-        >
           <Table
-            :columns="campaignColumns"
-            :data-source="campaignRows"
-            :pagination="campaignPagination"
-            :scroll="{ x: 2360 }"
-            row-key="campaignName"
-            size="small"
-            sticky
+            bordered
+            :columns="columns"
+            :data-source="overview?.responsibleRows ?? []"
+            :pagination="false"
+            row-key="responsible"
+            :scroll="{ x: 1030, y: 470 }"
+            size="middle"
           >
-            <template #bodyCell="{ column, record, text }">
-              <template v-if="column.dataIndex === 'campaignName'">
-                <span class="campaign-name">{{ text }}</span>
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.dataIndex === 'responsible'">
+                <div class="responsible-cell">
+                  <b>{{ record.responsible }}</b>
+                  <span>{{ record.department }}</span>
+                </div>
               </template>
-              <template
-                v-else-if="
-                  ['impressions', 'clicks', 'adOrders'].includes(
-                    String(column.dataIndex),
-                  )
-                "
-              >
-                {{ formatInteger(Number(text || 0)) }}
+              <template v-else-if="column.dataIndex === 'adSpend'">
+                <b class="money-value">{{ formatMoney(record.adSpend) }}</b>
               </template>
-              <template
-                v-else-if="
-                  ['spend', 'adSales', 'cpc'].includes(String(column.dataIndex))
-                "
-              >
-                {{ formatMoney(Number(text || 0)) }}
+              <template v-else-if="column.dataIndex === 'adOrders'">
+                <b>{{ formatInteger(record.adOrders) }}</b>
+                <small class="cell-note">
+                  占比 {{ formatPercent(record.adOrderShare) }}
+                </small>
               </template>
-              <template
-                v-else-if="
-                  [
-                    'ctr',
-                    'cvr',
-                    'acos',
-                    'budgetUtilization',
-                    'spendShare',
-                    'clicksShare',
-                    'ordersShare',
-                    'salesShare',
-                  ].includes(String(column.dataIndex))
-                "
-              >
-                <span
-                  :class="
-                    column.dataIndex === 'acos' && record.acos > 0.35
-                      ? 'risk'
-                      : ''
-                  "
+              <template v-else-if="column.dataIndex === 'totalSalesQty'">
+                <b>{{ formatInteger(record.totalSalesQty) }}</b>
+              </template>
+              <template v-else-if="column.dataIndex === 'adCvr'">
+                <b>{{ formatPercent(record.adCvr) }}</b>
+              </template>
+              <template v-else-if="column.dataIndex === 'previousAdCvr'">
+                <span>{{ formatPercent(record.previousAdCvr) }}</span>
+              </template>
+              <template v-else-if="column.dataIndex === 'cvrChangePp'">
+                <b :class="deltaClass(record.cvrChangePp)">
+                  {{ formatSignedPp(record.cvrChangePp) }}
+                </b>
+              </template>
+              <template v-else-if="column.dataIndex === 'acoas'">
+                <b>{{ formatPercent(record.acoas) }}</b>
+                <small v-if="record.targetConfigured" class="cell-note">
+                  目标 {{ formatPercent(record.targetAcoas) }}
+                </small>
+                <small v-else class="cell-note is-warning">未配置目标</small>
+              </template>
+              <template v-else-if="column.dataIndex === 'excessContribution'">
+                <Tooltip
+                  :title="`有效超标 ${formatMoney(record.effectiveExcessSpend)}；允许花费 ${formatMoney(record.allowedAdSpend)}`"
                 >
-                  {{ formatPercent(Number(text || 0)) }}
-                </span>
+                  <div class="contribution-cell">
+                    <Progress
+                      :percent="record.excessContribution * 100"
+                      :show-info="false"
+                      size="small"
+                      :stroke-color="contributionStroke(record)"
+                    />
+                    <b>{{ formatPercent(record.excessContribution) }}</b>
+                  </div>
+                </Tooltip>
               </template>
-              <template v-else-if="column.dataIndex === 'roas'">
-                {{ formatNumber(Number(text || 0)) }}
-              </template>
-              <template v-else-if="column.dataIndex === 'campaignType'">
-                <Tag>{{ String(text || '').toUpperCase() }}</Tag>
+              <template v-else-if="column.dataIndex === 'status'">
+                <Tag :color="statusFor(record).color">
+                  {{ statusFor(record).symbol }}
+                  {{ statusFor(record).label }}
+                </Tag>
               </template>
             </template>
-            <template #summary>
-              <Table.Summary fixed>
-                <Table.Summary.Row class="campaign-summary-row">
-                  <Table.Summary.Cell :index="0">合计</Table.Summary.Cell>
-                  <Table.Summary.Cell :col-span="6" :index="1">
-                    当前筛选范围
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="7" class="metric-cell">
-                    {{ formatInteger(campaignTotals.impressions) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="8" class="metric-cell">
-                    {{ formatInteger(campaignTotals.clicks) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="9" class="metric-cell">
-                    {{ formatPercent(campaignTotals.ctr) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="10" class="metric-cell">
-                    {{ formatMoney(campaignTotals.spend) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="11" class="metric-cell">
-                    {{ formatMoney(campaignTotals.cpc) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="12" class="metric-cell">
-                    {{ formatInteger(campaignTotals.orders) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="13" class="metric-cell">
-                    {{ formatMoney(campaignTotals.sales) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="14" class="metric-cell">
-                    {{ formatPercent(campaignTotals.cvr) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="15" class="metric-cell">
-                    {{ formatPercent(campaignTotals.acos) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="16" class="metric-cell">
-                    {{ formatNumber(campaignTotals.roas) }}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    :index="17"
-                    class="metric-cell share-cell"
-                  >
-                    100.00%
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    :index="18"
-                    class="metric-cell share-cell"
-                  >
-                    100.00%
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    :index="19"
-                    class="metric-cell share-cell"
-                  >
-                    100.00%
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell
-                    :index="20"
-                    class="metric-cell share-cell"
-                  >
-                    100.00%
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell :index="21" class="metric-cell">
-                    -
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
+            <template #emptyText>
+              <Empty description="当前筛选范围暂无广告数据" />
             </template>
           </Table>
-        </Card>
-      </template>
+        </section>
+
+        <section class="data-panel impact-panel">
+          <div class="panel-head">
+            <div>
+              <h2>广告占比超标影响</h2>
+              <p>按有效超标金额排序，仅统计已配置目标的负责人</p>
+            </div>
+          </div>
+
+          <div v-if="overview?.impactRows.length" class="impact-ranking">
+            <div
+              v-for="(row, index) in overview.impactRows.slice(0, 8)"
+              :key="row.responsible"
+              class="impact-row"
+            >
+              <span class="rank" :class="{ 'rank-top': index < 3 }">
+                {{ index + 1 }}
+              </span>
+              <div class="impact-owner">
+                <b>{{ row.responsible }}</b>
+                <span>
+                  {{ severityText(row) }} · ACoAS
+                  {{ formatPercent(row.acoas) }}
+                </span>
+              </div>
+              <div class="impact-value">
+                <b>{{ formatMoney(row.effectiveExcessSpend) }}</b>
+                <span>贡献 {{ formatPercent(row.excessContribution) }}</span>
+              </div>
+              <div class="impact-bar">
+                <Progress
+                  :percent="row.excessContribution * 100"
+                  :show-info="false"
+                  :stroke-color="contributionStroke(row)"
+                />
+              </div>
+            </div>
+          </div>
+          <Empty v-else description="当前筛选范围没有广告占比超标" />
+        </section>
+      </div>
     </Spin>
   </div>
 </template>
 
 <style scoped>
-.ads-page {
+.ad-monitor-page {
   min-height: 100%;
   padding: 16px;
-  background: #f6f8fb;
+  color: #172033;
+  background:
+    linear-gradient(#dce8f7 1px, transparent 1px),
+    linear-gradient(90deg, #dce8f7 1px, transparent 1px), #edf4fb;
+  background-size: 28px 28px;
+}
+
+.page-head,
+.filter-bar,
+.panel-head,
+.kpi-title,
+.kpi-foot,
+.impact-row,
+.contribution-cell {
+  display: flex;
+  align-items: center;
 }
 
 .page-head {
-  display: flex;
-  gap: 16px;
-  align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
 }
 
+.page-head h1,
+.panel-head h2 {
+  margin: 0;
+  font-weight: 800;
+  color: #101828;
+  letter-spacing: 0;
+}
+
 .page-head h1 {
-  margin: 0 0 6px;
   font-size: 24px;
-  font-weight: 850;
-  color: #0f172a;
+}
+
+.page-head p,
+.panel-head p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #667085;
 }
 
 .page-head p {
-  margin: 0;
-  color: #64748b;
+  display: flex;
+  gap: 14px;
 }
 
-.range-switch,
-.filter-actions {
-  display: inline-flex;
-  gap: 8px;
-}
-
-.range-switch {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.custom-range-picker {
-  width: 248px;
-}
-
-.filter-card {
-  margin-bottom: 12px;
-}
-
-.filters {
+.filter-bar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
-  gap: 10px;
+  grid-template-columns:
+    minmax(330px, auto) minmax(180px, 0.8fr) minmax(180px, 0.8fr)
+    minmax(240px, 1.2fr) auto;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: rgb(255 255 255 / 96%);
+  border: 1px solid #cbd9ea;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(31 65 114 / 6%);
+}
+
+.filter-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filter-item label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475467;
+}
+
+.range-filter {
+  min-width: 330px;
+}
+
+.range-control {
+  display: flex;
+  gap: 8px;
   align-items: center;
 }
 
-.scope-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+.custom-date-range {
+  width: 240px;
 }
 
-.scope-line span {
-  padding: 4px 9px;
-  font-size: 12px;
+.shop-filter :deep(.ant-select-selector) {
+  background: #f0fdfa !important;
+  border-color: #5cc8bc !important;
+  box-shadow: inset 3px 0 0 #0f9f8f;
+}
+
+.shop-filter :deep(.ant-select-selection-placeholder) {
+  color: #38756e;
+}
+
+.shop-filter :deep(.ant-select-selection-item) {
   font-weight: 700;
-  color: #334155;
-  background: #fff;
-  border: 1px solid rgb(15 23 42 / 8%);
-  border-radius: 999px;
+  color: #155e56;
+  background: #ccfbf1;
+  border-color: #5eead4;
+}
+
+.shop-option {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 4px;
+}
+
+.shop-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+  color: #253247;
+  white-space: nowrap;
+}
+
+.shop-site-badge {
+  flex: 0 0 auto;
+  min-width: 34px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 20px;
+  text-align: center;
+  border: 1px solid;
+  border-radius: 4px;
+}
+
+.shop-site-badge.is-americas {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #84caff;
+}
+
+.shop-site-badge.is-europe {
+  color: #067647;
+  background: #ecfdf3;
+  border-color: #75e0a7;
+}
+
+.shop-site-badge.is-growth {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fec84b;
+}
+
+.shop-site-badge.is-neutral {
+  color: #475467;
+  background: #f2f4f7;
+  border-color: #d0d5dd;
+}
+
+.reset-button {
+  align-self: end;
 }
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
 }
 
 .kpi-card {
-  min-height: 104px;
-  padding: 13px 14px;
+  min-height: 154px;
+  padding: 17px 18px 15px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(31 65 114 / 8%);
+}
+
+.kpi-spend {
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.kpi-orders {
+  background: #f0fdfa;
+  border-color: #5eead4;
+}
+
+.kpi-cvr {
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.kpi-acoas {
   color: #fff;
-  border-radius: 8px;
+  background: #263fcc;
+  border-color: #1d4ed8;
 }
 
-.kpi-card span {
-  display: block;
-  font-size: 12px;
-  font-weight: 750;
-  opacity: 0.84;
-}
-
-.kpi-card strong {
-  display: block;
-  margin-top: 14px;
-  font-size: 23px;
-  line-height: 1;
-}
-
-.kpi-card em {
-  display: inline-block;
-  margin-top: 12px;
-  font-size: 12px;
-  font-style: normal;
+.kpi-title {
+  gap: 8px;
+  justify-content: space-between;
+  font-size: 15px;
   font-weight: 800;
 }
 
-.good {
-  color: #dcfce7;
+.kpi-title small {
+  font-size: 10px;
+  font-weight: 700;
+  color: #667085;
 }
 
-.bad {
-  color: #fee2e2;
+.kpi-card > strong {
+  display: block;
+  margin: 19px 0 16px;
+  font-size: 34px;
+  line-height: 1;
+  color: #101828;
+  letter-spacing: 0;
 }
 
-.tone-blue {
-  background: #1d4ed8;
+.kpi-card > strong i {
+  margin: 0 5px;
+  font-size: 20px;
+  font-style: normal;
+  color: #98a2b3;
 }
 
-.tone-cyan {
-  background: #0369a1;
+.kpi-foot {
+  gap: 10px;
+  justify-content: space-between;
+  padding-top: 12px;
+  font-size: 12px;
+  color: #475467;
+  border-top: 1px solid rgb(102 112 133 / 18%);
 }
 
-.tone-green {
-  background: #15803d;
+.multi-metric > span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
-.tone-amber {
-  background: #b45309;
+.kpi-acoas .kpi-title small,
+.kpi-acoas .kpi-foot {
+  color: #dbeafe;
 }
 
-.tone-red {
-  background: #b91c1c;
+.kpi-acoas > strong {
+  color: #fde047;
 }
 
-.tone-purple {
-  background: #6d28d9;
+.kpi-acoas .kpi-foot {
+  border-color: rgb(255 255 255 / 22%);
 }
 
-.chart-grid,
-.middle-grid,
-.table-grid {
+.is-positive {
+  color: #039855;
+}
+
+.is-negative {
+  color: #d92d20;
+}
+
+.is-neutral {
+  color: #667085;
+}
+
+.is-warning {
+  color: #b54708;
+}
+
+.data-panel {
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 97%);
+  border: 1px solid #cbd9ea;
+  border-radius: 6px;
+  box-shadow: 0 5px 18px rgb(31 65 114 / 7%);
+}
+
+.analysis-grid {
   display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
   gap: 12px;
-  margin-top: 12px;
+  align-items: stretch;
 }
 
-.chart-grid {
-  grid-template-columns: 1.2fr 1fr;
+.analysis-grid > .data-panel {
+  min-width: 0;
 }
 
-.middle-grid {
-  grid-template-columns: 0.86fr 1.4fr;
+.panel-head {
+  gap: 16px;
+  justify-content: space-between;
+  min-height: 62px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #d8e2ef;
 }
 
-.table-grid {
-  grid-template-columns: 1.3fr 0.7fr;
+.panel-head h2 {
+  font-size: 17px;
 }
 
-.chart {
-  height: 310px;
-}
-
-.type-chart {
-  height: 210px;
-}
-
-.campaign-card {
-  margin-top: 12px;
-}
-
-.strategy-table-card :deep(.ant-table) {
+.panel-meta {
+  display: flex;
+  gap: 18px;
   font-size: 12px;
-  color: #172033;
+  color: #475467;
 }
 
-.strategy-table-card :deep(.ant-table-thead > tr > th) {
-  padding: 7px 8px;
+.panel-meta b {
+  color: #d92d20;
+}
+
+.responsible-cell,
+.impact-owner,
+.impact-value {
+  display: grid;
+  gap: 2px;
+}
+
+.responsible-cell b,
+.money-value {
+  color: #175cd3;
+}
+
+.responsible-cell span,
+.cell-note,
+.impact-owner span,
+.impact-value span {
   font-size: 12px;
-  font-weight: 750;
-  color: #f8fafc;
-  background: #1f2a37;
-  border-color: rgb(255 255 255 / 14%);
+  color: #667085;
 }
 
-.strategy-table-card :deep(.ant-table-thead > tr > th.ant-table-cell-fix-left) {
-  background: #1f2a37;
+.cell-note {
+  display: block;
+  margin-top: 2px;
 }
 
-.strategy-table-card :deep(.ant-table-tbody > tr > td),
-.strategy-table-card :deep(.ant-table-summary > tr > td) {
-  padding: 6px 8px;
-  border-color: #d8dee8;
+.contribution-cell {
+  gap: 8px;
 }
 
-.strategy-table-card :deep(.ant-table-tbody > tr:hover > td) {
-  background: #fff7ed;
+.contribution-cell :deep(.ant-progress) {
+  flex: 1;
+  min-width: 54px;
 }
 
-.strategy-table-card :deep(.metric-cell),
-.strategy-table-card :deep(.metric-header-cell) {
-  font-variant-numeric: tabular-nums;
+.contribution-cell b {
+  width: 44px;
   text-align: right;
 }
 
-.strategy-table-card :deep(.share-cell) {
-  font-weight: 750;
-  color: #7c4a03;
-  background: #fff7d6;
-}
-
-.strategy-table-card :deep(.share-header-cell) {
-  background: #263241;
-}
-
-.strategy-table-card :deep(.campaign-summary-row > td) {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  font-weight: 850;
-  color: #0f172a;
-  background: #eef2f7;
-}
-
-.strategy-table-card :deep(.campaign-summary-row .share-cell) {
-  background: #fde68a;
-}
-
-.strategy-table-card :deep(.ant-pagination) {
-  margin: 10px 12px;
-}
-
-.campaign-name {
-  display: inline-block;
-  max-width: 276px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 700;
-  vertical-align: bottom;
-  color: #111827;
-  white-space: nowrap;
-}
-
-.placeholder {
-  display: grid;
-  align-content: center;
-  min-height: 188px;
-  color: #475569;
+.responsible-panel :deep(.ant-table-cell) {
+  padding: 11px 8px !important;
+  font-size: 14px;
   text-align: center;
 }
 
-.placeholder strong {
-  font-size: 18px;
-  color: #0f172a;
-}
-
-.placeholder p {
-  max-width: 360px;
-  margin: 8px auto 0;
-  line-height: 1.7;
-}
-
-.risk {
+.responsible-panel :deep(.ant-table-tbody > tr > td b),
+.responsible-cell b {
+  font-size: 15px;
   font-weight: 800;
-  color: #dc2626;
 }
 
-@media (max-width: 1320px) {
-  .kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.responsible-panel :deep(.ant-table-thead > tr > th) {
+  padding: 11px 8px !important;
+  font-size: 14px;
+  font-weight: 800;
+  color: #344054;
+  text-align: center;
+  background: #f4f7fb;
+}
+
+.responsible-panel :deep(.ant-tag) {
+  margin-inline-end: 0;
+  font-size: 13px;
+}
+
+.responsible-panel :deep(.ant-table-tbody > tr:nth-child(even) > td) {
+  background: #f8fafc;
+}
+
+.impact-ranking {
+  max-height: 536px;
+  padding: 4px 14px 14px;
+  overflow-y: auto;
+}
+
+.impact-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  min-height: 64px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.rank {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-weight: 800;
+  color: #475467;
+  background: #f2f4f7;
+  border-radius: 50%;
+}
+
+.rank-top {
+  color: #fff;
+  background: #f97316;
+}
+
+.impact-bar :deep(.ant-progress-bg) {
+  height: 7px !important;
+}
+
+.impact-bar {
+  grid-column: 2 / 4;
+  line-height: 1;
+}
+
+.impact-value {
+  justify-items: end;
+}
+
+.impact-value b {
+  color: #b42318;
+}
+
+.impact-panel > :deep(.ant-empty) {
+  padding: 54px 0;
+}
+
+@media (max-width: 1180px) {
+  .filter-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chart-grid,
-  .middle-grid,
-  .table-grid,
-  .filters {
+  .range-filter,
+  .shop-filter {
+    min-width: 0;
+  }
+
+  .range-filter {
+    grid-column: 1 / -1;
+  }
+
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analysis-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 760px) {
-  .page-head {
+@media (max-width: 680px) {
+  .ad-monitor-page {
+    padding: 10px;
+  }
+
+  .page-head p,
+  .panel-meta {
+    display: grid;
+    gap: 2px;
+  }
+
+  .filter-bar,
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .range-control {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
-  .range-switch {
-    justify-content: flex-start;
+  .custom-date-range {
     width: 100%;
   }
 
-  .custom-range-picker {
-    width: 100%;
+  .kpi-card {
+    min-height: 140px;
   }
 
-  .kpi-grid {
-    grid-template-columns: 1fr;
+  .impact-row {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
   }
 }
 </style>

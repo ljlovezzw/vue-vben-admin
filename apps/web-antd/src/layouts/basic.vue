@@ -1,7 +1,10 @@
 <script lang="ts" setup>
 import type { NotificationItem } from '@vben/layouts';
 
-import type { InAppCardNotification } from '#/api/kanban';
+import type {
+  InAppCardNotification,
+  InAppCardNotificationHistory,
+} from '#/api/kanban';
 
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -17,10 +20,21 @@ import {
 import { preferences, usePreferences } from '@vben/preferences';
 import { useAccessStore, useUserStore } from '@vben/stores';
 
-import { Button, message, Modal } from 'ant-design-vue';
+import {
+  Button,
+  Empty,
+  Input,
+  message,
+  Modal,
+  Pagination,
+  Segmented,
+  Spin,
+  Tag,
+} from 'ant-design-vue';
 
 import {
   acknowledgeInAppCardNotification,
+  fetchInAppCardNotificationHistory,
   fetchInAppCardNotifications,
 } from '#/api/kanban';
 import { $t } from '#/locales';
@@ -38,6 +52,20 @@ const IN_APP_NOTIFICATION_LAST_REQUEST_KEY =
 const notifications = ref<NotificationItem[]>([]);
 const inAppCardNotifications = ref<InAppCardNotification[]>([]);
 const ackLoadingId = ref<null | number>(null);
+const notificationHistoryOpen = ref(false);
+const notificationHistoryLoading = ref(false);
+const notificationHistoryKeyword = ref('');
+const notificationHistoryStatus = ref<'acked' | 'all' | 'pending'>('all');
+const notificationHistoryPage = ref(1);
+const notificationHistoryPageSize = 10;
+const notificationHistory = ref<InAppCardNotificationHistory>({
+  items: [],
+  page: 1,
+  pageSize: notificationHistoryPageSize,
+  total: 0,
+});
+const notificationHistoryDetail = ref<InAppCardNotification | null>(null);
+let notificationHistoryRequestId = 0;
 let notificationPollTimer: ReturnType<typeof setTimeout> | undefined;
 let notificationVisibilityListenerBound = false;
 let notificationBeforeUnloadListenerBound = false;
@@ -59,6 +87,11 @@ const showDot = computed(() =>
 const activeInAppCardNotification = computed(
   () => inAppCardNotifications.value[0] ?? null,
 );
+const notificationHistoryStatusOptions = [
+  { label: '全部', value: 'all' },
+  { label: '未读', value: 'pending' },
+  { label: '已读', value: 'acked' },
+];
 
 const menus = computed(() => [
   {
@@ -101,7 +134,61 @@ async function handleMakeAll() {
   await acknowledgeAllInAppNotifications();
 }
 
-const viewAll = () => {};
+async function loadNotificationHistory() {
+  const requestId = ++notificationHistoryRequestId;
+  notificationHistoryLoading.value = true;
+  try {
+    const result = await fetchInAppCardNotificationHistory({
+      keyword: notificationHistoryKeyword.value.trim() || undefined,
+      page: notificationHistoryPage.value,
+      pageSize: notificationHistoryPageSize,
+      status:
+        notificationHistoryStatus.value === 'all'
+          ? undefined
+          : notificationHistoryStatus.value,
+    });
+    if (requestId === notificationHistoryRequestId) {
+      notificationHistory.value = result;
+    }
+  } catch (error) {
+    if (requestId === notificationHistoryRequestId) {
+      const detail = error instanceof Error ? error.message : String(error);
+      message.error(`查询通知记录失败：${detail}`);
+    }
+  } finally {
+    if (requestId === notificationHistoryRequestId) {
+      notificationHistoryLoading.value = false;
+    }
+  }
+}
+
+function viewAll() {
+  notificationHistoryOpen.value = true;
+  notificationHistoryPage.value = 1;
+  void loadNotificationHistory();
+}
+
+function reloadNotificationHistoryFromFirstPage() {
+  notificationHistoryPage.value = 1;
+  void loadNotificationHistory();
+}
+
+function handleNotificationHistoryPageChange(page: number) {
+  notificationHistoryPage.value = page;
+  void loadNotificationHistory();
+}
+
+function openNotificationHistoryDetail(item: InAppCardNotification) {
+  notificationHistoryDetail.value = item;
+}
+
+async function acknowledgeNotificationHistoryDetail() {
+  const item = notificationHistoryDetail.value;
+  if (!item || item.inAppStatus !== 'pending') return;
+  await acknowledgeInAppNotification(item.id);
+  notificationHistoryDetail.value = null;
+  await loadNotificationHistory();
+}
 
 const handleClick = (item: NotificationItem) => {
   if (item.inAppEventId) {
@@ -136,6 +223,21 @@ function cardPlainText(item: InAppCardNotification) {
     .filter(Boolean)
     .join('\n')
     .slice(0, 160);
+}
+
+function notificationSceneText(scene: string) {
+  const labels: Record<string, string> = {
+    cold_start_fba_arrival: '新品 FBA 到货',
+    cold_start_performance_bonus: '冷启动优秀表现',
+    first_week_visual_cvr_low: '第一周低 CVR',
+  };
+  return labels[scene] || scene || '卡片通知';
+}
+
+function notificationTime(item: InAppCardNotification) {
+  return String(item.sentAt || item.detectedAt || '')
+    .replace('T', ' ')
+    .slice(0, 16);
 }
 
 function normalizeCardMarkdown(value: unknown) {
@@ -374,7 +476,10 @@ function unbindNotificationListeners() {
     notificationVisibilityListenerBound = false;
   }
   if (notificationBeforeUnloadListenerBound) {
-    window.removeEventListener('beforeunload', releaseNotificationPollOwnership);
+    window.removeEventListener(
+      'beforeunload',
+      releaseNotificationPollOwnership,
+    );
     notificationBeforeUnloadListenerBound = false;
   }
 }
@@ -544,6 +649,137 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </Modal>
+      <Modal
+        v-model:open="notificationHistoryOpen"
+        :footer="null"
+        title="通知记录"
+        width="760px"
+      >
+        <div class="notification-history">
+          <div class="notification-history-toolbar">
+            <Segmented
+              v-model:value="notificationHistoryStatus"
+              :options="notificationHistoryStatusOptions"
+              @change="reloadNotificationHistoryFromFirstPage"
+            />
+            <div class="notification-history-search">
+              <Input
+                v-model:value="notificationHistoryKeyword"
+                allow-clear
+                placeholder="搜索标题、场景或卡片内容"
+                @press-enter="reloadNotificationHistoryFromFirstPage"
+              />
+              <Button
+                :loading="notificationHistoryLoading"
+                type="primary"
+                @click="reloadNotificationHistoryFromFirstPage"
+              >
+                查询
+              </Button>
+            </div>
+          </div>
+
+          <Spin :spinning="notificationHistoryLoading">
+            <div
+              v-if="notificationHistory.items.length > 0"
+              class="notification-history-list"
+            >
+              <button
+                v-for="item in notificationHistory.items"
+                :key="item.id"
+                class="notification-history-item"
+                type="button"
+                @click="openNotificationHistoryDetail(item)"
+              >
+                <div class="notification-history-main">
+                  <div class="notification-history-title">
+                    <span>{{ cardTitle(item) }}</span>
+                    <Tag
+                      :color="
+                        item.inAppStatus === 'pending'
+                          ? 'processing'
+                          : 'default'
+                      "
+                    >
+                      {{ item.inAppStatus === 'pending' ? '未读' : '已读' }}
+                    </Tag>
+                  </div>
+                  <p>{{ cardPlainText(item) || '查看卡片详情' }}</p>
+                </div>
+                <div class="notification-history-meta">
+                  <span>{{ notificationSceneText(item.scene) }}</span>
+                  <time>{{ notificationTime(item) }}</time>
+                </div>
+              </button>
+            </div>
+            <Empty v-else description="暂无通知记录" />
+          </Spin>
+
+          <div
+            v-if="notificationHistory.total > notificationHistoryPageSize"
+            class="notification-history-pagination"
+          >
+            <Pagination
+              :current="notificationHistoryPage"
+              :page-size="notificationHistoryPageSize"
+              :show-size-changer="false"
+              :total="notificationHistory.total"
+              @change="handleNotificationHistoryPageChange"
+            />
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        :footer="null"
+        :open="Boolean(notificationHistoryDetail)"
+        :title="cardTitle(notificationHistoryDetail)"
+        width="640px"
+        @cancel="notificationHistoryDetail = null"
+      >
+        <div v-if="notificationHistoryDetail" class="in-app-card-notice">
+          <div class="notification-detail-meta">
+            <Tag
+              :color="
+                notificationHistoryDetail.inAppStatus === 'pending'
+                  ? 'processing'
+                  : 'default'
+              "
+            >
+              {{
+                notificationHistoryDetail.inAppStatus === 'pending'
+                  ? '未读'
+                  : '已读'
+              }}
+            </Tag>
+            <span>{{
+              notificationSceneText(notificationHistoryDetail.scene)
+            }}</span>
+            <time>{{ notificationTime(notificationHistoryDetail) }}</time>
+          </div>
+          <div
+            v-for="(block, index) in cardContentBlocks(
+              notificationHistoryDetail,
+            )"
+            :key="index"
+            class="in-app-card-block"
+            :class="{ 'in-app-card-note': block.kind === 'note' }"
+          >
+            {{ block.text }}
+          </div>
+          <div
+            v-if="notificationHistoryDetail.inAppStatus === 'pending'"
+            class="in-app-card-actions"
+          >
+            <Button
+              :loading="ackLoadingId === notificationHistoryDetail.id"
+              type="primary"
+              @click="acknowledgeNotificationHistoryDetail"
+            >
+              标记已读
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </template>
     <template #lock-screen>
       <LockScreen :avatar @to-login="handleLogout" />
@@ -590,5 +826,105 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: flex-end;
   padding-top: 18px;
+}
+
+.notification-history {
+  min-height: 420px;
+}
+
+.notification-history-toolbar {
+  display: grid;
+  grid-template-columns: auto minmax(280px, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.notification-history-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.notification-history-list {
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.notification-history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 4px;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.notification-history-item:hover {
+  background: #f8fafc;
+}
+
+.notification-history-main {
+  min-width: 0;
+}
+
+.notification-history-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 650;
+}
+
+.notification-history-main p {
+  display: -webkit-box;
+  margin: 7px 0 0;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
+  -webkit-box-orient: vertical;
+}
+
+.notification-history-meta {
+  display: grid;
+  gap: 6px;
+  align-content: center;
+  justify-items: end;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.notification-history-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.notification-detail-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+@media (max-width: 680px) {
+  .notification-history-toolbar,
+  .notification-history-item {
+    grid-template-columns: 1fr;
+  }
+
+  .notification-history-meta {
+    grid-auto-flow: column;
+    justify-content: start;
+    justify-items: start;
+  }
 }
 </style>
