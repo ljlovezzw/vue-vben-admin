@@ -5,6 +5,7 @@ dist-ssr
 dist.zip
 dist.tar
 dist.war
+dist-production
 .nitro
 .output
 *-dist.zip

@@ -1,1 +1,0 @@
-import{Ds as e}from"../jse/index-index-rF6XiL1M.js";function t(t=10,n=[`10`,`20`,`50`,`100`],r=e=>`共 ${e} 条`){let i=e({current:1,onChange:(e,t)=>{i.current=e,i.pageSize=t},onShowSizeChange:(e,t)=>{i.current=1,i.pageSize=t},pageSize:t,pageSizeOptions:n,showSizeChanger:!0,showTotal:r});return i}function n(e){e.current=1}export{t as n,n as t};

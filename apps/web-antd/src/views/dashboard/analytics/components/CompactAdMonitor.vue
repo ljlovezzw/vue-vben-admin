@@ -538,7 +538,9 @@ onBeforeUnmount(() => {
               </div>
               <div class="impact-value">
                 <b>{{ formatMoney(row.effectiveExcessSpend) }}</b>
-                <small>{{ formatPercent(row.excessContribution) }}</small>
+                <small>
+                  影响比例 {{ formatPercent(row.excessContribution) }}
+                </small>
               </div>
             </div>
           </div>

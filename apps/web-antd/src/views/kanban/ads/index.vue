@@ -610,7 +610,9 @@ onBeforeUnmount(() => {
               </div>
               <div class="impact-value">
                 <b>{{ formatMoney(row.effectiveExcessSpend) }}</b>
-                <span>贡献 {{ formatPercent(row.excessContribution) }}</span>
+                <span>
+                  影响比例 {{ formatPercent(row.excessContribution) }}
+                </span>
               </div>
               <div class="impact-bar">
                 <Progress
