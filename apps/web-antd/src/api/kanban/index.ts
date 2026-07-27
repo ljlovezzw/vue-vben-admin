@@ -133,6 +133,7 @@ export interface NetProfitDetailsParams extends NetProfitOverviewParams {
 export type SpuManagerParams = Partial<SpuManagerFilters>;
 
 export interface KanbanProductDetailParams extends KanbanOverviewParams {
+  analyticsDepartmentScope?: boolean;
   countries?: string[];
   dateRangeType?: string;
   endDate?: string;
@@ -148,6 +149,7 @@ export interface KanbanProductDetailRowsParams extends KanbanProductDetailParams
 }
 
 export interface KanbanProductDetailFbaInventoryParams {
+  analyticsDepartmentScope?: boolean;
   site: string;
   spu: string;
 }

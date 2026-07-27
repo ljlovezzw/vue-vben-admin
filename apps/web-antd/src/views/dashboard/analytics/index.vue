@@ -686,12 +686,16 @@ const departmentCards = computed(() =>
 );
 const productDetailBaseParams = computed(() => {
   const dateRange = dashboardDateRangeForTables();
+  const hasOwnerFilter =
+    query.operationGroupIds.length > 0 || query.responsibles.length > 0;
   return {
+    analyticsDepartmentScope: true,
     countries: dashboardCountryLabelsFromSites(query.sites),
     dateRangeType: 'custom',
+    departments: hasOwnerFilter ? [] : [...query.departments],
     endDate: dateRange.endDate,
     projectTags: [...query.projectTags],
-    responsibles: dashboardResponsibleScopeForTables(),
+    responsibles: hasOwnerFilter ? dashboardResponsibleScopeForTables() : [],
     sites: [...query.sites],
     startDate: dateRange.startDate,
   };
@@ -3348,7 +3352,11 @@ onBeforeUnmount(() => {
         :end-date="productDetailBaseParams.endDate"
         :follow-summary="adMonitorFollowSummary"
         :project-tags="query.projectTags"
-        :responsibles="dashboardResponsibleScopeForTables()"
+        :responsibles="
+          query.operationGroupIds.length > 0 || query.responsibles.length > 0
+            ? dashboardResponsibleScopeForTables()
+            : []
+        "
         :start-date="productDetailBaseParams.startDate"
       />
 

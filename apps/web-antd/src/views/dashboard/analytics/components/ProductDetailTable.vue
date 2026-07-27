@@ -54,10 +54,12 @@ type ProductDetailDateRangeType =
 
 interface BaseProductDetailParams {
   alertLevels?: AlertLevel[];
+  analyticsDepartmentScope?: boolean;
   categories?: string[];
   countries?: string[];
   dateRangeType?: ProductDetailDateRangeType | string;
   endDate?: string;
+  departments?: string[];
   projectTags?: string[];
   responsibles?: string[];
   sites?: string[];
@@ -1405,6 +1407,8 @@ async function loadFbaInventory(record: Record<string, any>) {
   fbaInventoryLoadingKey.value = key;
   try {
     fbaInventoryCache[key] = await fetchKanbanProductDetailFbaInventory({
+      analyticsDepartmentScope:
+        props.baseParams.analyticsDepartmentScope ?? false,
       site,
       spu,
     });

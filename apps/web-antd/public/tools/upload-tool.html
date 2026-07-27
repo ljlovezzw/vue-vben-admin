@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>图片标准命名打包工具</title>
+  <title>RPA自动上传亚马逊图片</title>
   <style>
     :root {
       --bg: #eef3f8;
@@ -102,6 +102,13 @@
       gap: 16px;
     }
 
+    .task-sidebar {
+      position: sticky;
+      top: 16px;
+      display: grid;
+      gap: 16px;
+    }
+
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -137,6 +144,87 @@
       padding: 18px;
       display: grid;
       gap: 16px;
+    }
+
+    .asset-panel.is-collapsed > .panel-body,
+    .asset-panel.is-collapsed > .panel-head .asset-panel-actions {
+      display: none;
+    }
+
+    .asset-panel.is-collapsed > .panel-head {
+      border-bottom: 0;
+      padding-block: 13px;
+    }
+
+    .asset-panel:not(.is-collapsed) > .panel-head .asset-panel-heading {
+      flex-basis: 100%;
+    }
+
+    .asset-panel:not(.is-collapsed) > .panel-head .asset-panel-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .asset-panel-heading {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      padding: 0;
+      color: inherit;
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .asset-panel-heading:focus {
+      outline: none;
+    }
+
+    .asset-panel-chevron {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #d8e2ee;
+      border-radius: 7px;
+      color: #475569;
+      background: #fff;
+      font-size: 17px;
+      line-height: 1;
+    }
+
+    .asset-panel-heading-copy {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .asset-panel-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .asset-panel-title-text {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .asset-panel-count {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .asset-panel-heading:focus-visible .asset-panel-chevron {
+      outline: 3px solid rgba(37, 99, 235, .2);
+      outline-offset: 2px;
+      border-color: var(--primary);
     }
 
     .grid {
@@ -186,6 +274,10 @@
       border-radius: 10px;
       background: #fff;
       overflow: hidden;
+    }
+
+    .shop-picker:not(.is-expanded) .shop-options {
+      display: none;
     }
 
     .shop-filter {
@@ -246,6 +338,10 @@
       color: var(--muted);
       font-size: 12px;
       line-height: 1.55;
+    }
+
+    .shop-selection {
+      cursor: pointer;
     }
 
     .listing-selection.selected {
@@ -376,25 +472,98 @@
     .rule-card.aplus-card {
       position: relative;
       overflow: hidden;
-      border-width: 2px;
-      border-radius: 8px;
+      border: 1px solid #d5dbdb;
+      border-radius: 4px;
       background: #fff;
-      box-shadow: 0 8px 22px rgba(18, 32, 51, .07);
+      box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
       transition: border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
     }
 
+    .rule-card.aplus-card.is-collapsed {
+      gap: 0;
+    }
+
     .rule-card.aplus-full {
-      border-color: #38b2ac;
-      border-left-width: 7px;
+      border-top: 4px solid #879596;
     }
 
     .rule-card.aplus-carousel {
-      border-color: #f59e0b;
-      border-left-width: 7px;
+      border-top: 4px solid #879596;
     }
 
     .rule-card.aplus-video {
-      border-color: #3b82f6;
+      border-top: 4px solid #879596;
+    }
+
+    .aplus-module-frame {
+      min-height: 150px;
+      border: 2px dashed #d5dbdb;
+      border-radius: 2px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      padding: 28px 18px;
+      color: #565959;
+    }
+
+    .aplus-module-picker {
+      display: grid;
+      gap: 13px;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .aplus-module-title {
+      color: #0f1111;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .aplus-module-title span {
+      color: #565959;
+      font-weight: 400;
+    }
+
+    .aplus-module-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn-aplus-module {
+      min-height: 36px;
+      border-color: #d5d9d9;
+      border-radius: 3px;
+      background: linear-gradient(#fff, #f7fafa);
+      color: #0f1111;
+      box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+      font-weight: 500;
+    }
+
+    .btn-aplus-module:hover {
+      border-color: #a2a6ac;
+      background: #f7fafa;
+      box-shadow: 0 1px 3px rgba(15, 17, 17, .16);
+    }
+
+    .btn-aplus-module:disabled {
+      cursor: not-allowed;
+      border-color: #e3e6e6;
+      background: #f7fafa;
+      color: #8c8c8c;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .aplus-module-count {
+      color: #565959;
+      font-size: 12px;
+    }
+
+    .rule-card.gallery-card {
+      border-color: #0f9f9a;
       border-left-width: 7px;
     }
 
@@ -480,7 +649,7 @@
 
     .map-row {
       display: grid;
-      grid-template-columns: 130px minmax(180px, 1fr) minmax(220px, 1.1fr) 150px auto;
+      grid-template-columns: 150px minmax(140px, .65fr) minmax(220px, 1.1fr);
       gap: 10px;
       align-items: start;
     }
@@ -521,6 +690,8 @@
       overflow: hidden;
       color: var(--muted);
       font-size: 12px;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
     }
 
     .preview-box img {
@@ -531,22 +702,34 @@
       background: #fff;
     }
 
-    .quick-file-button {
+    .preview-box:hover,
+    .preview-box.dragover {
+      border-color: #879596;
+      background: #fff;
+      box-shadow: inset 0 0 0 2px rgba(135, 149, 150, .18);
+    }
+
+    .preview-delete-button {
       position: absolute;
-      right: 7px;
-      bottom: 7px;
-      width: 32px;
-      height: 32px;
-      display: inline-grid;
+      top: 6px;
+      right: 6px;
+      width: 24px;
+      height: 24px;
+      display: grid;
       place-items: center;
-      border: 1px solid #fff;
+      border: 1px solid rgba(255, 255, 255, .9);
       border-radius: 50%;
-      background: var(--primary);
+      background: rgba(15, 23, 42, .72);
       color: #fff;
-      font-size: 21px;
+      font-size: 16px;
       line-height: 1;
-      box-shadow: 0 4px 12px rgba(29, 78, 216, .28);
       cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, .22);
+      z-index: 1;
+    }
+
+    .preview-delete-button:hover {
+      background: #b42318;
     }
 
     .slot-validation {
@@ -612,50 +795,9 @@
       color: var(--danger);
     }
 
-    .summary {
-      position: sticky;
-      top: 16px;
-      display: grid;
-      gap: 16px;
-    }
-
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    .stat {
-      border: 1px solid #e3ebf5;
-      border-radius: 12px;
-      background: #f9fbfe;
-      padding: 12px;
-      display: grid;
-      gap: 4px;
-    }
-
-    .stat span {
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .stat strong {
-      font-size: 20px;
-      line-height: 1.2;
-    }
-
-    .manifest {
-      min-height: 300px;
-      max-height: 560px;
-      overflow: auto;
-      border-radius: 12px;
-      background: #0b1220;
-      color: #c8d6ef;
-      padding: 14px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.65;
-      white-space: pre;
+    .icon-btn.collapse-button {
+      color: #475569;
+      font-size: 18px;
     }
 
     .notice {
@@ -865,16 +1007,130 @@
       font-size: 12px;
     }
 
+    .task-log {
+      display: grid;
+      gap: 10px;
+    }
+
+    .task-log-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .task-log-title {
+      display: grid;
+      gap: 3px;
+    }
+
+    .task-log-title strong {
+      font-size: 18px;
+    }
+
+    .task-log-status {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .task-log-list {
+      display: grid;
+      gap: 8px;
+      max-height: 520px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .task-log-item {
+      display: grid;
+      gap: 8px;
+      padding: 11px 12px;
+      border: 1px solid #d8e2ee;
+      border-left: 4px solid #2563eb;
+      border-radius: 8px;
+      background: #f8fbff;
+    }
+
+    .task-log-item.done { border-left-color: #0f766e; }
+    .task-log-item.failed { border-left-color: #b91c1c; }
+    .task-log-item.running { border-left-color: #f59e0b; }
+
+    .task-log-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .task-log-main {
+      min-width: 0;
+      font-weight: 700;
+      color: #162338;
+    }
+
+    .task-log-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: #5b6b80;
+      font-size: 12px;
+    }
+
+    .task-log-id {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .task-log-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
+      color: #1d4ed8;
+      background: #eff6ff;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .task-log-badge.done {
+      border-color: #99f6e4;
+      color: #0f766e;
+      background: #ecfdf5;
+    }
+
+    .task-log-badge.failed {
+      border-color: #fecaca;
+      color: #b91c1c;
+      background: #fef2f2;
+    }
+
+    .task-log-empty {
+      padding: 18px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      color: var(--muted);
+      text-align: center;
+      background: #f8fafc;
+    }
+
     .hidden { display: none !important; }
 
     @media (max-width: 1180px) {
       .layout { grid-template-columns: 1fr; }
-      .summary { position: static; }
+      .task-sidebar { position: static; }
+      .task-log-list { max-height: 360px; }
     }
 
     @media (max-width: 860px) {
       body { padding: 14px; }
-      .grid, .grid-5, .map-row, .stats { grid-template-columns: 1fr; }
+      .grid, .grid-5, .map-row { grid-template-columns: 1fr; }
       .shop-field { grid-column: 1; }
       .shop-options { grid-template-columns: 1fr; }
       .top { padding: 18px; }
@@ -887,14 +1143,15 @@
     <header class="top">
       <div class="top-row">
         <div>
-          <h1>图片标准命名打包工具</h1>
-          <p>把美工交付的未规范命名图片、视频按 A+ 或品牌故事规则重命名，并直接生成对应 zip 下载；需要创建飞书任务时，会把当前生成的 zip 上传到飞书多维表格。</p>
+          <h1>RPA自动上传亚马逊图片</h1>
+          <p>
+运营按顺序上传图片和添加模块，选择对应的店铺（支持多选站点和店铺）和需要上传的SKU，RPA实现自动上传并在飞书完成反馈，通过此工具上传的图片，将自动化跟踪图片转化前后7天CVR，飞书卡片自动通知运营。</p>
         </div>
-        <div class="chips">
+        <!-- <div class="chips">
           <span class="chip">本地重命名</span>
           <span class="chip">生成 ZIP</span>
-          <span class="chip">A+ / 品牌故事</span>
-        </div>
+          <span class="chip">橱窗图 / A+ / 品牌故事</span>
+        </div> -->
       </div>
     </header>
 
@@ -904,34 +1161,38 @@
           <div class="panel-head">
             <div>
               <h2>基础设置</h2>
-              <div class="sub">SPU 用于生成标准文件名；压缩包名称可单独设置，适配样例里的 `573A+.zip`、`423品牌故事.zip`。</div>
+          
             </div>
           </div>
           <div class="panel-body">
             <div class="grid-5">
+              <div class="field">
+                <label for="spuInput">SPU / 命名前缀</label>
+                <input class="control" id="spuInput" value="LLW000573" placeholder="例如 LLW000573" />
+              </div>
               <div class="field shop-field">
                 <label for="shopFilterInput">店铺</label>
-                <div class="shop-picker">
+                <div class="shop-picker" id="shopPicker">
                   <input class="control shop-filter" id="shopFilterInput" placeholder="搜索店铺" />
                   <div class="shop-options" id="shopOptions"></div>
                 </div>
                 <div class="shop-selection" id="shopSelection">未选择店铺</div>
               </div>
               <div class="field">
-                <label for="spuInput">SPU / 命名前缀</label>
-                <input class="control" id="spuInput" value="LLW000573" placeholder="例如 LLW000573" />
-              </div>
-              <div class="field">
                 <label>已选 Listing</label>
                 <div class="listing-selection" id="listingSelection">未选择</div>
               </div>
               <div class="field">
+                <label for="galleryZipName">橱窗图压缩包名</label>
+                <input class="control" id="galleryZipName" value="LLW000573橱窗图" placeholder="例如 LLW000696橱窗图" />
+              </div>
+              <div class="field">
                 <label for="aPlusZipName">A+ 压缩包名</label>
-                <input class="control" id="aPlusZipName" value="573A+" placeholder="例如 573A+" />
+                <input class="control" id="aPlusZipName" value="LLW000573A+" placeholder="例如 LLW000696A+" />
               </div>
               <div class="field">
                 <label for="brandZipName">品牌故事压缩包名</label>
-                <input class="control" id="brandZipName" value="573品牌故事" placeholder="例如 423品牌故事" />
+                <input class="control" id="brandZipName" value="LLW000573品牌故事" placeholder="例如 LLW000696品牌故事" />
               </div>
               <div class="field">
                 <label for="mediaMode">品牌卡媒体资产</label>
@@ -961,7 +1222,7 @@
             <div class="actions">
               <button class="btn btn-primary" id="fetchListingBtn" type="button">查询在线 Listing</button>
             </div>
-            <div class="notice" id="listingStatus">选择店铺并输入 SPU 后可以查询领星在线 Listing 数据。</div>
+            <div class="notice hidden" id="listingStatus"></div>
             <div class="notice hidden" id="asinSummary"></div>
             <div class="table-wrap hidden" id="listingTableWrap">
               <table class="data-table" id="listingTable"></table>
@@ -969,24 +1230,76 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel asset-panel is-collapsed" id="galleryPanel">
           <div class="panel-head">
-            <div>
-              <h2>A+ 素材</h2>
-              <div class="sub">按组件添加文件。完整图和轮播共用 A+ 图片组序号；视频包含视频文件和封面，不占用图片组序号。</div>
-            </div>
-            <div class="actions">
-              <button class="btn btn-soft" id="addAplusFull" type="button">新增完整图</button>
-              <button class="btn btn-soft" id="addAplusCarousel" type="button">新增轮播</button>
-              <button class="btn btn-soft" id="addAplusVideo" type="button">新增视频</button>
-              <button class="btn btn-danger" id="resetAplus" type="button">重置 A+</button>
-              <button class="btn btn-primary" id="downloadAplus" type="button">
+            <button class="asset-panel-heading" id="galleryPanelToggle" type="button" aria-expanded="false" aria-controls="galleryPanelBody">
+              <span class="asset-panel-chevron" aria-hidden="true">▸</span>
+              <span class="asset-panel-heading-copy">
+                <span class="asset-panel-title-row">
+                  <span class="asset-panel-title-text">主图 橱窗图 合规文件上传</span>
+                  <span class="asset-panel-count" id="gallerySectionCount">0 个文件</span>
+                </span>
+                <span class="sub">按显示顺序上传,5张橱窗图最佳。</span>
+              </span>
+            </button>
+            <div class="actions asset-panel-actions">
+              <button class="btn btn-soft" id="gpsrImageButton" type="button">GPSR图片</button>
+              <span class="mini" id="gpsrImageStatus">未选择</span>
+              <button class="btn btn-danger" id="resetGallery" type="button">重置橱窗图</button>
+              <button class="btn btn-primary" id="downloadGallery" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                下载 A+ ZIP
+                下载
               </button>
             </div>
           </div>
-          <div class="panel-body">
+          <div class="panel-body" id="galleryPanelBody">
+            <div class="dropzone" id="galleryDrop">
+              <div>
+                <strong>点击选择文件夹或拖入</strong>
+                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色。</span>
+              </div>
+            </div>
+            <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept="image/*" />
+            <input class="hidden" id="gpsrImageInput" type="file" accept="image/*" />
+            <div class="notice hidden" id="galleryPool"></div>
+            <div class="mapping-list" id="galleryRules"></div>
+          </div>
+        </section>
+
+        <section class="panel asset-panel is-collapsed" id="aPlusPanel">
+          <div class="panel-head">
+            <button class="asset-panel-heading" id="aPlusPanelToggle" type="button" aria-expanded="false" aria-controls="aPlusPanelBody">
+              <span class="asset-panel-chevron" aria-hidden="true">▸</span>
+              <span class="asset-panel-heading-copy">
+                <span class="asset-panel-title-row">
+                  <span class="asset-panel-title-text">A+ 上传</span>
+                  <span class="asset-panel-count" id="aPlusSectionCount">0 个文件</span>
+                </span>
+                <span class="sub">Step1：选择上传模块 Step2：检查对应模块顺序并上传文件。</span>
+              </span>
+            </button>
+            <div class="actions asset-panel-actions">
+              <button class="btn btn-danger" id="resetAplus" type="button">重置 A+</button>
+              <button class="btn btn-primary" id="downloadAplus" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                下载
+              </button>
+            </div>
+          </div>
+          <div class="panel-body" id="aPlusPanelBody">
+            <div class="aplus-module-frame">
+              <div class="aplus-module-picker">
+                <div class="aplus-module-title">
+                  上传模块选择 <span>（最多7个，最后1个模块建议设置高级比较表）</span>
+                </div>
+                <div class="aplus-module-actions">
+                  <button class="btn btn-aplus-module" id="addAplusFull" type="button">添加高级单张图片</button>
+                  <button class="btn btn-aplus-module" id="addAplusVideo" type="button">添加高级视频</button>
+                  <button class="btn btn-aplus-module" id="addAplusCarousel" type="button">添加多图轮播</button>
+                </div>
+                <div class="aplus-module-count" id="aPlusModuleLimitText">已选择 0/7 个模块</div>
+              </div>
+            </div>
             <div class="dropzone" id="aPlusDrop">
               <div>
                 <strong>把全部 A+ 图片和视频拖到这里</strong>
@@ -999,59 +1312,64 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel asset-panel is-collapsed" id="brandPanel">
           <div class="panel-head">
-            <div>
-              <h2>品牌故事素材</h2>
-              <div class="sub">固定输出 `品牌故事_手机端` 和 `品牌故事_电脑端`；品牌卡媒体资产默认重命名为 SPU-序号。</div>
-            </div>
-            <div class="actions">
+            <button class="asset-panel-heading" id="brandPanelToggle" type="button" aria-expanded="false" aria-controls="brandPanelBody">
+              <span class="asset-panel-chevron" aria-hidden="true">▸</span>
+              <span class="asset-panel-heading-copy">
+                <span class="asset-panel-title-row">
+                  <span class="asset-panel-title-text">品牌故事素材</span>
+                  <span class="asset-panel-count" id="brandSectionCount">0 个文件</span>
+                </span>
+                <!-- <span class="sub">固定输出 `品牌故事_手机端` 和 `品牌故事_电脑端`；品牌卡媒体资产默认重命名为 SPU-序号。</span> -->
+              </span>
+            </button>
+            <div class="actions asset-panel-actions">
               <button class="btn btn-soft" id="addBrandMedia" type="button">新增品牌卡媒体资产</button>
               <button class="btn btn-danger" id="resetBrand" type="button">重置品牌故事</button>
               <button class="btn btn-green" id="downloadBrand" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                下载品牌故事 ZIP
+                下载
               </button>
             </div>
           </div>
-          <div class="panel-body">
+          <div class="panel-body" id="brandPanelBody">
+            <div class="dropzone" id="brandDrop">
+              <div>
+                <strong>把全部品牌故事图片拖到这里</strong>
+                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序，并为每张图生成一个品牌卡媒体资产。</span>
+              </div>
+            </div>
+            <input class="hidden" id="brandBulkInput" type="file" multiple accept="image/*" />
+            <div class="notice hidden" id="brandPool"></div>
             <div class="mapping-list" id="brandRules"></div>
           </div>
         </section>
-      </main>
-
-      <aside class="summary">
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>输出摘要</h2>
-              <div class="sub">下载前先核对文件名。</div>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="stats">
-              <div class="stat"><span>A+ 文件数</span><strong id="aPlusCount">0</strong></div>
-              <div class="stat"><span>品牌故事文件数</span><strong id="brandCount">0</strong></div>
-              <div class="stat"><span>A+ ZIP</span><strong id="aPlusZipLabel">-</strong></div>
-              <div class="stat"><span>品牌故事 ZIP</span><strong id="brandZipLabel">-</strong></div>
-            </div>
-            <div class="notice warn" id="warningBox">请选择文件后再下载 zip。</div>
-          </div>
-        </section>
 
         <section class="panel">
-          <div class="panel-head">
-            <div>
-              <h2>文件清单</h2>
-              <div class="sub">zip 内会包含同名根目录。</div>
-            </div>
-          </div>
           <div class="panel-body">
-            <div class="manifest" id="manifest"></div>
             <div class="actions">
               <button class="btn btn-green" id="uploadFeishuTask" type="button">上传到飞书任务</button>
             </div>
             <div class="notice hidden" id="feishuTaskStatus"></div>
+          </div>
+        </section>
+      </main>
+      <aside class="task-sidebar">
+        <section class="panel">
+          <div class="panel-body">
+            <div class="task-log">
+              <div class="task-log-head">
+                <div class="task-log-title">
+                  <strong>任务日志</strong>
+                  <span class="task-log-status" id="taskLogStatus">等待同步任务状态</span>
+                </div>
+                <button class="btn btn-soft" id="refreshTaskLog" type="button">刷新日志</button>
+              </div>
+              <div class="task-log-list" id="taskLogList">
+                <div class="task-log-empty">暂无任务日志</div>
+              </div>
+            </div>
           </div>
         </section>
       </aside>
@@ -1060,11 +1378,15 @@
 
   <script>
     const state = {
+      gallery: [],
+      galleryAutoAssignResult: null,
+      gpsrImage: null,
       aPlus: [],
       draggedAPlusId: "",
       brand: [],
       pool: [],
       aPlusAutoAssignResult: null,
+      brandAutoAssignResult: null,
       listings: [],
       listingGroups: [],
       selectedListingKeys: new Set(),
@@ -1072,13 +1394,32 @@
       expandedListingKeys: new Set(),
       shopOptions: [],
       selectedShops: new Set(),
+      shopPickerExpanded: false,
       shopOptionsLoading: false,
       shopOptionsLoaded: false,
       queriedSpu: "",
       authToken: "",
+      taskLog: {
+        items: [],
+        loading: false,
+        error: "",
+        lastLoadedAt: "",
+      },
+      autoZipNames: {
+        gallery: "",
+        aPlus: "",
+        brand: "",
+      },
+      zipNameManual: {
+        gallery: false,
+        aPlus: false,
+        brand: false,
+      },
     };
 
     const els = {
+      galleryZip: document.getElementById("galleryZipName"),
+      shopPicker: document.getElementById("shopPicker"),
       shopFilter: document.getElementById("shopFilterInput"),
       shopOptions: document.getElementById("shopOptions"),
       shopSelection: document.getElementById("shopSelection"),
@@ -1096,19 +1437,30 @@
       listingColorFilterPanel: document.getElementById("listingColorFilterPanel"),
       listingColorFilters: document.getElementById("listingColorFilters"),
       listingColorCurrent: document.getElementById("listingColorCurrent"),
+      galleryRules: document.getElementById("galleryRules"),
       aPlusRules: document.getElementById("aPlusRules"),
       brandRules: document.getElementById("brandRules"),
-      manifest: document.getElementById("manifest"),
-      aPlusCount: document.getElementById("aPlusCount"),
-      brandCount: document.getElementById("brandCount"),
-      aPlusZipLabel: document.getElementById("aPlusZipLabel"),
-      brandZipLabel: document.getElementById("brandZipLabel"),
-      warningBox: document.getElementById("warningBox"),
+      gallerySectionCount: document.getElementById("gallerySectionCount"),
+      aPlusSectionCount: document.getElementById("aPlusSectionCount"),
+      aPlusModuleLimitText: document.getElementById("aPlusModuleLimitText"),
+      brandSectionCount: document.getElementById("brandSectionCount"),
+      galleryDrop: document.getElementById("galleryDrop"),
+      galleryBulkInput: document.getElementById("galleryBulkInput"),
+      gpsrImageButton: document.getElementById("gpsrImageButton"),
+      gpsrImageInput: document.getElementById("gpsrImageInput"),
+      gpsrImageStatus: document.getElementById("gpsrImageStatus"),
+      galleryPool: document.getElementById("galleryPool"),
       aPlusDrop: document.getElementById("aPlusDrop"),
       aPlusBulkInput: document.getElementById("aPlusBulkInput"),
       aPlusPool: document.getElementById("aPlusPool"),
+      brandDrop: document.getElementById("brandDrop"),
+      brandBulkInput: document.getElementById("brandBulkInput"),
+      brandPool: document.getElementById("brandPool"),
       uploadFeishuTask: document.getElementById("uploadFeishuTask"),
       feishuTaskStatus: document.getElementById("feishuTaskStatus"),
+      taskLogList: document.getElementById("taskLogList"),
+      taskLogStatus: document.getElementById("taskLogStatus"),
+      refreshTaskLog: document.getElementById("refreshTaskLog"),
     };
 
     function uid(prefix) {
@@ -1133,6 +1485,16 @@
       return file ? file.name : "未选择文件";
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[char]));
+    }
+
     const previewUrls = new Map();
 
     function previewUrlForFile(file) {
@@ -1149,6 +1511,8 @@
     });
 
     function setListingStatus(text, type = "normal") {
+      if (!els.listingStatus) return;
+      els.listingStatus.classList.remove("hidden");
       els.listingStatus.textContent = text;
       els.listingStatus.classList.toggle("warn", type === "warn");
     }
@@ -1382,6 +1746,22 @@
       return parts.slice(1, -1).join("_");
     }
 
+    function sidMskuOfRows(rows) {
+      const values = new Map();
+      rows.forEach((row) => {
+        const msku = mskuOf(row);
+        if (!msku) return;
+        const key = msku.toLowerCase();
+        if (!values.has(key)) {
+          values.set(key, { msku });
+        }
+      });
+      return [...values.values()].sort((left, right) =>
+        colorOf({ msku: left.msku }).localeCompare(colorOf({ msku: right.msku }), "en") ||
+        left.msku.localeCompare(right.msku, "en"),
+      );
+    }
+
     function uniqueTexts(rows, getter) {
       return [...new Set(rows.map(getter).filter(Boolean))].sort();
     }
@@ -1420,6 +1800,7 @@
             group.rows,
             (row) => textByKeys(row, ["owner", "owner_name", "ownerName", "responsible", "responsible_name", "responsibleName", "operator", "operator_name", "operatorName", "负责人"]),
           ),
+          sidMsku: sidMskuOfRows(group.rows),
           statuses: uniqueTexts(group.rows, statusText),
         }))
         .sort((left, right) =>
@@ -1475,6 +1856,15 @@
       return [...state.selectedShops].sort((left, right) => left.localeCompare(right, "zh-CN"));
     }
 
+    function setShopPickerExpanded(expanded) {
+      state.shopPickerExpanded = Boolean(expanded);
+      els.shopPicker.classList.toggle("is-expanded", state.shopPickerExpanded);
+      if (!state.shopPickerExpanded) {
+        els.shopFilter.value = "";
+      }
+      renderShopOptions();
+    }
+
     function renderShopSelection() {
       const shops = selectedShopValues();
       els.shopSelection.textContent = shops.length
@@ -1507,6 +1897,7 @@
     }
 
     function renderShopOptions() {
+      els.shopPicker.classList.toggle("is-expanded", state.shopPickerExpanded);
       const keyword = (els.shopFilter.value || "").trim().toLowerCase();
       const options = state.shopOptions.filter((shop) => !keyword || shop.toLowerCase().includes(keyword));
       els.shopOptions.innerHTML = "";
@@ -2007,6 +2398,10 @@
       }
     }
 
+    function galleryRoot() {
+      return cleanName(els.galleryZip.value, "橱窗图");
+    }
+
     function aPlusRoot() {
       return cleanName(els.aPlusZip.value, "A+");
     }
@@ -2017,6 +2412,43 @@
 
     function spuPrefix() {
       return cleanName(els.spu.value, "SPU");
+    }
+
+    function zipNameSuggestions() {
+      const prefix = spuPrefix();
+      return {
+        gallery: `${prefix}橱窗图`,
+        aPlus: `${prefix}A+`,
+        brand: `${prefix}品牌故事`,
+      };
+    }
+
+    function syncZipNamesWithSpu({ force = false } = {}) {
+      const suggestions = zipNameSuggestions();
+      [
+        ["gallery", els.galleryZip],
+        ["aPlus", els.aPlusZip],
+        ["brand", els.brandZip],
+      ].forEach(([key, input]) => {
+        const previousAutoName = state.autoZipNames[key];
+        const current = String(input.value || "").trim();
+        const canAutoUpdate =
+          force ||
+          !state.zipNameManual[key] ||
+          !current ||
+          (previousAutoName && current === previousAutoName);
+        if (canAutoUpdate) {
+          input.value = suggestions[key];
+          state.zipNameManual[key] = false;
+        }
+      });
+      state.autoZipNames = suggestions;
+    }
+
+    function markZipNameManual(key, input) {
+      const value = String(input.value || "").trim();
+      state.zipNameManual[key] = Boolean(value && value !== state.autoZipNames[key]);
+      render();
     }
 
     function targetForSlot(slot, componentIndex, mediaIndex = 1) {
@@ -2046,6 +2478,7 @@
     }
 
     const APLUS_CAROUSEL_IMAGE_COUNT = 6;
+    const APLUS_MAX_COMPONENTS = 7;
     const FEISHU_SMALL_UPLOAD_LIMIT = 20 * 1024 * 1024;
     const FEISHU_TASK_CACHE_TTL_MS = 30 * 60 * 1000;
     const FEISHU_TASK_CACHE_PREFIX = "kanban:feishu-image-task:v1:";
@@ -2059,7 +2492,7 @@
         return {
           id: uid("carousel"),
           type,
-          title: "图像轮播",
+          title: "多图轮播",
           slots: [
             ...Array.from({ length: APLUS_CAROUSEL_IMAGE_COUNT }, () =>
               makeSlot({ kind: "carousel", platform: "手机端" }),
@@ -2074,7 +2507,7 @@
         return {
           id: uid("video"),
           type,
-          title: "高级全视频",
+          title: "高级视频",
           slots: [
             makeSlot({ kind: "video", role: "video" }),
             makeSlot({ kind: "video", role: "cover" }),
@@ -2084,7 +2517,7 @@
       return {
         id: uid("full"),
         type: "full",
-        title: "高级完整图片",
+        title: "高级单张图片",
         slots: [
           makeSlot({ kind: "full", platform: "手机端" }),
           makeSlot({ kind: "full", platform: "电脑端" }),
@@ -2093,6 +2526,11 @@
     }
 
     function insertAPlusComponent(type, afterId = "", renderNow = true) {
+      if (state.aPlus.length >= APLUS_MAX_COMPONENTS) {
+        alert(`A+ 上传模块最多 ${APLUS_MAX_COMPONENTS} 个。最后 1 个模块建议设置高级比较表。`);
+        if (renderNow !== false) render();
+        return null;
+      }
       const component = createAPlusComponent(type);
       const afterIndex = afterId
         ? state.aPlus.findIndex((item) => item.id === afterId)
@@ -2102,7 +2540,7 @@
       } else {
         state.aPlus.push(component);
       }
-      if (renderNow) render();
+      if (renderNow !== false) render();
       return component;
     }
 
@@ -2118,35 +2556,332 @@
       return insertAPlusComponent("video", afterId, renderNow);
     }
 
+    function createBrandHeroComponent() {
+      return {
+        id: uid("brandHero"),
+        type: "brandHero",
+        title: "品牌故事完整图",
+        slots: [
+          makeSlot({ kind: "brandHero", platform: "手机端" }),
+          makeSlot({ kind: "brandHero", platform: "电脑端" }),
+        ],
+      };
+    }
+
+    function createBrandMediaComponent(file = null) {
+      return {
+        id: uid("brandMedia"),
+        type: "brandMedia",
+        title: "品牌卡媒体资产",
+        slots: [makeSlot({ kind: "brandMedia", file })],
+      };
+    }
+
     function resetBrand(renderNow = true) {
       state.brand = [
-        {
-          id: uid("brandHero"),
-          type: "brandHero",
-          title: "品牌故事完整图",
-          slots: [
-            makeSlot({ kind: "brandHero", platform: "手机端" }),
-            makeSlot({ kind: "brandHero", platform: "电脑端" }),
-          ],
-        },
-        {
-          id: uid("brandMedia"),
-          type: "brandMedia",
-          title: "品牌卡媒体资产",
-          slots: [makeSlot({ kind: "brandMedia" })],
-        },
+        createBrandHeroComponent(),
+        createBrandMediaComponent(),
       ];
+      state.brandAutoAssignResult = null;
       if (renderNow) render();
     }
 
     function addBrandMedia() {
-      state.brand.push({
-        id: uid("brandMedia"),
-        type: "brandMedia",
-        title: "品牌卡媒体资产",
-        slots: [makeSlot({ kind: "brandMedia" })],
-      });
+      state.brand.push(createBrandMediaComponent());
       render();
+    }
+
+    const fileNameCollator = new Intl.Collator("zh-CN", {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    function isImageFile(file) {
+      return String(file?.type || "").startsWith("image/") ||
+        /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file?.name || "");
+    }
+
+    function brandHeroKeywordScore(file) {
+      const name = String(file?.name || "").normalize("NFKC").toLowerCase();
+      let score = 0;
+      if (/(品牌故事|brand[\s_-]*story)/i.test(name)) score += 4;
+      if (/(完整图|完整|hero|full)/i.test(name)) score += 3;
+      return score;
+    }
+
+    function selectBrandHeroPair(files) {
+      const candidates = files
+        .map((file, order) => ({
+          file,
+          order,
+          platform: filePlatform(file.name),
+          score: brandHeroKeywordScore(file),
+          stem: normalizedPairStem(file.name),
+        }));
+      const mobile = candidates.filter((item) => item.platform === "手机端");
+      const desktop = candidates.filter((item) => item.platform === "电脑端");
+      const pairs = [];
+      mobile.forEach((mobileItem) => {
+        desktop.forEach((desktopItem) => {
+          const sameStem = mobileItem.stem && mobileItem.stem === desktopItem.stem;
+          pairs.push({
+            desktop: desktopItem,
+            mobile: mobileItem,
+            score:
+              mobileItem.score +
+              desktopItem.score +
+              (sameStem ? 20 : 0),
+          });
+        });
+      });
+      pairs.sort((left, right) =>
+        right.score - left.score ||
+        left.mobile.order - right.mobile.order ||
+        left.desktop.order - right.desktop.order
+      );
+      if (pairs.length) {
+        return {
+          desktop: pairs[0].desktop.file,
+          mobile: pairs[0].mobile.file,
+        };
+      }
+
+      const keywordFiles = candidates
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score || left.order - right.order);
+      const fallback = keywordFiles.length ? keywordFiles : candidates;
+      return {
+        mobile: fallback[0]?.file || null,
+        desktop: fallback.find((item) => item.file !== fallback[0]?.file)?.file || null,
+      };
+    }
+
+    function buildBrandInitialAssignment(files) {
+      const incoming = Array.from(files || []).filter(Boolean);
+      const images = incoming
+        .filter(isImageFile)
+        .sort((left, right) => fileNameCollator.compare(left.name, right.name));
+      const ignored = incoming.filter((file) => !isImageFile(file));
+      const heroFiles = images.length
+        ? selectBrandHeroPair(images)
+        : { desktop: null, mobile: null };
+      const usedHeroFiles = new Set(
+        [heroFiles.mobile, heroFiles.desktop].filter(Boolean),
+      );
+      const mediaFiles = images.filter((file) => !usedHeroFiles.has(file));
+
+      return {
+        heroFiles,
+        ignored,
+        images,
+        mediaFiles,
+        total: incoming.length,
+      };
+    }
+
+    function autoAssignBrandFiles(files) {
+      const assignment = buildBrandInitialAssignment(files);
+      if (!assignment.total) return;
+      if (!assignment.images.length) {
+        state.brandAutoAssignResult = {
+          ignored: assignment.ignored,
+          mediaCount: 0,
+          total: assignment.total,
+        };
+        render();
+        return;
+      }
+
+      const hero = createBrandHeroComponent();
+      hero.slots.find((slot) => slot.platform === "手机端").file =
+        assignment.heroFiles.mobile;
+      hero.slots.find((slot) => slot.platform === "电脑端").file =
+        assignment.heroFiles.desktop;
+      state.brand = [
+        hero,
+        ...assignment.mediaFiles.map((file) => createBrandMediaComponent(file)),
+      ];
+      state.brandAutoAssignResult = {
+        heroDesktop: assignment.heroFiles.desktop?.name || "",
+        heroMobile: assignment.heroFiles.mobile?.name || "",
+        ignored: assignment.ignored,
+        mediaCount: assignment.mediaFiles.length,
+        total: assignment.total,
+      };
+      render();
+    }
+
+    function resetGallery(renderNow = true) {
+      state.gallery = [];
+      state.galleryAutoAssignResult = null;
+      state.gpsrImage = null;
+      if (renderNow) render();
+    }
+
+    function makeGalleryItem({ file, order, role }) {
+      return {
+        file,
+        id: uid("gallerySlot"),
+        kind: "gallery",
+        order,
+        role,
+      };
+    }
+
+    function galleryInputEntries(files) {
+      return Array.from(files || [])
+        .filter(Boolean)
+        .map((file) => ({
+          file,
+          relativePath: String(file.webkitRelativePath || file.name || "")
+            .replace(/\\/g, "/"),
+        }));
+    }
+
+    function parseGalleryEntry(entry) {
+      const file = entry?.file;
+      const relativePath = String(entry?.relativePath || file?.name || "")
+        .replace(/\\/g, "/");
+      if (!file || /^thumbs\.db$/i.test(file.name || "")) {
+        return { ignored: true, reason: "系统文件", file };
+      }
+      if (!isImageFile(file)) {
+        return { ignored: true, reason: "非图片文件", file };
+      }
+
+      const stem = String(file.name || "")
+        .normalize("NFKC")
+        .replace(/\.[^.]+$/, "")
+        .trim();
+      const orderedMatch = stem.match(/^(.*?)[(（]\s*(\d+)\s*[)）]$/);
+      const baseName = String(orderedMatch?.[1] || stem).trim().replace(/[_-]+$/, "");
+      const order = orderedMatch ? Number(orderedMatch[2]) : null;
+      if (!baseName || (orderedMatch && (!Number.isInteger(order) || order <= 0))) {
+        return { ignored: true, reason: "文件名或括号序号无效", file };
+      }
+
+      const colorMatch = baseName.match(/_([^_]+)$/);
+      const pathParts = relativePath.split("/").filter(Boolean);
+      const parentName = pathParts.length > 1
+        ? pathParts[pathParts.length - 2].replace(/[_-]+$/, "")
+        : "";
+      const parentColorMatch = parentName.match(/_([^_]+)$/);
+      const color = String(colorMatch?.[1] || parentColorMatch?.[1] || "默认").trim();
+
+      return {
+        baseName,
+        color,
+        file,
+        order,
+        relativePath,
+      };
+    }
+
+    function buildGalleryInitialAssignment(entries) {
+      const incoming = Array.from(entries || []).filter(Boolean);
+      const ignored = [];
+      const groupMap = new Map();
+
+      incoming.forEach((entry) => {
+        const parsed = parseGalleryEntry(entry);
+        if (parsed.ignored) {
+          if (!/^thumbs\.db$/i.test(parsed.file?.name || "")) {
+            ignored.push({
+              file: parsed.file,
+              reason: parsed.reason,
+            });
+          }
+          return;
+        }
+        const key = parsed.baseName.toLocaleLowerCase("en-US");
+        if (!groupMap.has(key)) {
+          groupMap.set(key, {
+            baseName: parsed.baseName,
+            color: parsed.color,
+            candidates: [],
+          });
+        }
+        groupMap.get(key).candidates.push(parsed);
+      });
+
+      const groups = [...groupMap.values()]
+        .map((group) => {
+          const candidates = group.candidates.sort((left, right) =>
+            (left.order ?? 0) - (right.order ?? 0) ||
+            fileNameCollator.compare(left.relativePath, right.relativePath)
+          );
+          const mainCandidates = candidates.filter((item) => item.order === null);
+          const orderedCandidates = candidates.filter((item) => item.order !== null);
+          const seenOrders = new Set();
+          const items = [];
+          if (mainCandidates[0]) {
+            items.push(makeGalleryItem({
+              file: mainCandidates[0].file,
+              order: null,
+              role: "main",
+            }));
+          }
+          mainCandidates.slice(1).forEach((item) => {
+            ignored.push({
+              file: item.file,
+              reason: `${group.color} 颜色存在重复主图`,
+            });
+          });
+          orderedCandidates.forEach((item) => {
+            if (seenOrders.has(item.order)) {
+              ignored.push({
+                file: item.file,
+                reason: `${group.color} 颜色存在重复序号 ${item.order}`,
+              });
+              return;
+            }
+            seenOrders.add(item.order);
+            items.push(makeGalleryItem({
+              file: item.file,
+              order: item.order,
+              role: "other",
+            }));
+          });
+          return {
+            baseName: group.baseName,
+            color: group.color,
+            folderName: `${group.baseName}_`,
+            id: uid("gallery"),
+            items,
+            missingMain: mainCandidates.length === 0,
+          };
+        })
+        .sort((left, right) =>
+          fileNameCollator.compare(left.color, right.color) ||
+          fileNameCollator.compare(left.baseName, right.baseName)
+        );
+
+      return {
+        groups,
+        ignored,
+        total: incoming.length,
+        imageCount: groups.reduce((sum, group) => sum + group.items.length, 0),
+      };
+    }
+
+    function autoAssignGalleryEntries(entries) {
+      const assignment = buildGalleryInitialAssignment(entries);
+      if (!assignment.total) return;
+      state.gallery = assignment.groups;
+      state.galleryAutoAssignResult = {
+        ignored: assignment.ignored,
+        imageCount: assignment.imageCount,
+        total: assignment.total,
+        missingMainColors: assignment.groups
+          .filter((group) => group.missingMain)
+          .map((group) => group.color),
+      };
+      render();
+    }
+
+    function galleryTargetName(group, item) {
+      const suffix = item.order === null ? "" : `(${item.order})`;
+      return `${group.baseName}${suffix}${extOf(item.file, ".jpg")}`;
     }
 
     function aPlusImageComponentIndex(component) {
@@ -2185,16 +2920,6 @@
         .replace(/[\s_.\-()[\]{}]+/g, "");
     }
 
-    function pairedSlot(component, slot) {
-      if (!slot.platform || !["手机端", "电脑端"].includes(slot.platform)) return null;
-      const opposite = slot.platform === "手机端" ? "电脑端" : "手机端";
-      if (component.type === "carousel") {
-        const index = aPlusFileIndex(component, slot);
-        return component.slots.filter((item) => item.platform === opposite)[index - 1] || null;
-      }
-      return component.slots.find((item) => item.platform === opposite) || null;
-    }
-
     function fileKindMatches(slot, file) {
       if (!file) return true;
       const isVideo = String(file.type || "").startsWith("video/") ||
@@ -2220,17 +2945,6 @@
           level: "error",
           message: `原名识别为${detected}，不能放入${slot.platform}`,
         };
-      }
-      const pair = pairedSlot(component, slot);
-      if (pair?.file) {
-        const currentStem = normalizedPairStem(file.name);
-        const pairStem = normalizedPairStem(pair.file.name);
-        if (currentStem && pairStem && currentStem !== pairStem) {
-          return {
-            level: "error",
-            message: `与${pair.platform}原名不成对：${pair.file.name}`,
-          };
-        }
       }
       if (!detected) {
         return { level: "warn", message: "原名未标注手机端/电脑端，请人工确认" };
@@ -2287,6 +3001,30 @@
       };
     }
 
+    function compactAPlusParsedTargets(parsedFiles) {
+      const sourceIndexes = [...new Set(
+        parsedFiles
+          .map(({ target }) =>
+            target && target.kind !== "video" ? Number(target.componentIndex) : null,
+          )
+          .filter((value) => Number.isInteger(value) && value > 0),
+      )].sort((left, right) => left - right);
+      const compactIndexMap = new Map(
+        sourceIndexes.map((value, index) => [value, index + 1]),
+      );
+      return parsedFiles.map(({ file, target }) => {
+        if (!target || target.kind === "video") return { file, target };
+        return {
+          file,
+          target: {
+            ...target,
+            sourceComponentIndex: target.componentIndex,
+            componentIndex: compactIndexMap.get(target.componentIndex) || target.componentIndex,
+          },
+        };
+      });
+    }
+
     function aPlusImageComponents() {
       return state.aPlus.filter((item) =>
         item.type === "full" || item.type === "carousel"
@@ -2310,6 +3048,7 @@
       for (let index = 1; index <= maxIndex; index += 1) {
         let components = aPlusImageComponents();
         if (!components[index - 1]) {
+          if (state.aPlus.length >= APLUS_MAX_COMPONENTS) continue;
           const component = createAPlusComponent(desiredTypes.get(index) || "full");
           const firstVideoIndex = state.aPlus.findIndex((item) => item.type === "video");
           if (firstVideoIndex >= 0) {
@@ -2333,6 +3072,7 @@
       }
       if (parsedFiles.some(({ target }) => target?.kind === "video")) {
         if (!state.aPlus.some((component) => component.type === "video")) {
+          if (state.aPlus.length >= APLUS_MAX_COMPONENTS) return;
           state.aPlus.push(createAPlusComponent("video"));
         }
       }
@@ -2368,10 +3108,12 @@
     function autoAssignAPlusFiles(files) {
       const incoming = Array.from(files || []).filter(Boolean);
       if (!incoming.length) return;
-      const parsedFiles = incoming.map((file) => ({
-        file,
-        target: parseAPlusDefaultFile(file),
-      }));
+      const parsedFiles = compactAPlusParsedTargets(
+        incoming.map((file) => ({
+          file,
+          target: parseAPlusDefaultFile(file),
+        })),
+      );
       ensureAPlusAssignmentStructure(parsedFiles);
       const assigned = [];
       const unassigned = [];
@@ -2416,53 +3158,13 @@
       render();
     }
 
-    function createFileSelect(component, slot, accept) {
-      const input = document.createElement("input");
-      input.className = "control";
-      input.type = "file";
-      input.accept = accept;
-      input.addEventListener("change", () => {
-        if (!assignSlotFile(component, slot, input.files[0] || null)) {
-          input.value = "";
-        }
-      });
-      return input;
-    }
-
-    function createPoolSelect(component, slot) {
-      const select = document.createElement("select");
-      select.className = "control";
-      select.innerHTML = `<option value="">从拖入文件中选择</option>` + state.pool.map((item, index) => `<option value="${index}">${item.name}</option>`).join("");
-      select.addEventListener("change", () => {
-        const index = Number(select.value);
-        if (!Number.isNaN(index) && state.pool[index]) {
-          const file = state.pool[index];
-          if (!assignSlotFile(component, slot, file, { renderNow: false })) {
-            select.value = "";
-            return;
-          }
-          state.pool.splice(index, 1);
-          if (state.aPlusAutoAssignResult) {
-            state.aPlusAutoAssignResult.unassigned =
-              state.aPlusAutoAssignResult.unassigned.filter(
-                (item) => item.file !== file,
-              );
-            state.aPlusAutoAssignResult.assigned.push({
-              file,
-              target: "人工分配",
-            });
-          }
-          render();
-        }
-      });
-      return select;
-    }
-
     function createPreview(component, slot, accept) {
       const wrapper = document.createElement("div");
       wrapper.className = "preview-box";
+      wrapper.tabIndex = 0;
+      wrapper.title = slot.file ? "点击或拖入文件替换" : "点击或拖入文件";
       if (!slot.file) {
-        wrapper.textContent = "未选择";
+        wrapper.textContent = slot.role === "video" ? "拖入视频" : "拖入图片";
       } else if (slot.role === "video") {
         wrapper.classList.add("video");
         wrapper.textContent = `已选择视频：${slot.file.name}`;
@@ -2472,10 +3174,20 @@
         img.src = previewUrlForFile(slot.file);
         wrapper.appendChild(img);
       }
-      const quickButton = document.createElement("label");
-      quickButton.className = "quick-file-button";
-      quickButton.textContent = "+";
-      quickButton.title = slot.file ? "更换文件" : "直接添加文件";
+      if (slot.file) {
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "preview-delete-button";
+        deleteButton.type = "button";
+        deleteButton.textContent = "×";
+        deleteButton.title = "删除当前文件";
+        deleteButton.setAttribute("aria-label", "删除当前文件");
+        deleteButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          assignSlotFile(component, slot, null);
+        });
+        wrapper.appendChild(deleteButton);
+      }
       const quickInput = document.createElement("input");
       quickInput.className = "hidden";
       quickInput.type = "file";
@@ -2485,8 +3197,32 @@
           quickInput.value = "";
         }
       });
-      quickButton.appendChild(quickInput);
-      wrapper.appendChild(quickButton);
+      wrapper.addEventListener("click", () => quickInput.click());
+      wrapper.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        quickInput.click();
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        wrapper.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          wrapper.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        wrapper.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          wrapper.classList.remove("dragover");
+        });
+      });
+      wrapper.addEventListener("drop", (event) => {
+        const file = event.dataTransfer?.files?.[0] || null;
+        if (!file) return;
+        assignSlotFile(component, slot, file);
+      });
+      wrapper.appendChild(quickInput);
       return wrapper;
     }
 
@@ -2537,22 +3273,75 @@
       return wrapper;
     }
 
+    function renderGallery() {
+      els.galleryRules.innerHTML = "";
+      if (!state.gallery.length) {
+        const empty = document.createElement("div");
+        empty.className = "notice warn";
+        empty.textContent = "当前没有橱窗图，请拖入完整文件夹生成颜色分组和排序。";
+        els.galleryRules.appendChild(empty);
+        return;
+      }
+
+      state.gallery.forEach((group) => {
+        const card = document.createElement("section");
+        card.className = "rule-card gallery-card";
+        card.innerHTML = `
+          <div class="rule-head">
+            <div>
+              <div class="rule-title-line">
+                <span class="group-index">${group.color}</span>
+                <h3 class="rule-title">颜色 ${group.color}</h3>
+              </div>
+              <div class="mini">${group.folderName} · ${group.items.length} 个文件${group.missingMain ? " · 缺少主图 / Swatch" : ""}</div>
+            </div>
+            <button class="icon-btn delete-button" type="button" title="删除该颜色">×</button>
+          </div>
+        `;
+        card.querySelector(".delete-button").addEventListener("click", () => {
+          state.gallery = state.gallery.filter((item) => item.id !== group.id);
+          render();
+        });
+
+        group.items.forEach((item) => {
+          const target = galleryTargetName(group, item);
+          const roleLabel = item.order === null
+            ? "主图 + Swatch"
+            : `排序 ${item.order}`;
+          const row = document.createElement("div");
+          row.className = "map-row gallery-row";
+          row.innerHTML = `
+            <div class="field preview-here"><label>预览</label><div class="source">${roleLabel}</div></div>
+            <div class="field"><label>颜色 / 排序</label><div class="source">${group.color} · ${roleLabel}</div></div>
+            <div class="field"><label>ZIP 内文件名</label><div class="target" title="${group.folderName}/${target}">${group.folderName}/${target}</div></div>
+          `;
+          row.querySelector(".preview-here").appendChild(
+            createPreview(group, item, "image/*"),
+          );
+          card.appendChild(row);
+        });
+        els.galleryRules.appendChild(card);
+      });
+    }
+
     function renderAPlus() {
       els.aPlusRules.innerHTML = "";
       const components = activeAPlusComponents();
       if (!components.length) {
         const empty = document.createElement("div");
-        empty.className = "notice warn";
-        empty.textContent = "当前没有图片组，请使用上方按钮新增完整图、轮播或视频。";
+        empty.className = "notice";
+        empty.textContent = "当前没有上传模块，请先添加高级单张图片、高级视频或多图轮播。";
         els.aPlusRules.appendChild(empty);
         return;
       }
       components.forEach((component) => {
         const card = document.createElement("section");
         card.className = `rule-card aplus-card aplus-${component.type}`;
+        card.classList.toggle("is-collapsed", Boolean(component.collapsed));
         card.dataset.componentId = component.id;
         const version = component.type === "video" ? 1 : aPlusImageComponentIndex(component);
         const groupLabel = component.type === "video" ? "视频" : pad2(version);
+        const selectedCount = component.slots.filter((slot) => slot.file).length;
         card.innerHTML = `
           <div class="rule-head">
             <div>
@@ -2560,20 +3349,25 @@
                 <span class="group-index">${groupLabel}</span>
                 <h3 class="rule-title">${component.title}</h3>
               </div>
-              <div class="mini">${component.type === "carousel" ? `手机端、电脑端各 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"}</div>
+              <div class="mini">${component.type === "carousel" ? `手机端、电脑端各 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"} · 已选 ${selectedCount}/${component.slots.length}</div>
             </div>
             <div class="group-tools">
+              <button class="icon-btn collapse-button" type="button" title="${component.collapsed ? "展开图片组" : "收起图片组"}" aria-label="${component.collapsed ? "展开图片组" : "收起图片组"}">${component.collapsed ? "▸" : "▾"}</button>
               <span class="drag-handle" role="button" tabindex="0" title="拖动调整重命名顺序" aria-label="拖动图片组">⋮⋮</span>
               <select class="control insert-select" title="选择要插入的图片组">
-                <option value="full">完整图</option>
-                <option value="carousel">轮播</option>
-                <option value="video">视频</option>
+                <option value="full">高级单张图片</option>
+                <option value="video">高级视频</option>
+                <option value="carousel">多图轮播</option>
               </select>
               <button class="btn btn-soft insert-button" type="button">插入</button>
               <button class="icon-btn delete-button" type="button" title="删除图片组">×</button>
             </div>
           </div>
         `;
+        card.querySelector(".collapse-button").addEventListener("click", () => {
+          component.collapsed = !component.collapsed;
+          render();
+        });
         card.querySelector(".delete-button").addEventListener("click", () => {
           state.aPlus = state.aPlus.filter((item) => item.id !== component.id);
           render();
@@ -2629,6 +3423,11 @@
           dragHandle.addEventListener("pointercancel", cancelPointerDrag);
         });
 
+        if (component.collapsed) {
+          els.aPlusRules.appendChild(card);
+          return;
+        }
+
         component.slots.forEach((slot) => {
           const row = document.createElement("div");
           row.className = "map-row";
@@ -2637,14 +3436,10 @@
           const target = targetForSlot(slot, version, fileIndex);
           row.innerHTML = `
             <div class="field preview-here"><label>文件位 / 预览</label><div class="source">${label}</div></div>
-            <div class="field select-here"><label>${slot.file ? "更换文件" : "选择文件"}</label></div>
-            <div class="field pool-here"><label>拖入文件池</label></div>
             <div class="field flags-here"><label>AI标记</label></div>
             <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
           `;
           const accept = slot.role === "video" ? "video/*" : "image/*";
-          row.querySelector(".select-here").appendChild(createFileSelect(component, slot, accept));
-          row.querySelector(".pool-here").appendChild(createPoolSelect(component, slot));
           row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
           row.querySelector(".source").textContent = `${label} · ${fileLabel(slot.file)}`;
           const previewField = row.querySelector(".preview-here");
@@ -2694,12 +3489,9 @@
           row.className = "map-row";
           row.innerHTML = `
             <div class="field preview-here"><label>文件位 / 预览</label><div class="source">${label} · ${fileLabel(slot.file)}</div></div>
-            <div class="field select-here"><label>${slot.file ? "更换文件" : "选择文件"}</label></div>
-            <div></div>
             <div class="field flags-here"><label>AI标记</label></div>
             <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
           `;
-          row.querySelector(".select-here").appendChild(createFileSelect(component, slot, "image/*"));
           row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
           const previewField = row.querySelector(".preview-here");
           previewField.appendChild(createPreview(component, slot, "image/*"));
@@ -2714,6 +3506,20 @@
         });
         els.brandRules.appendChild(card);
       });
+    }
+
+    function collectGalleryFiles() {
+      const root = galleryRoot();
+      return state.gallery.flatMap((group) =>
+        group.items
+          .filter((item) => item.file)
+          .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+          .map((item) => ({
+            file: item.file,
+            isImage: true,
+            path: `${root}/${group.folderName}/${galleryTargetName(group, item)}`,
+          }))
+      );
     }
 
     function collectAPlusFiles() {
@@ -2770,6 +3576,12 @@
       return [...new Set(errors)];
     }
 
+    function currentGalleryValidationErrors() {
+      return state.gallery
+        .filter((group) => group.missingMain || !group.items.some((item) => item.order === null))
+        .map((group) => `颜色 ${group.color} 缺少无括号的主图 / Swatch 文件`);
+    }
+
     function imageFlagRecord(entry) {
       const fileName = entry.path.split("/").pop() || entry.path;
       return {
@@ -2799,6 +3611,31 @@
       ];
     }
 
+    function renderGalleryPool() {
+      const result = state.galleryAutoAssignResult;
+      if (!result) {
+        els.galleryPool.classList.add("hidden");
+        els.galleryPool.textContent = "";
+        return;
+      }
+      const warnings = [];
+      if (result.missingMainColors?.length) {
+        warnings.push(`缺少主图 / Swatch：${result.missingMainColors.join("、")}`);
+      }
+      if (result.ignored?.length) {
+        warnings.push(
+          `忽略 ${result.ignored.length} 个文件：${result.ignored
+            .map((item) => `${item.file?.name || "未知文件"}（${item.reason}）`)
+            .join("；")}`,
+        );
+      }
+      els.galleryPool.classList.remove("hidden");
+      els.galleryPool.classList.toggle("warn", warnings.length > 0);
+      els.galleryPool.textContent =
+        `已按 ${state.gallery.length} 个颜色生成排序，共 ${result.imageCount} 张图片` +
+        (warnings.length ? `；${warnings.join("；")}` : "，全部匹配成功。");
+    }
+
     function renderPool() {
       const result = state.aPlusAutoAssignResult;
       if (!state.pool.length && !result) {
@@ -2823,38 +3660,81 @@
       els.aPlusPool.textContent = `${summary}，${result.unassigned.length} 个待人工调整：${details}`;
     }
 
-    function renderManifest() {
+    function renderBrandPool() {
+      const result = state.brandAutoAssignResult;
+      if (!result) {
+        els.brandPool.classList.add("hidden");
+        els.brandPool.textContent = "";
+        return;
+      }
+      els.brandPool.classList.remove("hidden");
+      const heroFiles = [result.heroMobile, result.heroDesktop].filter(Boolean);
+      const heroText = heroFiles.length
+        ? `完整图 ${heroFiles.length}/2：${heroFiles.join("、")}`
+        : "未识别到完整图";
+      const ignoredText = result.ignored?.length
+        ? `；忽略非图片文件：${result.ignored.map((file) => file.name).join("、")}`
+        : "";
+      els.brandPool.classList.toggle(
+        "warn",
+        heroFiles.length < 2 || Boolean(result.ignored?.length),
+      );
+      els.brandPool.textContent =
+        `已生成初始排序，${heroText}；品牌卡媒体资产 ${result.mediaCount} 个${ignoredText}。`;
+    }
+
+    function renderGpsrImageStatus() {
+      if (!state.gpsrImage) {
+        els.gpsrImageButton.textContent = "GPSR图片";
+        els.gpsrImageStatus.textContent = "未选择";
+        els.gpsrImageStatus.title = "";
+        return;
+      }
+      els.gpsrImageButton.textContent = "更换GPSR图片";
+      els.gpsrImageStatus.textContent = `已选 ${state.gpsrImage.name}`;
+      els.gpsrImageStatus.title = state.gpsrImage.name;
+    }
+
+    function renderAssetCounts() {
+      const galleryFiles = collectGalleryFiles();
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
-      const lines = [];
-      lines.push(`${aPlusRoot()}.zip`);
-      lines.push(`${aPlusRoot()}/`);
-      if (aPlusFiles.length) {
-        aPlusFiles.forEach((item) => lines.push(`  ${item.path.split("/").slice(1).join("/")}`));
-      } else {
-        lines.push("  (未选择文件)");
+      els.gallerySectionCount.textContent = `${galleryFiles.length} 个文件`;
+      els.aPlusSectionCount.textContent = `${aPlusFiles.length} 个文件`;
+      els.brandSectionCount.textContent = `${brandFiles.length} 个文件`;
+    }
+
+    function renderAPlusModuleLimit() {
+      const count = state.aPlus.length;
+      const reachedLimit = count >= APLUS_MAX_COMPONENTS;
+      if (els.aPlusModuleLimitText) {
+        els.aPlusModuleLimitText.textContent =
+          reachedLimit
+            ? `已选择 ${count}/${APLUS_MAX_COMPONENTS} 个模块，已达到上限。`
+            : `已选择 ${count}/${APLUS_MAX_COMPONENTS} 个模块`;
       }
-      lines.push("");
-      lines.push(`${brandRoot()}.zip`);
-      lines.push(`${brandRoot()}/`);
-      if (brandFiles.length) {
-        brandFiles.forEach((item) => lines.push(`  ${item.path.split("/").slice(1).join("/")}`));
-      } else {
-        lines.push("  (未选择文件)");
-      }
-      els.manifest.textContent = lines.join("\n");
-      els.aPlusCount.textContent = String(aPlusFiles.length);
-      els.brandCount.textContent = String(brandFiles.length);
-      els.aPlusZipLabel.textContent = `${aPlusRoot()}.zip`;
-      els.brandZipLabel.textContent = `${brandRoot()}.zip`;
-      els.warningBox.textContent = aPlusFiles.length || brandFiles.length ? "文件名已生成，下载前请核对右侧清单。" : "请选择文件后再下载 zip。";
+      ["addAplusFull", "addAplusVideo", "addAplusCarousel"].forEach((id) => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = reachedLimit;
+      });
+      document.querySelectorAll(".aplus-card .insert-button").forEach((button) => {
+        button.disabled = reachedLimit;
+        button.title = reachedLimit
+          ? `最多只能添加 ${APLUS_MAX_COMPONENTS} 个 A+ 上传模块`
+          : "";
+      });
     }
 
     function render() {
+      renderGalleryPool();
       renderPool();
+      renderBrandPool();
+      renderGpsrImageStatus();
+      renderGallery();
       renderAPlus();
       renderBrand();
-      renderManifest();
+      renderAssetCounts();
+      renderAPlusModuleLimit();
     }
 
     function crc32Table() {
@@ -2938,8 +3818,23 @@
     }
 
     async function downloadZip(type) {
-      const entries = type === "aplus" ? collectAPlusFiles() : collectBrandFiles();
-      const root = type === "aplus" ? aPlusRoot() : brandRoot();
+      const entries = type === "gallery"
+        ? collectGalleryFiles()
+        : type === "aplus"
+          ? collectAPlusFiles()
+          : collectBrandFiles();
+      const root = type === "gallery"
+        ? galleryRoot()
+        : type === "aplus"
+          ? aPlusRoot()
+          : brandRoot();
+      if (type === "gallery") {
+        const errors = currentGalleryValidationErrors();
+        if (errors.length) {
+          alert(`橱窗图校验未通过：\n${errors.join("\n")}`);
+          return;
+        }
+      }
       if (type === "aplus") {
         const errors = currentAPlusValidationErrors();
         if (errors.length) {
@@ -2951,7 +3846,9 @@
         alert("请先选择要打包的文件。");
         return;
       }
-      const zip = await buildZip(withImageFlagJson(entries, root));
+      const zip = await buildZip(
+        type === "gallery" ? entries : withImageFlagJson(entries, root),
+      );
       const url = URL.createObjectURL(zip);
       const a = document.createElement("a");
       a.href = url;
@@ -2992,6 +3889,7 @@
         if (event.data?.type !== "kanban-auth-token") return;
         state.authToken = String(event.data.token || "").replace(/^Bearer\s+/i, "");
         loadShopOptions();
+        loadTaskLog({ silent: true });
       });
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(
@@ -3074,6 +3972,20 @@
         .map((item) => ({
           asins: [...item.asins].sort(),
           parentAsin: item.parentAsin,
+          sidMsku: (item.sidMsku || [])
+            .map((entry) => {
+              const storeId = Number(entry.store_id ?? entry.storeId ?? entry.sid);
+              const value = { msku: String(entry.msku || entry.MSKU || "").trim() };
+              if (Number.isInteger(storeId) && storeId > 0) {
+                value.store_id = storeId;
+              }
+              return value;
+            })
+            .filter((entry) => entry.msku)
+            .sort((left, right) =>
+              (Number(left.store_id || 0) - Number(right.store_id || 0)) ||
+              left.msku.localeCompare(right.msku, "en"),
+            ),
           shop: item.shop,
           spu: item.spu,
         }))
@@ -3131,9 +4043,11 @@
       }
     }
 
-    async function buildUploadZip(entries, root) {
+    async function buildUploadZip(entries, root, { includeImageFlags = true } = {}) {
       if (!entries.length) return null;
-      const sourceEntries = withImageFlagJson(entries, root);
+      const sourceEntries = includeImageFlags
+        ? withImageFlagJson(entries, root)
+        : entries;
       const [zip, sourceFingerprint] = await Promise.all([
         buildZip(sourceEntries),
         sourceFilesFingerprint(sourceEntries),
@@ -3143,6 +4057,16 @@
         contentType: "application/zip",
         blob: zip,
         sourceFingerprint,
+      };
+    }
+
+    function gpsrImageUploadFile() {
+      if (!state.gpsrImage) return null;
+      const extension = extOf(state.gpsrImage, ".jpg");
+      return {
+        filename: `${spuPrefix()}-GPSR合规图片${extension}`,
+        contentType: state.gpsrImage.type || "application/octet-stream",
+        blob: state.gpsrImage,
       };
     }
 
@@ -3158,6 +4082,106 @@
 
     function feishuTokenTaskApiUrl() {
       return `${feishuTaskApiBaseUrl()}/from-tokens`;
+    }
+
+    function feishuTaskStatusApiUrl(taskId) {
+      return `${feishuTaskApiBaseUrl()}/${encodeURIComponent(taskId)}`;
+    }
+
+    function uploadTaskLogApiUrl() {
+      return location.hostname === "localhost" || location.hostname === "127.0.0.1"
+        ? "/api/kanban/tools/upload/task-log"
+        : "https://api.junlee.top/kanban/tools/upload/task-log";
+    }
+
+    function taskLogStatusText(item) {
+      const raw = item.rawStatus && item.rawStatus !== item.statusLabel
+        ? ` / ${item.rawStatus}`
+        : "";
+      return `${item.statusLabel || "运行中"}${raw}`;
+    }
+
+    function renderTaskLog() {
+      const items = state.taskLog.items || [];
+      els.taskLogList.innerHTML = "";
+      if (els.refreshTaskLog) {
+        els.refreshTaskLog.disabled = Boolean(state.taskLog.loading);
+      }
+      if (state.taskLog.loading && !items.length) {
+        els.taskLogStatus.textContent = "正在同步飞书任务状态...";
+      } else if (state.taskLog.error) {
+        els.taskLogStatus.textContent = state.taskLog.error;
+      } else if (state.taskLog.lastLoadedAt) {
+        els.taskLogStatus.textContent = `已同步 ${items.length} 条，${state.taskLog.lastLoadedAt}`;
+      } else {
+        els.taskLogStatus.textContent = "等待同步任务状态";
+      }
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "task-log-empty";
+        empty.textContent = state.taskLog.error || "暂无任务日志";
+        els.taskLogList.appendChild(empty);
+        return;
+      }
+      items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = `task-log-item ${item.statusKind || "running"}`;
+        const completedNodes = Array.isArray(item.completedNodes) && item.completedNodes.length
+          ? item.completedNodes.join("，")
+          : "未完成节点";
+        row.innerHTML = `
+          <div class="task-log-row">
+            <div class="task-log-main">${escapeHtml(item.createdAt || "-")} ${escapeHtml(item.spu || "-")} ${escapeHtml(item.taskType || "图片任务")}</div>
+            <span class="task-log-badge ${escapeHtml(item.statusKind || "running")}">${escapeHtml(taskLogStatusText(item))}</span>
+          </div>
+          <div class="task-log-meta">
+            <span>任务ID <span class="task-log-id">${escapeHtml(item.recordId || "-")}</span></span>
+            <span>店铺 ${escapeHtml(item.shop || "-")}</span>
+            <span>父ASIN ${escapeHtml(item.parentAsin || "-")}</span>
+            <span>${escapeHtml(completedNodes)}</span>
+          </div>
+        `;
+        if (item.recordUrl) {
+          row.addEventListener("dblclick", () => window.open(item.recordUrl, "_blank", "noopener"));
+          row.title = "双击打开飞书任务记录";
+        }
+        els.taskLogList.appendChild(row);
+      });
+    }
+
+    async function loadTaskLog({ silent = false } = {}) {
+      const token = authToken();
+      if (!token) {
+        state.taskLog.error = "请先登录后查看任务日志";
+        state.taskLog.loading = false;
+        renderTaskLog();
+        return;
+      }
+      state.taskLog.loading = true;
+      if (!silent) state.taskLog.error = "";
+      renderTaskLog();
+      try {
+        const params = new URLSearchParams({ limit: "20" });
+        const spu = (els.spu.value || "").trim();
+        if (spu) params.set("spu", spu);
+        const response = await fetch(`${uploadTaskLogApiUrl()}?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await readJsonResponse(response);
+        state.taskLog.items = Array.isArray(payload?.data?.items) ? payload.data.items : [];
+        state.taskLog.error = "";
+        state.taskLog.lastLoadedAt = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      } catch (error) {
+        state.taskLog.error = `任务日志同步失败：${error.message}`;
+      } finally {
+        state.taskLog.loading = false;
+        renderTaskLog();
+      }
+    }
+
+    function startTaskLogPolling() {
+      loadTaskLog({ silent: true });
+      setInterval(() => loadTaskLog({ silent: true }), 30000);
     }
 
     async function readJsonResponse(response) {
@@ -3263,10 +4287,19 @@
       return finishPayload.receipt;
     }
 
-    async function uploadFeishuTaskViaEdge(metadataList, aplusZip, brandZip, token) {
+    async function uploadFeishuTaskViaEdge(
+      metadataList,
+      galleryZip,
+      aplusZip,
+      brandZip,
+      gpsrImage,
+      token,
+    ) {
       const zipFiles = await Promise.all([
+        galleryZip ? { ...galleryZip, key: "galleryZip" } : null,
         aplusZip ? { ...aplusZip, key: "aplusZip" } : null,
         brandZip ? { ...brandZip, key: "brandZip" } : null,
+        gpsrImage ? { ...gpsrImage, key: "gpsrImage" } : null,
       ].filter(Boolean).map(prepareUploadZipFile));
       const cacheKey = await submissionCacheKey(metadataList, zipFiles, token);
       const cached = readFeishuTaskCache(cacheKey);
@@ -3302,9 +4335,97 @@
       return payload;
     }
 
+    function shouldUseBackendGalleryUpload(metadataList, galleryZip) {
+      return Boolean(
+        galleryZip &&
+        metadataList.some((metadata) => Array.isArray(metadata.sidMsku) && metadata.sidMsku.length),
+      );
+    }
+
+    async function uploadFeishuTaskViaBackend(
+      metadataList,
+      galleryZip,
+      aplusZip,
+      brandZip,
+      gpsrImage,
+      token,
+    ) {
+      const zipFiles = await Promise.all([
+        galleryZip ? { ...galleryZip, key: "galleryZip" } : null,
+        aplusZip ? { ...aplusZip, key: "aplusZip" } : null,
+        brandZip ? { ...brandZip, key: "brandZip" } : null,
+        gpsrImage ? { ...gpsrImage, key: "gpsrImage" } : null,
+      ].filter(Boolean).map(prepareUploadZipFile));
+      const cacheKey = await submissionCacheKey(metadataList, zipFiles, token);
+      const cached = readFeishuTaskCache(cacheKey);
+      if (cached) {
+        setFeishuTaskStatus("检测到相同内容已创建任务，正在复用原任务结果...");
+        return {
+          ...cached,
+          data: {
+            ...(cached.data || {}),
+            clientCached: true,
+            deduplicated: true,
+          },
+        };
+      }
+
+      const formData = new FormData();
+      formData.append(
+        "metadata",
+        JSON.stringify({
+          metadata: metadataList[0],
+          metadataList,
+        }),
+      );
+      formData.append("asyncMode", "true");
+      zipFiles.forEach((item) => {
+        formData.append(item.key, item.blob, item.filename);
+      });
+
+      setFeishuTaskStatus("正在提交后端橱窗图直传任务...");
+      const queuedPayload = await readJsonResponse(await fetch(feishuTaskApiBaseUrl(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      }));
+      const taskId = queuedPayload?.data?.taskId;
+      if (!taskId) {
+        writeFeishuTaskCache(cacheKey, queuedPayload);
+        return queuedPayload;
+      }
+
+      for (let attempt = 0; attempt < 240; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
+        const statusPayload = await readJsonResponse(await fetch(feishuTaskStatusApiUrl(taskId), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }));
+        const task = statusPayload?.data || {};
+        if (task.status === "succeeded") {
+          const finalPayload = {
+            ...statusPayload,
+            data: task.result || {},
+          };
+          writeFeishuTaskCache(cacheKey, finalPayload);
+          return finalPayload;
+        }
+        if (task.status === "failed") {
+          throw new Error(task.error || "后端橱窗图直传任务失败");
+        }
+        setFeishuTaskStatus(`后端正在上传橱窗图到领星...（${attempt + 1}）`);
+      }
+      throw new Error("后端橱窗图直传任务超时，请稍后查看任务状态");
+    }
+
     async function uploadFeishuTask() {
+      const galleryFiles = collectGalleryFiles();
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
+      const gpsrImage = gpsrImageUploadFile();
       const token = authToken();
       const spu = (els.spu.value || "").trim();
       const listingGroups = selectedListingGroups();
@@ -3313,6 +4434,7 @@
         spu,
         parentAsin: group.parentAsin,
         asins: group.asins,
+        sidMsku: group.sidMsku || [],
       }));
 
       if (!token) {
@@ -3332,6 +4454,14 @@
         setFeishuTaskStatus("SPU 已变化，请重新查询并选择 Listing。", "warn");
         return;
       }
+      const galleryValidationErrors = currentGalleryValidationErrors();
+      if (galleryValidationErrors.length) {
+        setFeishuTaskStatus(
+          `橱窗图校验未通过：${galleryValidationErrors.join("；")}`,
+          "warn",
+        );
+        return;
+      }
       const aPlusValidationErrors = currentAPlusValidationErrors();
       if (aPlusValidationErrors.length) {
         setFeishuTaskStatus(
@@ -3340,22 +4470,43 @@
         );
         return;
       }
-      if (!aPlusFiles.length && !brandFiles.length) {
-        setFeishuTaskStatus("请先选择 A+ 或品牌故事素材文件。", "warn");
+      if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !gpsrImage) {
+        setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件。", "warn");
         return;
       }
 
       els.uploadFeishuTask.disabled = true;
-      setFeishuTaskStatus("正在生成 ZIP...");
+      setFeishuTaskStatus("正在整理上传文件...");
       try {
+        const galleryZip = await buildUploadZip(
+          galleryFiles,
+          galleryRoot(),
+          { includeImageFlags: false },
+        );
         const aplusZip = await buildUploadZip(aPlusFiles, aPlusRoot());
         const brandZip = await buildUploadZip(brandFiles, brandRoot());
-        const zipLabels = [aplusZip, brandZip]
+        const zipLabels = [galleryZip, aplusZip, brandZip, gpsrImage]
           .filter(Boolean)
           .map((item) => `${item.filename} ${formatBytes(item.blob.size)}`)
           .join("，");
-        setFeishuTaskStatus(`ZIP 已生成（${zipLabels}），正在创建 ${metadataList.length} 个飞书任务...`);
-        const payload = await uploadFeishuTaskViaEdge(metadataList, aplusZip, brandZip, token);
+        setFeishuTaskStatus(`文件已准备（${zipLabels}），正在创建 ${metadataList.length} 个飞书任务...`);
+        const payload = shouldUseBackendGalleryUpload(metadataList, galleryZip)
+          ? await uploadFeishuTaskViaBackend(
+              metadataList,
+              galleryZip,
+              aplusZip,
+              brandZip,
+              gpsrImage,
+              token,
+            )
+          : await uploadFeishuTaskViaEdge(
+              metadataList,
+              galleryZip,
+              aplusZip,
+              brandZip,
+              gpsrImage,
+              token,
+            );
         const taskCount = Number(payload?.data?.taskCount || metadataList.length);
         const recordIds = Array.isArray(payload?.data?.recordIds)
           ? payload.data.recordIds.filter(Boolean)
@@ -3374,6 +4525,7 @@
               : `文件已上传并创建 ${taskCount} 个飞书任务。`,
           );
         }
+        loadTaskLog({ silent: true });
       } catch (error) {
         setFeishuTaskStatus(`上传失败：${error.message}`, "warn");
       } finally {
@@ -3404,12 +4556,141 @@
       });
     }
 
+    function wireAssetPanel(panelId, toggleId) {
+      const panel = document.getElementById(panelId);
+      const toggle = document.getElementById(toggleId);
+      const chevron = toggle.querySelector(".asset-panel-chevron");
+      toggle.addEventListener("click", () => {
+        const expanded = panel.classList.toggle("is-collapsed") === false;
+        toggle.setAttribute("aria-expanded", String(expanded));
+        chevron.textContent = expanded ? "▾" : "▸";
+      });
+    }
+
+    function readGalleryFileEntry(entry, parentPath = "") {
+      return new Promise((resolve, reject) => {
+        entry.file(
+          (file) => resolve({
+            file,
+            relativePath: `${parentPath}${file.name}`,
+          }),
+          reject,
+        );
+      });
+    }
+
+    function readAllDirectoryEntries(reader) {
+      return new Promise((resolve, reject) => {
+        const entries = [];
+        const readBatch = () => {
+          reader.readEntries((batch) => {
+            if (!batch.length) {
+              resolve(entries);
+              return;
+            }
+            entries.push(...batch);
+            readBatch();
+          }, reject);
+        };
+        readBatch();
+      });
+    }
+
+    async function walkGalleryEntry(entry, parentPath = "") {
+      if (entry.isFile) {
+        return [await readGalleryFileEntry(entry, parentPath)];
+      }
+      if (!entry.isDirectory) return [];
+      const nextPath = `${parentPath}${entry.name}/`;
+      const children = await readAllDirectoryEntries(entry.createReader());
+      const nested = await Promise.all(
+        children.map((child) => walkGalleryEntry(child, nextPath)),
+      );
+      return nested.flat();
+    }
+
+    async function galleryEntriesFromDrop(dataTransfer) {
+      const itemEntries = Array.from(dataTransfer?.items || [])
+        .map((item) => item.webkitGetAsEntry?.())
+        .filter(Boolean);
+      if (!itemEntries.length) {
+        return galleryInputEntries(dataTransfer?.files || []);
+      }
+      const nested = await Promise.all(
+        itemEntries.map((entry) => walkGalleryEntry(entry)),
+      );
+      return nested.flat();
+    }
+
+    function wireGalleryDropzone() {
+      els.galleryDrop.addEventListener("click", () => els.galleryBulkInput.click());
+      els.galleryBulkInput.addEventListener("change", () => {
+        autoAssignGalleryEntries(galleryInputEntries(els.galleryBulkInput.files || []));
+        els.galleryBulkInput.value = "";
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        els.galleryDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.galleryDrop.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        els.galleryDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.galleryDrop.classList.remove("dragover");
+        });
+      });
+      els.galleryDrop.addEventListener("drop", async (event) => {
+        try {
+          const entries = await galleryEntriesFromDrop(event.dataTransfer);
+          autoAssignGalleryEntries(entries);
+        } catch (error) {
+          state.galleryAutoAssignResult = {
+            ignored: [],
+            imageCount: 0,
+            missingMainColors: [],
+            total: 0,
+          };
+          render();
+          els.galleryPool.classList.remove("hidden");
+          els.galleryPool.classList.add("warn");
+          els.galleryPool.textContent = `读取橱窗图文件夹失败：${error.message}`;
+        }
+      });
+    }
+
+    function wireBrandDropzone() {
+      els.brandDrop.addEventListener("click", () => els.brandBulkInput.click());
+      els.brandBulkInput.addEventListener("change", () => {
+        autoAssignBrandFiles(els.brandBulkInput.files || []);
+        els.brandBulkInput.value = "";
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        els.brandDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.brandDrop.classList.add("dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        els.brandDrop.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          els.brandDrop.classList.remove("dragover");
+        });
+      });
+      els.brandDrop.addEventListener("drop", (event) => {
+        autoAssignBrandFiles(event.dataTransfer.files || []);
+      });
+    }
+
     function init() {
       initAuthBridge();
       document.getElementById("addAplusFull").addEventListener("click", addAplusFull);
       document.getElementById("addAplusCarousel").addEventListener("click", addAplusCarousel);
       document.getElementById("addAplusVideo").addEventListener("click", addAplusVideo);
       document.getElementById("addBrandMedia").addEventListener("click", addBrandMedia);
+      document.getElementById("resetGallery").addEventListener("click", () => {
+        resetGallery();
+      });
       document.getElementById("resetAplus").addEventListener("click", () => {
         state.aPlus = [];
         state.pool = [];
@@ -3419,38 +4700,78 @@
       document.getElementById("resetBrand").addEventListener("click", () => {
         resetBrand();
       });
+      document.getElementById("downloadGallery").addEventListener("click", () => downloadZip("gallery"));
       document.getElementById("downloadAplus").addEventListener("click", () => downloadZip("aplus"));
       document.getElementById("downloadBrand").addEventListener("click", () => downloadZip("brand"));
+      els.gpsrImageButton.addEventListener("click", () => els.gpsrImageInput.click());
+      els.gpsrImageInput.addEventListener("change", () => {
+        state.gpsrImage = els.gpsrImageInput.files?.[0] || null;
+        els.gpsrImageInput.value = "";
+        render();
+      });
       els.uploadFeishuTask.addEventListener("click", uploadFeishuTask);
+      els.refreshTaskLog.addEventListener("click", () => loadTaskLog());
       els.fetchListingBtn.addEventListener("click", fetchListingData);
-      [els.aPlusZip, els.brandZip, els.mediaMode].forEach((input) => input.addEventListener("input", render));
+      [
+        ["gallery", els.galleryZip],
+        ["aPlus", els.aPlusZip],
+        ["brand", els.brandZip],
+      ].forEach(([key, input]) => {
+        input.addEventListener("input", () => markZipNameManual(key, input));
+      });
+      els.mediaMode.addEventListener("input", render);
       els.spu.addEventListener("input", () => {
         if (state.listings.length && (els.spu.value || "").trim() !== state.queriedSpu) {
           resetListingResults("SPU 已变化，请重新查询 Listing。");
         }
+        syncZipNamesWithSpu();
         render();
+        loadTaskLog({ silent: true });
       });
-      els.shopFilter.addEventListener("input", renderShopOptions);
+      els.shopFilter.addEventListener("focus", () => setShopPickerExpanded(true));
+      els.shopFilter.addEventListener("click", () => setShopPickerExpanded(true));
+      els.shopFilter.addEventListener("input", () => {
+        if (!state.shopPickerExpanded) {
+          state.shopPickerExpanded = true;
+        }
+        renderShopOptions();
+      });
       els.shopFilter.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
         addTypedShop();
       });
+      els.shopSelection.addEventListener("click", () => {
+        setShopPickerExpanded(true);
+        els.shopFilter.focus();
+      });
+      document.addEventListener("click", (event) => {
+        if (
+          els.shopPicker.contains(event.target) ||
+          els.shopSelection.contains(event.target)
+        ) {
+          return;
+        }
+        if (state.shopPickerExpanded) {
+          setShopPickerExpanded(false);
+        }
+      });
       els.mediaMode.addEventListener("change", render);
+      wireAssetPanel("galleryPanel", "galleryPanelToggle");
+      wireAssetPanel("aPlusPanel", "aPlusPanelToggle");
+      wireAssetPanel("brandPanel", "brandPanelToggle");
+      wireGalleryDropzone();
       wireDropzone();
+      wireBrandDropzone();
 
-      addAplusFull(false);
-      addAplusFull(false);
-      addAplusFull(false);
-      addAplusFull(false);
-      addAplusCarousel(false);
-      addAplusFull(false);
+      syncZipNamesWithSpu({ force: true });
       resetBrand(false);
       renderShopOptions();
       renderShopSelection();
       renderListingSelection();
       render();
       loadShopOptions();
+      startTaskLogPolling();
     }
 
     init();

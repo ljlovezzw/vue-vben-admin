@@ -511,6 +511,8 @@ public\tools\upload-tool.html
 
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
+- 基础设置中的橱窗图、A+ 和品牌故事压缩包名根据 SPU 自动生成，默认分别为 `SPU橱窗图`、`SPUA+`、`SPU品牌故事`；用户手动改过某个包名后，后续修改 SPU 不再覆盖该手动值。
+- 橱窗图素材标题栏提供 `GPSR图片` 按钮，选择一张图片后会随本次飞书任务一起上传；后端确认 `gpsrImage` 上传成功后，在多维表格记录中写入 `是否上传GPSR合规图片=是`，未选择或上传失败则写“否”。
 - A+ 图像轮播组件固定生成 6 组图片，即手机端 6 张、电脑端 6 张；完整图和轮播共用 A+ 图片组序号，轮播输出文件名格式为 `SPU-端_图片组序号-轮播序号`。
 - A+ 顶部批量拖放区会按默认文件名自动分配素材：`SPU-手机端_01` / `SPU-电脑端_01` 定位完整图，带轮播序号的 `SPU-手机端_05-1` 定位对应轮播文件位，视频文件和 `视频封面` 定位视频组件。空白组件类型可按文件名自动调整；无法识别、目标已有文件或校验失败的素材保留在文件池供人工分配。
 - 基础设置会从在线 Listing 返回数据中提取颜色，并支持单选或多选颜色过滤。showOnline 没有独立颜色字段时，前端从标准 MSKU 的中间段提取颜色代码，例如 `NY000282_B_L` 识别为 `B`；无法识别的非标准 MSKU 不强行归类。
@@ -525,7 +527,7 @@ public\tools\upload-tool.html
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 按店铺 + SPU 查询父 ASIN 候选，调用 `createSearchTermReportTask()` 提交后端生成任务，再用 `fetchSearchTermReportTask()` 每 30 秒轮询任务状态；任务成功后用 `downloadSearchTermReport()` 按 blob 下载文件，避免裸链接下载丢失登录态。
 - 搜索词报告词库页面的流程固定为：先选店铺、输入 SPU 和报告日期范围，再查询父 ASIN；候选表展示店铺、SPU、站点、父 ASIN、项目标签、生命周期、一级分类、二级分类和匹配行数。候选表的店铺列以后端返回为准，当前后端按 `店铺 -> 品牌+站点 -> 全店铺` 真实匹配到父 ASIN 后才把筛选店铺作为展示店铺返回。父 ASIN 支持多选，候选只有一个时自动选择，多个时必须至少选择一个。生成报告不拉长 HTTP 请求，后端立即返回 `taskId`，页面展示 `queued/running/succeeded/failed` 状态；同一天内相同店铺 + 父 ASIN 组合 + 日期范围可能由后端直接命中历史并立即返回成功；成功后展示报告基础信息、汇总表和各 sheet 的前 50 行预览。页面用 localStorage 缓存店铺、SPU、日期范围、候选行、已选父 ASIN 和当前 `taskId`，刷新后恢复并继续查询任务状态。sheet 预览列由返回行动态生成，不写死 SDK 输出字段。
-- 每个图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；该 JSON 会随图片一起打包。
+- A+ 和品牌故事图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 A+ / 品牌故事 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；橱窗图不展示 AI 标记，也不写入 `image_ai_flags.json`。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
 - 店铺选项复用搜索词报告的 `/kanban/tools/search-term-report/options`，支持搜索、回车补充和多选。查询时以前端最多 3 路并发分别调用在线 Listing 代理，合并后按“实际店铺 + 父 ASIN”分组；领星无结果回退全店查询时必须按实际返回店铺去重，不能把查询店铺强行覆盖到其它店铺的数据。
@@ -533,7 +535,7 @@ public\tools\upload-tool.html
 - 在线 Listing 查询本地开发使用 `/api/lingxing/listing/show-online` 经 Vite proxy 转到开发 FastAPI `localhost:8002`；非 localhost 环境使用 `https://api.junlee.top/api/lingxing/listing/show-online`，也就是正式后端 `localhost:8001` 的穿透地址。店铺选项、申请飞书上传票据和提交上传回执同样按环境切换，本地分别走 `/api/kanban/*`、`/api/feishu/*`，线上走 `https://api.junlee.top/kanban/*`、`https://api.junlee.top/api/feishu/*`。
 - 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
 - ZIP 生成后前端计算 SHA-256，并按当前登录 token、任务组合和 ZIP 内容生成会话缓存键。相同内容在 30 分钟内重复点击“上传到飞书任务”时直接复用原任务结果，不再次上传附件；页面会显示“已复用”及原 `recordIds`。服务端仍使用 Redis 幂等缓存作为跨页面、跨 Worker 的最终防线，前端缓存不可代替后端去重。
-- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用 `v=20260723-multi-shop-selection` 避免生产浏览器继续命中旧静态 HTML。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260727-gallery-no-ai-flags`。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
