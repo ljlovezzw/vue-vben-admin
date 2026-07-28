@@ -2,16 +2,21 @@
 import type { KanbanTrendPoint } from '#/api/kanban/types';
 
 import { computed } from 'vue';
-import { Card } from 'ant-design-vue';
 import VChart from 'vue-echarts';
-import { use } from 'echarts/core';
+
+import { Card } from 'ant-design-vue';
 import { LineChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
   TooltipComponent,
 } from 'echarts/components';
+import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
+
+const props = defineProps<{
+  trend: KanbanTrendPoint[];
+}>();
 
 use([
   CanvasRenderer,
@@ -20,10 +25,6 @@ use([
   TooltipComponent,
   LegendComponent,
 ]);
-
-const props = defineProps<{
-  trend: KanbanTrendPoint[];
-}>();
 
 const option = computed(() => ({
   color: ['#2563eb', '#16a34a', '#d97706'],

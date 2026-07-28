@@ -250,6 +250,11 @@
       font-size: 13px;
     }
 
+    .listing-query-field .btn {
+      width: 100%;
+      min-height: 42px;
+    }
+
     .control {
       width: 100%;
       border: 1px solid var(--line);
@@ -1145,7 +1150,7 @@
         <div>
           <h1>RPA自动上传亚马逊图片</h1>
           <p>
-运营按顺序上传图片和添加模块，选择对应的店铺（支持多选站点和店铺）和需要上传的SKU，RPA实现自动上传并在飞书完成反馈，通过此工具上传的图片，将自动化跟踪图片转化前后7天CVR，飞书卡片自动通知运营。</p>
+运营按顺序上传图片和添加模块，选择对应的店铺（支持多选站点和店铺）和需要上传的SKU，RPA实现自动上传并在飞书完成反馈，通过此工具上传的图片，将自动化跟踪图片转化前后7天CVR，飞书卡片自动通知运营</p>
         </div>
         <!-- <div class="chips">
           <span class="chip">本地重命名</span>
@@ -1160,55 +1165,46 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <h2>基础设置</h2>
+              <h2>选择上传ASIN</h2>
           
             </div>
           </div>
           <div class="panel-body">
             <div class="grid-5">
               <div class="field">
-                <label for="spuInput">SPU / 命名前缀</label>
+                <label for="spuInput">选择SPU</label>
                 <input class="control" id="spuInput" value="LLW000573" placeholder="例如 LLW000573" />
               </div>
               <div class="field shop-field">
-                <label for="shopFilterInput">店铺</label>
+                <label for="shopFilterInput">选择店铺</label>
                 <div class="shop-picker" id="shopPicker">
                   <input class="control shop-filter" id="shopFilterInput" placeholder="搜索店铺" />
                   <div class="shop-options" id="shopOptions"></div>
                 </div>
                 <div class="shop-selection" id="shopSelection">未选择店铺</div>
               </div>
+              <div class="field listing-query-field">
+                <label>&nbsp;</label>
+                <button class="btn btn-primary" id="fetchListingBtn" type="button">查询在线 Listing</button>
+              </div>
               <div class="field">
                 <label>已选 Listing</label>
                 <div class="listing-selection" id="listingSelection">未选择</div>
               </div>
-              <div class="field">
-                <label for="galleryZipName">橱窗图压缩包名</label>
-                <input class="control" id="galleryZipName" value="LLW000573橱窗图" placeholder="例如 LLW000696橱窗图" />
-              </div>
-              <div class="field">
-                <label for="aPlusZipName">A+ 压缩包名</label>
-                <input class="control" id="aPlusZipName" value="LLW000573A+" placeholder="例如 LLW000696A+" />
-              </div>
-              <div class="field">
-                <label for="brandZipName">品牌故事压缩包名</label>
-                <input class="control" id="brandZipName" value="LLW000573品牌故事" placeholder="例如 LLW000696品牌故事" />
-              </div>
-              <div class="field">
-                <label for="mediaMode">品牌卡媒体资产</label>
-                <select class="control" id="mediaMode">
-                  <option value="rename" selected>重命名为 SPU-序号</option>
-                  <option value="keep">保留原文件名</option>
-                </select>
-              </div>
-              <div class="field hidden">
-                <label for="fulfillmentInput">履约方式</label>
-                <select class="control" id="fulfillmentInput">
-                  <option value="">全部</option>
-                  <option value="FBA">FBA</option>
-                  <option value="FBM">FBM</option>
-                </select>
-              </div>
+            </div>
+            <div class="hidden" aria-hidden="true">
+              <input id="galleryZipName" value="LLW000573橱窗图" />
+              <input id="aPlusZipName" value="LLW000573A+" />
+              <input id="brandZipName" value="LLW000573品牌故事" />
+              <select id="mediaMode">
+                <option value="rename" selected>重命名为 SPU-序号</option>
+                <option value="keep">保留原文件名</option>
+              </select>
+              <select id="fulfillmentInput">
+                <option value="">全部</option>
+                <option value="FBA">FBA</option>
+                <option value="FBM">FBM</option>
+              </select>
             </div>
             <div class="color-workspace hidden" id="listingColorFilterPanel">
               <div class="color-workspace-head">
@@ -1218,9 +1214,6 @@
                 </div>
               </div>
               <div class="color-filter-list" id="listingColorFilters"></div>
-            </div>
-            <div class="actions">
-              <button class="btn btn-primary" id="fetchListingBtn" type="button">查询在线 Listing</button>
             </div>
             <div class="notice hidden" id="listingStatus"></div>
             <div class="notice hidden" id="asinSummary"></div>
@@ -1239,7 +1232,7 @@
                   <span class="asset-panel-title-text">主图 橱窗图 合规文件上传</span>
                   <span class="asset-panel-count" id="gallerySectionCount">0 个文件</span>
                 </span>
-                <span class="sub">按显示顺序上传,5张橱窗图最佳。</span>
+                <span class="sub">按显示顺序上传,5张橱窗图最佳</span>
               </span>
             </button>
             <div class="actions asset-panel-actions">
@@ -1256,7 +1249,7 @@
             <div class="dropzone" id="galleryDrop">
               <div>
                 <strong>点击选择文件夹或拖入</strong>
-                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色。</span>
+                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色</span>
               </div>
             </div>
             <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept="image/*" />
@@ -1275,7 +1268,7 @@
                   <span class="asset-panel-title-text">A+ 上传</span>
                   <span class="asset-panel-count" id="aPlusSectionCount">0 个文件</span>
                 </span>
-                <span class="sub">Step1：选择上传模块 Step2：检查对应模块顺序并上传文件。</span>
+                <span class="sub">Step1：选择上传模块 Step2：检查对应模块顺序并上传文件</span>
               </span>
             </button>
             <div class="actions asset-panel-actions">
@@ -1303,7 +1296,7 @@
             <div class="dropzone" id="aPlusDrop">
               <div>
                 <strong>把全部 A+ 图片和视频拖到这里</strong>
-                <span>系统按默认文件名自动分配到对应图片组；未识别或冲突文件保留给人工调整。</span>
+                <span>系统按默认文件名自动分配到对应图片组；未识别或冲突文件保留给人工调整</span>
               </div>
             </div>
             <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
@@ -1318,10 +1311,10 @@
               <span class="asset-panel-chevron" aria-hidden="true">▸</span>
               <span class="asset-panel-heading-copy">
                 <span class="asset-panel-title-row">
-                  <span class="asset-panel-title-text">品牌故事素材</span>
+                  <span class="asset-panel-title-text">品牌故事上传</span>
                   <span class="asset-panel-count" id="brandSectionCount">0 个文件</span>
                 </span>
-                <!-- <span class="sub">固定输出 `品牌故事_手机端` 和 `品牌故事_电脑端`；品牌卡媒体资产默认重命名为 SPU-序号。</span> -->
+                <!-- <span class="sub">固定输出 `品牌故事_手机端` 和 `品牌故事_电脑端`；品牌卡媒体资产默认重命名为 SPU-序号</span> -->
               </span>
             </button>
             <div class="actions asset-panel-actions">
@@ -1337,7 +1330,7 @@
             <div class="dropzone" id="brandDrop">
               <div>
                 <strong>把全部品牌故事图片拖到这里</strong>
-                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序，并为每张图生成一个品牌卡媒体资产。</span>
+                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序，并为每张图生成一个品牌卡媒体资产</span>
               </div>
             </div>
             <input class="hidden" id="brandBulkInput" type="file" multiple accept="image/*" />
@@ -1390,6 +1383,7 @@
       listings: [],
       listingGroups: [],
       selectedListingKeys: new Set(),
+      selectedListingAsinsByKey: new Map(),
       selectedListingColors: new Set(),
       expandedListingKeys: new Set(),
       shopOptions: [],
@@ -1829,11 +1823,6 @@
       { title: "颜色", getter: colorOf },
       { title: "状态", getter: statusText },
       {
-        title: "品名",
-        getter: (row) => firstText(row, ["品名", "product_name", "productName", "name"]),
-        wide: true,
-      },
-      {
         title: "分类",
         getter: (row) => firstText(row, ["分类", "category", "category_text", "categoryText"]),
         wide: true,
@@ -1876,6 +1865,7 @@
       state.listings = [];
       state.listingGroups = [];
       state.selectedListingKeys.clear();
+      state.selectedListingAsinsByKey.clear();
       state.selectedListingColors.clear();
       state.expandedListingKeys.clear();
       state.queriedSpu = "";
@@ -1893,7 +1883,7 @@
         state.selectedShops.delete(shop);
       }
       renderShopSelection();
-      resetListingResults("店铺选择已变化，请重新查询 Listing。");
+      resetListingResults("店铺选择已变化，请重新查询 Listing");
     }
 
     function renderShopOptions() {
@@ -1934,7 +1924,7 @@
       els.shopFilter.value = "";
       renderShopOptions();
       renderShopSelection();
-      resetListingResults("店铺选择已变化，请重新查询 Listing。");
+      resetListingResults("店铺选择已变化，请重新查询 Listing");
     }
 
     function shopOptionsApiUrl() {
@@ -1993,10 +1983,47 @@
       return buildListingGroups(rows);
     }
 
+    function setListingGroupAsins(group, asins) {
+      const validAsins = new Set(group.asins);
+      const nextAsins = new Set(asins.filter((asin) => validAsins.has(asin)));
+      state.selectedListingAsinsByKey.set(group.key, nextAsins);
+      if (nextAsins.size) {
+        state.selectedListingKeys.add(group.key);
+      } else {
+        state.selectedListingKeys.delete(group.key);
+      }
+    }
+
+    function selectAllListingGroupAsins(group) {
+      setListingGroupAsins(group, group.asins);
+    }
+
+    function selectedAsinsForGroup(group) {
+      if (!state.selectedListingKeys.has(group.key)) return [];
+      const selectedAsins = state.selectedListingAsinsByKey.get(group.key);
+      if (!selectedAsins) return group.asins.slice();
+      return group.asins.filter((asin) => selectedAsins.has(asin));
+    }
+
+    function selectedRowsForGroup(group) {
+      const selectedAsins = new Set(selectedAsinsForGroup(group));
+      return group.rows.filter((row) => selectedAsins.has(asinOf(row)));
+    }
+
     function selectedListingGroups() {
-      return visibleListingGroups().filter((group) =>
-        state.selectedListingKeys.has(group.key)
-      );
+      return visibleListingGroups()
+        .filter((group) => state.selectedListingKeys.has(group.key))
+        .map((group) => {
+          const asins = selectedAsinsForGroup(group);
+          const rows = selectedRowsForGroup(group);
+          return {
+            ...group,
+            asins,
+            rows,
+            sidMsku: sidMskuOfRows(rows),
+          };
+        })
+        .filter((group) => group.asins.length);
     }
 
     function applyListingColorFilter() {
@@ -2079,7 +2106,7 @@
       els.asinSummary.classList.remove("hidden");
       const groups = selectedListingGroups();
       if (!groups.length) {
-        els.asinSummary.textContent = `当前颜色筛选下共 ${visibleGroups.length} 个店铺 / 父 ASIN 组合，请选择对应数据。`;
+        els.asinSummary.textContent = `当前颜色筛选下共 ${visibleGroups.length} 个店铺 / 父 ASIN 组合，请选择对应数据`;
         return;
       }
       if (groups.length === 1) {
@@ -2141,6 +2168,10 @@
       table.className = "listing-child-table";
       const thead = document.createElement("thead");
       const headerRow = document.createElement("tr");
+      const selectHead = document.createElement("th");
+      selectHead.className = "select-cell";
+      selectHead.textContent = "选择";
+      headerRow.appendChild(selectHead);
       LISTING_CHILD_COLUMNS.forEach((column) => {
         const th = document.createElement("th");
         th.textContent = column.title;
@@ -2157,6 +2188,30 @@
         )
         .forEach((row) => {
           const tr = document.createElement("tr");
+          const rowAsin = asinOf(row);
+          const selectedAsins = new Set(selectedAsinsForGroup(group));
+          const selectCell = document.createElement("td");
+          selectCell.className = "select-cell";
+          const checkbox = document.createElement("input");
+          checkbox.className = "listing-select";
+          checkbox.type = "checkbox";
+          checkbox.checked = Boolean(rowAsin) && selectedAsins.has(rowAsin);
+          checkbox.disabled = !rowAsin;
+          checkbox.setAttribute("aria-label", `选择子 ASIN ${rowAsin || "空"}`);
+          checkbox.addEventListener("change", () => {
+            const nextAsins = new Set(selectedAsinsForGroup(group));
+            if (checkbox.checked && rowAsin) {
+              nextAsins.add(rowAsin);
+            } else {
+              nextAsins.delete(rowAsin);
+            }
+            setListingGroupAsins(group, [...nextAsins]);
+            renderListingTable();
+            renderAsinSummary();
+            renderListingSelection();
+          });
+          selectCell.appendChild(checkbox);
+          tr.appendChild(selectCell);
           LISTING_CHILD_COLUMNS.forEach((column) => {
             const td = document.createElement("td");
             const text = flattenValue(column.getter(row));
@@ -2191,19 +2246,29 @@
       const selectHead = document.createElement("th");
       selectHead.className = "select-cell";
       const selectableGroups = groups.filter((group) => group.asins.length);
-      const selectedCount = selectableGroups.filter((group) => state.selectedListingKeys.has(group.key)).length;
+      const groupSelectionStates = selectableGroups.map((group) => ({
+        group,
+        selectedAsinCount: selectedAsinsForGroup(group).length,
+      }));
+      const fullSelectedCount = groupSelectionStates.filter(({ group, selectedAsinCount }) =>
+        selectedAsinCount === group.asins.length
+      ).length;
+      const partialSelectedCount = groupSelectionStates.filter(({ group, selectedAsinCount }) =>
+        selectedAsinCount > 0 && selectedAsinCount < group.asins.length
+      ).length;
       const selectAll = document.createElement("input");
       selectAll.className = "listing-select";
       selectAll.type = "checkbox";
-      selectAll.checked = Boolean(selectableGroups.length) && selectedCount === selectableGroups.length;
-      selectAll.indeterminate = selectedCount > 0 && selectedCount < selectableGroups.length;
+      selectAll.checked = Boolean(selectableGroups.length) && fullSelectedCount === selectableGroups.length;
+      selectAll.indeterminate = partialSelectedCount > 0 || (fullSelectedCount > 0 && fullSelectedCount < selectableGroups.length);
       selectAll.disabled = !selectableGroups.length;
       selectAll.setAttribute("aria-label", "选择全部 Listing 组合");
       selectAll.addEventListener("change", () => {
         if (selectAll.checked) {
-          selectableGroups.forEach((group) => state.selectedListingKeys.add(group.key));
+          selectableGroups.forEach((group) => selectAllListingGroupAsins(group));
         } else {
           state.selectedListingKeys.clear();
+          state.selectedListingAsinsByKey.clear();
         }
         renderListingTable();
         renderAsinSummary();
@@ -2224,21 +2289,25 @@
       thead.appendChild(headRow);
       const tbody = document.createElement("tbody");
       groups.forEach((group) => {
+        const selectedAsins = selectedAsinsForGroup(group);
+        const isGroupSelected = Boolean(selectedAsins.length);
         const tr = document.createElement("tr");
-        tr.classList.toggle("selected-row", state.selectedListingKeys.has(group.key));
+        tr.classList.toggle("selected-row", isGroupSelected);
         const selectCell = document.createElement("td");
         selectCell.className = "select-cell";
         const checkbox = document.createElement("input");
         checkbox.className = "listing-select";
         checkbox.type = "checkbox";
-        checkbox.checked = state.selectedListingKeys.has(group.key);
+        checkbox.checked = Boolean(group.asins.length) && selectedAsins.length === group.asins.length;
+        checkbox.indeterminate = selectedAsins.length > 0 && selectedAsins.length < group.asins.length;
         checkbox.disabled = !group.asins.length;
         checkbox.setAttribute("aria-label", `选择 ${group.shop} ${group.parentAsin}`);
         checkbox.addEventListener("change", () => {
           if (checkbox.checked) {
-            state.selectedListingKeys.add(group.key);
+            selectAllListingGroupAsins(group);
           } else {
             state.selectedListingKeys.delete(group.key);
+            state.selectedListingAsinsByKey.delete(group.key);
           }
           renderListingTable();
           renderAsinSummary();
@@ -2353,7 +2422,7 @@
       const sku = (els.spu.value || "").trim();
       const fulfillment = els.fulfillment.value;
       if (!shops.length || !sku) {
-        setListingStatus("请先选择店铺并填写 SPU。", "warn");
+        setListingStatus("请先选择店铺并填写 SPU", "warn");
         return;
       }
 
@@ -2368,7 +2437,11 @@
         const rows = dedupeListingRows(results.flatMap((result) => result.rows));
         state.listings = rows;
         state.selectedListingColors.clear();
+        state.selectedListingAsinsByKey.clear();
         state.listingGroups = buildListingGroups(rows);
+        state.listingGroups.forEach((group) => {
+          state.selectedListingAsinsByKey.set(group.key, new Set(group.asins));
+        });
         state.queriedSpu = sku;
         const availableKeys = new Set(state.listingGroups.map((group) => group.key));
         state.selectedListingKeys.forEach((key) => {
@@ -2386,8 +2459,8 @@
         const failureText = failures.length ? `，${failures.length} 个店铺查询失败` : "";
         setListingStatus(
           rows.length
-            ? `查询完成，共 ${rows.length} 条 Listing、${state.listingGroups.length} 个店铺 / 父 ASIN 组合${failureText}。`
-            : `查询完成，但没有返回记录${failureText}。`,
+            ? `查询完成，共 ${rows.length} 条 Listing、${state.listingGroups.length} 个店铺 / 父 ASIN 组合${failureText}`
+            : `查询完成，但没有返回记录${failureText}`,
           rows.length && !failures.length ? "normal" : "warn",
         );
       } catch (error) {
@@ -2527,7 +2600,7 @@
 
     function insertAPlusComponent(type, afterId = "", renderNow = true) {
       if (state.aPlus.length >= APLUS_MAX_COMPONENTS) {
-        alert(`A+ 上传模块最多 ${APLUS_MAX_COMPONENTS} 个。最后 1 个模块建议设置高级比较表。`);
+        alert(`A+ 上传模块最多 ${APLUS_MAX_COMPONENTS} 个最后 1 个模块建议设置高级比较表`);
         if (renderNow !== false) render();
         return null;
       }
@@ -3278,7 +3351,7 @@
       if (!state.gallery.length) {
         const empty = document.createElement("div");
         empty.className = "notice warn";
-        empty.textContent = "当前没有橱窗图，请拖入完整文件夹生成颜色分组和排序。";
+        empty.textContent = "当前没有橱窗图，请拖入完整文件夹生成颜色分组和排序";
         els.galleryRules.appendChild(empty);
         return;
       }
@@ -3330,7 +3403,7 @@
       if (!components.length) {
         const empty = document.createElement("div");
         empty.className = "notice";
-        empty.textContent = "当前没有上传模块，请先添加高级单张图片、高级视频或多图轮播。";
+        empty.textContent = "当前没有上传模块，请先添加高级单张图片、高级视频或多图轮播";
         els.aPlusRules.appendChild(empty);
         return;
       }
@@ -3633,7 +3706,7 @@
       els.galleryPool.classList.toggle("warn", warnings.length > 0);
       els.galleryPool.textContent =
         `已按 ${state.gallery.length} 个颜色生成排序，共 ${result.imageCount} 张图片` +
-        (warnings.length ? `；${warnings.join("；")}` : "，全部匹配成功。");
+        (warnings.length ? `；${warnings.join("；")}` : "，全部匹配成功");
     }
 
     function renderPool() {
@@ -3651,7 +3724,7 @@
       }
       const summary = `自动分配 ${result.assigned.length}/${result.total} 个文件`;
       if (!result.unassigned.length) {
-        els.aPlusPool.textContent = `${summary}，全部匹配成功。`;
+        els.aPlusPool.textContent = `${summary}，全部匹配成功`;
         return;
       }
       const details = result.unassigned
@@ -3680,7 +3753,7 @@
         heroFiles.length < 2 || Boolean(result.ignored?.length),
       );
       els.brandPool.textContent =
-        `已生成初始排序，${heroText}；品牌卡媒体资产 ${result.mediaCount} 个${ignoredText}。`;
+        `已生成初始排序，${heroText}；品牌卡媒体资产 ${result.mediaCount} 个${ignoredText}`;
     }
 
     function renderGpsrImageStatus() {
@@ -3710,7 +3783,7 @@
       if (els.aPlusModuleLimitText) {
         els.aPlusModuleLimitText.textContent =
           reachedLimit
-            ? `已选择 ${count}/${APLUS_MAX_COMPONENTS} 个模块，已达到上限。`
+            ? `已选择 ${count}/${APLUS_MAX_COMPONENTS} 个模块，已达到上限`
             : `已选择 ${count}/${APLUS_MAX_COMPONENTS} 个模块`;
       }
       ["addAplusFull", "addAplusVideo", "addAplusCarousel"].forEach((id) => {
@@ -3843,7 +3916,7 @@
         }
       }
       if (!entries.length) {
-        alert("请先选择要打包的文件。");
+        alert("请先选择要打包的文件");
         return;
       }
       const zip = await buildZip(
@@ -4149,7 +4222,11 @@
       });
     }
 
-    async function loadTaskLog({ silent = false } = {}) {
+    let taskLogRequestPromise = null;
+    let taskLogRefreshQueued = false;
+    let taskLogInputTimer = null;
+
+    async function performTaskLogLoad({ silent = false } = {}) {
       const token = authToken();
       if (!token) {
         state.taskLog.error = "请先登录后查看任务日志";
@@ -4176,6 +4253,23 @@
       } finally {
         state.taskLog.loading = false;
         renderTaskLog();
+      }
+    }
+
+    async function loadTaskLog(options = {}) {
+      if (taskLogRequestPromise) {
+        taskLogRefreshQueued = true;
+        return taskLogRequestPromise;
+      }
+      taskLogRequestPromise = performTaskLogLoad(options);
+      try {
+        return await taskLogRequestPromise;
+      } finally {
+        taskLogRequestPromise = null;
+        if (taskLogRefreshQueued) {
+          taskLogRefreshQueued = false;
+          setTimeout(() => loadTaskLog({ silent: true }), 0);
+        }
       }
     }
 
@@ -4438,7 +4532,7 @@
       }));
 
       if (!token) {
-        setFeishuTaskStatus("请先登录后再上传到飞书任务。", "warn");
+        setFeishuTaskStatus("请先登录后再上传到飞书任务", "warn");
         return;
       }
       if (
@@ -4447,11 +4541,11 @@
           !metadata.shop || !metadata.spu || !metadata.parentAsin || !metadata.asins.length
         )
       ) {
-        setFeishuTaskStatus("请先查询 Listing，并在结果表格中选择至少一组对应数据。", "warn");
+        setFeishuTaskStatus("请先查询 Listing，并在结果表格中选择至少一组对应数据", "warn");
         return;
       }
       if (spu !== state.queriedSpu) {
-        setFeishuTaskStatus("SPU 已变化，请重新查询并选择 Listing。", "warn");
+        setFeishuTaskStatus("SPU 已变化，请重新查询并选择 Listing", "warn");
         return;
       }
       const galleryValidationErrors = currentGalleryValidationErrors();
@@ -4471,7 +4565,7 @@
         return;
       }
       if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !gpsrImage) {
-        setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件。", "warn");
+        setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件", "warn");
         return;
       }
 
@@ -4521,8 +4615,8 @@
         } else {
           setFeishuTaskStatus(
             reused
-              ? `相同内容已创建过，已复用 ${taskCount} 个飞书任务。`
-              : `文件已上传并创建 ${taskCount} 个飞书任务。`,
+              ? `相同内容已创建过，已复用 ${taskCount} 个飞书任务`
+              : `文件已上传并创建 ${taskCount} 个飞书任务`,
           );
         }
         loadTaskLog({ silent: true });
@@ -4722,11 +4816,15 @@
       els.mediaMode.addEventListener("input", render);
       els.spu.addEventListener("input", () => {
         if (state.listings.length && (els.spu.value || "").trim() !== state.queriedSpu) {
-          resetListingResults("SPU 已变化，请重新查询 Listing。");
+          resetListingResults("SPU 已变化，请重新查询 Listing");
         }
         syncZipNamesWithSpu();
         render();
-        loadTaskLog({ silent: true });
+        clearTimeout(taskLogInputTimer);
+        taskLogInputTimer = setTimeout(
+          () => loadTaskLog({ silent: true }),
+          500,
+        );
       });
       els.shopFilter.addEventListener("focus", () => setShopPickerExpanded(true));
       els.shopFilter.addEventListener("click", () => setShopPickerExpanded(true));

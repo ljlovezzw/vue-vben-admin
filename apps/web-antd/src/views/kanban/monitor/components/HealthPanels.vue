@@ -6,6 +6,7 @@ import type {
 } from '#/api/kanban/types';
 
 import { computed } from 'vue';
+
 import { Card, Table } from 'ant-design-vue';
 
 const props = defineProps<{
@@ -70,7 +71,7 @@ const categoryColumns = [
           <div
             v-for="(row, index) in funnelRows"
             :key="row.label"
-            :class="['funnel-slice', `slice-${index}`]"
+            class="funnel-slice" :class="[`slice-${index}`]"
           >
             <span class="slice-label">{{ row.label }}</span>
             <strong>{{ formatNumber(row.value) }}</strong>

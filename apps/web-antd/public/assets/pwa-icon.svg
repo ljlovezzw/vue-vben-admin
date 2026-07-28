@@ -1,11 +1,3 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="图励科技">
-  <defs>
-    <linearGradient id="pwa-bg" x1="80" x2="432" y1="56" y2="456" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#1d7afc"/>
-      <stop offset="1" stop-color="#00a77f"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="url(#pwa-bg)"/>
-  <path d="M144 144h224v64h-96v160h-64V208h-64z" fill="#fff"/>
-  <path d="M304 272h72v96h-72z" fill="#fff" opacity=".9"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="图励未来">
+  <image href="/assets/pwa-icon-full-20260728.png" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
 </svg>

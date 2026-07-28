@@ -23,8 +23,9 @@ export const overridesPreferences = defineOverridesPreferences({
     name: import.meta.env.VITE_APP_TITLE,
   },
   logo: {
-    source: '/assets/app-logo.svg',
-    sourceDark: '/assets/app-logo.svg',
+    fit: 'contain',
+    source: '/assets/app-logo-full-20260728.png',
+    sourceDark: '/assets/app-logo-full-20260728.png',
   },
   sidebar: {
     collapsed: true,
