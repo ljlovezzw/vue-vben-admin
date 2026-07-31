@@ -3,6 +3,7 @@ import type { TableColumnsType } from 'ant-design-vue';
 import type { Dayjs } from 'dayjs';
 
 import type {
+  SearchTermReportCampaignRow,
   SearchTermReportOptions,
   SearchTermReportParentAsinRow,
   SearchTermReportResult,
@@ -29,6 +30,7 @@ import {
   Form,
   Input,
   message,
+  Pagination,
   Select,
   Space,
   Spin,
@@ -43,6 +45,7 @@ import {
   createSearchTermReportTask,
   downloadSearchTermReport,
   downloadSearchTermReportChunk,
+  fetchSearchTermReportCampaigns,
   fetchSearchTermReportOptions,
   fetchSearchTermReportParentAsins,
   fetchSearchTermReportTask,
@@ -52,11 +55,14 @@ const DEFAULT_DATE_RANGE: [Dayjs, Dayjs] = [
   dayjs().subtract(29, 'day'),
   dayjs(),
 ];
+const CAMPAIGN_LOAD_DEBOUNCE_MS = 200;
 const TASK_POLL_INTERVAL_MS = 30_000;
 const STATE_CACHE_KEY = 'kanban:search-term-report:state:v1';
+const PARENT_PAGE_SIZE = 8;
 
 const loadingOptions = ref(false);
 const searching = ref(false);
+const loadingCampaigns = ref(false);
 const generating = ref(false);
 const downloading = ref(false);
 const options = ref<SearchTermReportOptions>({
@@ -65,6 +71,9 @@ const options = ref<SearchTermReportOptions>({
 });
 const parentRows = ref<SearchTermReportParentAsinRow[]>([]);
 const selectedParentAsins = ref<string[]>([]);
+const parentPage = ref(1);
+const campaignRows = ref<SearchTermReportCampaignRow[]>([]);
+const selectedCampaignIds = ref<string[]>([]);
 const result = ref<null | SearchTermReportResult>(null);
 const activeSheetKey = ref('');
 const dateRange = ref<[Dayjs, Dayjs]>(DEFAULT_DATE_RANGE);
@@ -75,6 +84,9 @@ const currentTaskId = ref('');
 const taskStatus = ref('');
 const taskError = ref('');
 let taskPollTimer: null | ReturnType<typeof setTimeout> = null;
+let campaignLoadTimer: null | ReturnType<typeof setTimeout> = null;
+let campaignRequestController: AbortController | null = null;
+let campaignRequestSerial = 0;
 const DOWNLOAD_CHUNK_SIZE = 32 * 1024;
 const DOWNLOAD_CONCURRENCY = 4;
 const DOWNLOAD_RETRIES = 2;
@@ -91,6 +103,16 @@ const shopOptions = computed(() =>
   options.value.shops.map((value) => ({ label: value, value })),
 );
 
+const campaignOptions = computed(() =>
+  campaignRows.value.map((row) => ({
+    campaignId: row.campaignId,
+    campaignName: row.campaignName,
+    label: `[${row.sponsoredType}] ${row.campaignName}`,
+    sponsoredType: row.sponsoredType,
+    value: row.campaignId,
+  })),
+);
+
 const canGenerate = computed(
   () =>
     Boolean(query.shopName.trim()) &&
@@ -102,6 +124,11 @@ const canGenerate = computed(
         Boolean(adAnalyzerDateRange.value?.[1]))) &&
     (parentRows.value.length === 0 || selectedParentAsins.value.length > 0),
 );
+
+const pagedParentRows = computed(() => {
+  const start = (parentPage.value - 1) * PARENT_PAGE_SIZE;
+  return parentRows.value.slice(start, start + PARENT_PAGE_SIZE);
+});
 
 const activeSheet = computed<null | SearchTermReportSheet>(() => {
   const sheets = result.value?.sheets ?? [];
@@ -230,6 +257,14 @@ function restoreCachedState() {
           .map((item) => String(item || ''))
           .filter(Boolean)
       : [];
+    campaignRows.value = Array.isArray(state.campaignRows)
+      ? state.campaignRows
+      : [];
+    selectedCampaignIds.value = Array.isArray(state.selectedCampaignIds)
+      ? state.selectedCampaignIds
+          .map((item) => String(item || ''))
+          .filter(Boolean)
+      : [];
     currentTaskId.value = String(state.currentTaskId || '');
     taskStatus.value = String(state.taskStatus || '');
     taskError.value = String(state.taskError || '');
@@ -260,12 +295,14 @@ function persistCachedState() {
         currentTaskId: currentTaskId.value,
         dateRange: { endDate, startDate },
         includeAdAnalyzer: includeAdAnalyzer.value,
+        campaignRows: campaignRows.value,
         parentRows: parentRows.value,
         query: {
           shopName: query.shopName,
           spu: query.spu,
         },
         selectedParentAsins: selectedParentAsins.value,
+        selectedCampaignIds: selectedCampaignIds.value,
         taskError: taskError.value,
         taskStatus: taskStatus.value,
       }),
@@ -299,6 +336,10 @@ function formatCell(value: unknown) {
   return String(value);
 }
 
+function parentTotalText(total: number) {
+  return `共 ${total} 条`;
+}
+
 function errorText(error: unknown) {
   if (error && typeof error === 'object') {
     const payload = error as Record<string, any>;
@@ -323,6 +364,9 @@ function selectParent(row: SearchTermReportParentAsinRow) {
   selectedParentAsins.value = selectedParentAsins.value.includes(parent)
     ? selectedParentAsins.value.filter((item) => item !== parent)
     : [...selectedParentAsins.value, parent];
+  selectedCampaignIds.value = [];
+  resetResultState();
+  scheduleLoadCampaigns();
 }
 
 function clearTaskPoll() {
@@ -342,8 +386,92 @@ function resetResultState() {
 }
 
 function resetCandidateState() {
+  clearCampaignLoad();
+  campaignRequestSerial += 1;
+  loadingCampaigns.value = false;
   parentRows.value = [];
   selectedParentAsins.value = [];
+  campaignRows.value = [];
+  selectedCampaignIds.value = [];
+  resetResultState();
+}
+
+function clearCampaignLoad() {
+  if (campaignLoadTimer) {
+    clearTimeout(campaignLoadTimer);
+    campaignLoadTimer = null;
+  }
+  campaignRequestController?.abort();
+  campaignRequestController = null;
+}
+
+function scheduleLoadCampaigns() {
+  if (campaignLoadTimer) {
+    clearTimeout(campaignLoadTimer);
+  }
+  campaignRequestController?.abort();
+  campaignLoadTimer = setTimeout(() => {
+    campaignLoadTimer = null;
+    void loadCampaigns();
+  }, CAMPAIGN_LOAD_DEBOUNCE_MS);
+}
+
+async function loadCampaigns() {
+  if (campaignLoadTimer) {
+    clearTimeout(campaignLoadTimer);
+    campaignLoadTimer = null;
+  }
+  campaignRequestController?.abort();
+  campaignRequestController = null;
+  const requestSerial = ++campaignRequestSerial;
+  const shopName = query.shopName.trim();
+  const spu = query.spu.trim();
+  const parentAsins = [...selectedParentAsins.value];
+  campaignRows.value = [];
+  if (!shopName || !spu || parentAsins.length === 0) {
+    selectedCampaignIds.value = [];
+    return;
+  }
+  const controller = new AbortController();
+  campaignRequestController = controller;
+  loadingCampaigns.value = true;
+  try {
+    const data = await fetchSearchTermReportCampaigns(
+      {
+        parentAsins: parentAsins.join(','),
+        shopName,
+        spu,
+      },
+      controller.signal,
+    );
+    if (
+      requestSerial !== campaignRequestSerial ||
+      shopName !== query.shopName.trim() ||
+      spu !== query.spu.trim() ||
+      parentAsins.join(',') !== selectedParentAsins.value.join(',')
+    ) {
+      return;
+    }
+    campaignRows.value = data.rows;
+    const validIds = new Set(data.rows.map((row) => row.campaignId));
+    selectedCampaignIds.value = selectedCampaignIds.value.filter((value) =>
+      validIds.has(value),
+    );
+  } catch (error) {
+    if (!controller.signal.aborted && requestSerial === campaignRequestSerial) {
+      message.error(`查询广告活动失败：${errorText(error)}`);
+    }
+  } finally {
+    if (requestSerial === campaignRequestSerial) {
+      loadingCampaigns.value = false;
+    }
+    if (campaignRequestController === controller) {
+      campaignRequestController = null;
+    }
+  }
+}
+
+function handleCampaignChange() {
   resetResultState();
 }
 
@@ -369,8 +497,11 @@ async function searchParentAsins() {
     return;
   }
   searching.value = true;
+  parentPage.value = 1;
   selectedParentAsins.value = [];
   parentRows.value = [];
+  campaignRows.value = [];
+  selectedCampaignIds.value = [];
   resetResultState();
   try {
     const data = await fetchSearchTermReportParentAsins({
@@ -383,6 +514,7 @@ async function searchParentAsins() {
         ? [data.rows[0].parentAsin]
         : [];
     }
+    await loadCampaigns();
     if (data.rows.length === 0) {
       message.warning('未找到该店铺 + SPU 对应的父ASIN');
     }
@@ -421,6 +553,8 @@ async function generateReport() {
       adAnalyzerEndDate: includeAdAnalyzer.value ? adDate.endDate : null,
       adAnalyzerSearchField: adAnalyzerSearchField.value,
       adAnalyzerStartDate: includeAdAnalyzer.value ? adDate.startDate : null,
+      campaignId: selectedCampaignIds.value[0] || null,
+      campaignIds: selectedCampaignIds.value,
       endDate,
       includeAdAnalyzer: includeAdAnalyzer.value,
       parentAsin: selectedParentAsins.value[0] || null,
@@ -459,6 +593,7 @@ function handleTaskStatus(task: SearchTermReportTask) {
     } else {
       selectedParentAsins.value = [];
     }
+    selectedCampaignIds.value = task.result.campaignIds ?? [];
     activeSheetKey.value = task.result.sheets[0]?.key ?? '';
     generating.value = false;
     message.success('搜索词报告已生成');
@@ -600,10 +735,12 @@ watch(
     dateEnd: formattedDateRange().endDate,
     dateStart: formattedDateRange().startDate,
     includeAdAnalyzer: includeAdAnalyzer.value,
+    campaignRows: campaignRows.value,
     parentRows: parentRows.value,
     queryShopName: query.shopName,
     querySpu: query.spu,
     selectedParentAsins: selectedParentAsins.value,
+    selectedCampaignIds: selectedCampaignIds.value,
     taskError: taskError.value,
     taskStatus: taskStatus.value,
   }),
@@ -619,7 +756,10 @@ onMounted(() => {
     pollTaskStatus(currentTaskId.value);
   }
 });
-onBeforeUnmount(clearTaskPoll);
+onBeforeUnmount(() => {
+  clearTaskPoll();
+  clearCampaignLoad();
+});
 </script>
 
 <template>
@@ -629,19 +769,6 @@ onBeforeUnmount(clearTaskPoll);
         <h1>搜索词报告词库</h1>
         <p>按店铺、SPU、父ASIN 和日期范围生成搜索词报告 Excel。</p>
       </div>
-      <Space>
-        <Button :loading="searching" @click="searchParentAsins">
-          查询父ASIN
-        </Button>
-        <Button
-          :disabled="!canGenerate"
-          :loading="generating"
-          type="primary"
-          @click="generateReport"
-        >
-          生成搜索词报告
-        </Button>
-      </Space>
     </section>
 
     <Spin :spinning="loadingOptions">
@@ -687,6 +814,51 @@ onBeforeUnmount(clearTaskPoll);
             >
               {{ preset.label }}
             </Button>
+            <Button
+              class="parent-search-button"
+              :loading="searching"
+              type="primary"
+              @click="searchParentAsins"
+            >
+              查询父ASIN
+            </Button>
+          </div>
+          <div class="campaign-filter-row">
+            <Form.Item label="广告活动（可选）">
+              <Select
+                v-model:value="selectedCampaignIds"
+                :disabled="selectedParentAsins.length === 0"
+                :loading="loadingCampaigns"
+                max-tag-count="responsive"
+                :max-tag-text-length="28"
+                :options="campaignOptions"
+                allow-clear
+                mode="multiple"
+                option-filter-prop="label"
+                placeholder="不选择表示全部广告活动"
+                show-search
+                @change="handleCampaignChange"
+              >
+                <template #option="{ campaignId, campaignName, sponsoredType }">
+                  <div class="campaign-option">
+                    <Tag :color="sponsoredType === 'SP' ? 'blue' : 'cyan'">
+                      {{ sponsoredType }}
+                    </Tag>
+                    <span class="campaign-option-name">{{ campaignName }}</span>
+                    <span class="campaign-option-id">{{ campaignId }}</span>
+                  </div>
+                </template>
+              </Select>
+            </Form.Item>
+            <span class="campaign-filter-summary">
+              {{
+                selectedCampaignIds.length > 0
+                  ? `已选择 ${selectedCampaignIds.length} / ${campaignRows.length} 个活动`
+                  : campaignRows.length > 0
+                    ? `当前商品共 ${campaignRows.length} 个活动，默认查询全部`
+                    : '选择父ASIN后加载广告活动'
+              }}
+            </span>
           </div>
           <div class="ad-analyzer-row">
             <div class="ad-analyzer-switch">
@@ -731,9 +903,9 @@ onBeforeUnmount(clearTaskPoll);
       </div>
       <Table
         :columns="parentColumns"
-        :data-source="parentRows"
+        :data-source="pagedParentRows"
         :loading="searching"
-        :pagination="{ pageSize: 8, showTotal: (total) => `共 ${total} 条` }"
+        :pagination="false"
         :row-class-name="parentRowClassName"
         :row-key="parentRowKey"
         :scroll="{ x: 1254 }"
@@ -757,6 +929,25 @@ onBeforeUnmount(clearTaskPoll);
           </template>
         </template>
       </Table>
+      <div class="parent-table-footer">
+        <Button
+          class="parent-generate-button"
+          :disabled="!canGenerate"
+          :loading="generating"
+          type="primary"
+          @click="generateReport"
+        >
+          生成搜索词报告
+        </Button>
+        <Pagination
+          v-model:current="parentPage"
+          :page-size="PARENT_PAGE_SIZE"
+          :show-size-changer="false"
+          :show-total="parentTotalText"
+          :total="parentRows.length"
+          size="small"
+        />
+      </div>
     </section>
 
     <section class="result-section">
@@ -807,6 +998,13 @@ onBeforeUnmount(clearTaskPoll);
           </Descriptions.Item>
           <Descriptions.Item label="报告日期">
             {{ result.reportDate }}
+          </Descriptions.Item>
+          <Descriptions.Item label="广告活动">
+            {{
+              result.campaignIds?.length
+                ? `${result.campaignIds.length} 个`
+                : '全部'
+            }}
           </Descriptions.Item>
           <Descriptions.Item :span="4" label="文件名">
             {{ result.fileName }}
@@ -967,6 +1165,60 @@ onBeforeUnmount(clearTaskPoll);
   color: #64748b;
 }
 
+.parent-search-button {
+  margin-left: auto;
+}
+
+.parent-table-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  margin-top: 12px;
+}
+
+.campaign-filter-row {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding-top: 10px;
+  margin-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.campaign-filter-row :deep(.ant-form-item) {
+  margin-bottom: 0;
+}
+
+.campaign-filter-summary {
+  padding-bottom: 6px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.campaign-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.campaign-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.campaign-option-id {
+  margin-left: auto;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 .ad-analyzer-row {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) 180px minmax(280px, 1fr);
@@ -1055,8 +1307,19 @@ onBeforeUnmount(clearTaskPoll);
 
 @media (max-width: 960px) {
   .ad-analyzer-row,
+  .campaign-filter-row,
   .query-grid {
     grid-template-columns: 1fr;
+  }
+
+  .campaign-filter-summary {
+    padding-bottom: 0;
+    white-space: normal;
+  }
+
+  .parent-search-button {
+    width: 100%;
+    margin-left: 0;
   }
 
   .page-head,

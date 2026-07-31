@@ -1,6 +1,8 @@
 import type {
+  AdCampaignDrilldown,
   AdMonitorFilters,
   AdMonitorOverview,
+  AdMonitorTrend,
   AnalyticsOverview,
   AnalyticsReportOverview,
   Asin360Overview,
@@ -25,6 +27,7 @@ import type {
   NetProfitOverview,
   OperationGroupPayload,
   OperationGroupRow,
+  SearchTermReportCampaignsResult,
   SearchTermReportOptions,
   SearchTermReportParentAsinsResult,
   SearchTermReportPayload,
@@ -77,6 +80,10 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
   rangePreset?: '7d' | '30d' | 'month';
   responsibles?: string[];
   startDate?: string;
+}
+
+export interface AdCampaignDrilldownParams extends AdMonitorOverviewParams {
+  responsible: string;
 }
 
 export interface AnalyticsReportParams {
@@ -208,6 +215,20 @@ export async function fetchSearchTermReportParentAsins(params: {
   });
 }
 
+export async function fetchSearchTermReportCampaigns(
+  params: {
+    parentAsins: string;
+    shopName: string;
+    spu: string;
+  },
+  signal?: AbortSignal,
+): Promise<SearchTermReportCampaignsResult> {
+  return requestClient.get('/kanban/tools/search-term-report/campaigns', {
+    params,
+    signal,
+  });
+}
+
 export async function createSearchTermReportTask(
   data: SearchTermReportPayload,
 ): Promise<SearchTermReportTask> {
@@ -300,14 +321,16 @@ export async function fetchKanbanOverview(
 
 export async function fetchAnalyticsOverview(
   params: AnalyticsOverviewParams = {},
+  signal?: AbortSignal,
 ): Promise<AnalyticsOverview> {
-  return requestClient.get('/kanban/analytics/overview', { params });
+  return requestClient.get('/kanban/analytics/overview', { params, signal });
 }
 
 export async function fetchAnalyticsReport(
   params: AnalyticsReportParams = {},
+  signal?: AbortSignal,
 ): Promise<AnalyticsReportOverview> {
-  return requestClient.get('/kanban/analytics/report', { params });
+  return requestClient.get('/kanban/analytics/report', { params, signal });
 }
 
 export async function fetchNetProfitOverview(
@@ -390,6 +413,23 @@ export async function fetchAdMonitorOverview(
   signal?: AbortSignal,
 ): Promise<AdMonitorOverview> {
   return requestClient.get('/kanban/ads/overview', { params, signal });
+}
+
+export async function fetchAdMonitorTrend(
+  params: AdMonitorOverviewParams = {},
+  signal?: AbortSignal,
+): Promise<AdMonitorTrend> {
+  return requestClient.get('/kanban/ads/trend', { params, signal });
+}
+
+export async function fetchAdCampaignDrilldown(
+  params: AdCampaignDrilldownParams,
+  signal?: AbortSignal,
+): Promise<AdCampaignDrilldown> {
+  return requestClient.get('/kanban/ads/campaign-drilldown', {
+    params,
+    signal,
+  });
 }
 
 export async function fetchTargetTrackerOverview(

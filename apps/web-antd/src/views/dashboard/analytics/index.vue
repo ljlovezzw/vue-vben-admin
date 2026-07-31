@@ -159,11 +159,16 @@ const responsibleOwnerDropdownOpen = ref(false);
 const responsibleOwnerDraftGroups = ref<string[]>([]);
 const responsibleOwnerDraftResponsibles = ref<string[]>([]);
 const activeResponsibleOwnerGroupId = ref('');
+const dashboardCommittedVersion = ref(0);
 let reportBodyScrollElement: HTMLElement | null = null;
 let reportScrollSyncing = false;
 let reportResizeSuppressClickUntil = 0;
 let dashboardAutoReloadReady = false;
 let dashboardAutoReloadTimer: null | ReturnType<typeof setTimeout> = null;
+let overviewLoadController: AbortController | null = null;
+let overviewLoadSequence = 0;
+let reportLoadController: AbortController | null = null;
+let reportLoadSequence = 0;
 let syncingDashboardQuery = false;
 const query = reactive({
   departments: [] as string[],
@@ -175,6 +180,13 @@ const query = reactive({
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   siteDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
   sites: [] as string[],
+});
+const committedDashboardFilters = ref({
+  departments: [...query.departments],
+  operationGroupIds: [...query.operationGroupIds],
+  projectTags: [...query.projectTags],
+  responsibles: [...query.responsibles],
+  sites: [...query.sites],
 });
 const reportQuery = reactive({
   countries: [] as string[],
@@ -685,18 +697,31 @@ const departmentCards = computed(() =>
     .toSorted((a, b) => b.salesQty - a.salesQty),
 );
 const productDetailBaseParams = computed(() => {
-  const dateRange = dashboardDateRangeForTables();
+  const responseQuery = overview.value?.query;
+  const committedFilters = committedDashboardFilters.value;
+  const dateRange = responseQuery
+    ? {
+        endDate: responseQuery.endDate,
+        startDate: responseQuery.startDate,
+      }
+    : dashboardDateRangeForTables();
   const hasOwnerFilter =
-    query.operationGroupIds.length > 0 || query.responsibles.length > 0;
+    committedFilters.operationGroupIds.length > 0 ||
+    committedFilters.responsibles.length > 0;
+  const resolvedResponsibles = responseQuery?.responsibles ?? [];
   return {
     analyticsDepartmentScope: true,
-    countries: dashboardCountryLabelsFromSites(query.sites),
+    countries: dashboardCountryLabelsFromSites(committedFilters.sites),
     dateRangeType: 'custom',
-    departments: hasOwnerFilter ? [] : [...query.departments],
+    departments: hasOwnerFilter ? [] : [...committedFilters.departments],
     endDate: dateRange.endDate,
-    projectTags: [...query.projectTags],
-    responsibles: hasOwnerFilter ? dashboardResponsibleScopeForTables() : [],
-    sites: [...query.sites],
+    projectTags: [...committedFilters.projectTags],
+    responsibles: hasOwnerFilter
+      ? resolvedResponsibles.length > 0
+        ? [...resolvedResponsibles]
+        : ['__NO_ACCESS__']
+      : [],
+    sites: [...committedFilters.sites],
     startDate: dateRange.startDate,
   };
 });
@@ -756,38 +781,69 @@ function gaugeOption(rate: null | number, color: string) {
 }
 
 async function loadData() {
+  overviewLoadController?.abort();
+  const controller = new AbortController();
+  const sequence = ++overviewLoadSequence;
+  const requestedFilters = {
+    departments: [...query.departments],
+    operationGroupIds: [...query.operationGroupIds],
+    projectTags: [...query.projectTags],
+    responsibles: [...query.responsibles],
+    sites: [...query.sites],
+  };
+  overviewLoadController = controller;
   loading.value = true;
   try {
-    overview.value = await fetchAnalyticsOverview({
-      departments: query.departments,
-      granularity: query.granularity,
-      endDate: isMonthMode.value ? undefined : query.endDate,
-      operationGroupIds: query.operationGroupIds,
-      projectTags: query.projectTags,
-      responsibles: query.responsibles,
-      siteDate: query.siteDate,
-      sites: query.sites,
-      startDate: isMonthMode.value ? undefined : query.startDate,
-    });
+    const data = await fetchAnalyticsOverview(
+      {
+        departments: query.departments,
+        granularity: query.granularity,
+        endDate: isMonthMode.value ? undefined : query.endDate,
+        operationGroupIds: query.operationGroupIds,
+        projectTags: query.projectTags,
+        responsibles: query.responsibles,
+        siteDate: query.siteDate,
+        sites: query.sites,
+        startDate: isMonthMode.value ? undefined : query.startDate,
+      },
+      controller.signal,
+    );
+    if (controller.signal.aborted || sequence !== overviewLoadSequence) return;
+    overview.value = data;
+    committedDashboardFilters.value = requestedFilters;
     syncingDashboardQuery = true;
-    query.departments = overview.value.query.departments;
-    query.granularity = overview.value.query.granularity;
-    query.siteDate = overview.value.query.siteDate;
-    query.startDate = overview.value.query.startDate;
-    query.endDate = overview.value.query.endDate;
-    query.projectTags = overview.value.query.projectTags ?? [];
+    query.departments = data.query.departments;
+    query.granularity = data.query.granularity;
+    query.siteDate = data.query.siteDate;
+    query.startDate = data.query.startDate;
+    query.endDate = data.query.endDate;
+    query.projectTags = data.query.projectTags ?? [];
+    dashboardCommittedVersion.value += 1;
     void nextTick(() => {
       syncingDashboardQuery = false;
     });
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
   } finally {
-    loading.value = false;
+    if (overviewLoadController === controller) {
+      overviewLoadController = null;
+      loading.value = false;
+    }
   }
 }
 
 async function loadReportData() {
+  reportLoadController?.abort();
+  const controller = new AbortController();
+  const sequence = ++reportLoadSequence;
+  reportLoadController = controller;
   reportLoading.value = true;
   try {
-    const data = await fetchAnalyticsReport(buildReportParams());
+    const data = await fetchAnalyticsReport(
+      buildReportParams(),
+      controller.signal,
+    );
+    if (controller.signal.aborted || sequence !== reportLoadSequence) return;
     report.value = data;
     reportQuery.countries = data.query.countries ?? [];
     reportQuery.dateRangeType = normalizeReportDateRangeType(
@@ -810,8 +866,13 @@ async function loadReportData() {
       selectedReportColumns.value = defaultReportColumnKeys(data);
       reportColumnsInitialized.value = true;
     }
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
   } finally {
-    reportLoading.value = false;
+    if (reportLoadController === controller) {
+      reportLoadController = null;
+      reportLoading.value = false;
+    }
   }
 }
 
@@ -2280,6 +2341,8 @@ onBeforeUnmount(() => {
   if (dashboardAutoReloadTimer) {
     clearTimeout(dashboardAutoReloadTimer);
   }
+  overviewLoadController?.abort();
+  reportLoadController?.abort();
   stopReportColumnResize();
   if (reportBodyScrollElement) {
     reportBodyScrollElement.removeEventListener(
@@ -3352,6 +3415,7 @@ onBeforeUnmount(() => {
         :end-date="productDetailBaseParams.endDate"
         :follow-summary="adMonitorFollowSummary"
         :project-tags="query.projectTags"
+        :refresh-key="dashboardCommittedVersion"
         :responsibles="
           query.operationGroupIds.length > 0 || query.responsibles.length > 0
             ? dashboardResponsibleScopeForTables()

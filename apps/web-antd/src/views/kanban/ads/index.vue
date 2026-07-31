@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { TableColumnsType } from 'ant-design-vue';
 
+import type { AdMonitorOverviewParams } from '#/api/kanban';
 import type {
   AdMonitorOverview,
   AdMonitorStatus,
@@ -25,6 +26,9 @@ import dayjs from 'dayjs';
 
 import { fetchAdMonitorOverview } from '#/api/kanban';
 
+import AdMetricTrendPanel from './components/AdMetricTrendPanel.vue';
+import ResponsibleCampaignDrilldownModal from './components/ResponsibleCampaignDrilldownModal.vue';
+
 type RangePreset = '7d' | '30d' | 'month' | 'range';
 
 const loading = ref(false);
@@ -43,6 +47,8 @@ const query = reactive({
   departments: [] as string[],
   shops: [] as string[],
 });
+const drilldownResponsible = ref('');
+const drilldownOpen = computed(() => Boolean(drilldownResponsible.value));
 
 const rangeOptions = [
   { label: '近7天', value: '7d' },
@@ -180,6 +186,12 @@ const periodText = computed(() => {
   const period = overview.value?.period;
   return period ? `${period.startDate} 至 ${period.endDate}` : '';
 });
+const drilldownParams = computed<AdMonitorOverviewParams>(() => ({
+  countries: query.countries,
+  departments: query.departments,
+  ...requestPeriodParams(),
+  shops: query.shops,
+}));
 
 function requestPeriodParams() {
   if (rangePreset.value === 'range') {
@@ -328,6 +340,14 @@ function severityText(row: AdResponsibleRow) {
   if (row.excessSeverity >= 1.5) return '严重超标';
   if (row.excessSeverity >= 1.2) return '明显超标';
   return '轻度超标';
+}
+
+function openCampaignDrilldown(row: AdResponsibleRow) {
+  drilldownResponsible.value = row.responsible;
+}
+
+function closeCampaignDrilldown() {
+  drilldownResponsible.value = '';
 }
 
 onMounted(loadData);
@@ -594,7 +614,7 @@ onBeforeUnmount(() => {
 
           <div v-if="overview?.impactRows.length" class="impact-ranking">
             <div
-              v-for="(row, index) in overview.impactRows.slice(0, 8)"
+              v-for="(row, index) in overview.impactRows"
               :key="row.responsible"
               class="impact-row"
             >
@@ -602,7 +622,13 @@ onBeforeUnmount(() => {
                 {{ index + 1 }}
               </span>
               <div class="impact-owner">
-                <b>{{ row.responsible }}</b>
+                <button
+                  class="impact-owner-button"
+                  type="button"
+                  @click="openCampaignDrilldown(row)"
+                >
+                  {{ row.responsible }}
+                </button>
                 <span>
                   {{ severityText(row) }} · ACoAS
                   {{ formatPercent(row.acoas) }}
@@ -627,6 +653,15 @@ onBeforeUnmount(() => {
         </section>
       </div>
     </Spin>
+
+    <AdMetricTrendPanel class="trend-section" :params="drilldownParams" />
+
+    <ResponsibleCampaignDrilldownModal
+      :open="drilldownOpen"
+      :params="drilldownParams"
+      :responsible="drilldownResponsible"
+      @close="closeCampaignDrilldown"
+    />
   </div>
 </template>
 
@@ -639,6 +674,10 @@ onBeforeUnmount(() => {
     linear-gradient(#dce8f7 1px, transparent 1px),
     linear-gradient(90deg, #dce8f7 1px, transparent 1px), #edf4fb;
   background-size: 28px 28px;
+}
+
+.trend-section {
+  margin-top: 12px;
 }
 
 .page-head,
@@ -1024,6 +1063,21 @@ onBeforeUnmount(() => {
   max-height: 536px;
   padding: 4px 14px 14px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.impact-ranking::-webkit-scrollbar {
+  width: 8px;
+}
+
+.impact-ranking::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.impact-ranking::-webkit-scrollbar-track {
+  background: #f8fafc;
 }
 
 .impact-row {
@@ -1066,6 +1120,28 @@ onBeforeUnmount(() => {
 
 .impact-value b {
   color: #b42318;
+}
+
+.impact-owner-button {
+  width: fit-content;
+  padding: 0;
+  font: inherit;
+  font-weight: 800;
+  color: #175cd3;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.impact-owner-button:hover {
+  color: #004eeb;
+  text-decoration: underline;
+}
+
+.impact-owner-button:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 2px;
 }
 
 .impact-panel > :deep(.ant-empty) {

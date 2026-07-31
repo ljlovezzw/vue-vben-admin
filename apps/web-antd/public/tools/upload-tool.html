@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RPA自动上传亚马逊图片</title>
+  <title>自动传图</title>
   <style>
     :root {
       --bg: #eef3f8;
@@ -275,14 +275,81 @@
     }
 
     .shop-picker {
+      position: relative;
+      z-index: 10;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
-      overflow: hidden;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
 
-    .shop-picker:not(.is-expanded) .shop-options {
+    .shop-picker.is-expanded {
+      border-color: #8fb0ff;
+      box-shadow: 0 0 0 4px rgba(29,78,216,.10);
+    }
+
+    .shop-picker:not(.is-expanded) .shop-picker-menu {
       display: none;
+    }
+
+    .shop-picker-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: -1px;
+      left: -1px;
+      overflow: hidden;
+      border: 1px solid #8fb0ff;
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 12px 30px rgba(36, 61, 92, .18);
+    }
+
+    .shop-selection {
+      width: 100%;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 0;
+      background: #fff;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: inherit;
+      line-height: 1.55;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .shop-selection > span:first-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .shop-picker-caret {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-right: 2px solid #64748b;
+      border-bottom: 2px solid #64748b;
+      transform: rotate(45deg) translate(-1px, -1px);
+      transition: transform .15s ease;
+    }
+
+    .shop-picker.is-expanded .shop-selection {
+      color: #31537f;
+    }
+
+    .shop-picker.is-expanded .shop-picker-caret {
+      transform: rotate(225deg) translate(-1px, -1px);
+    }
+
+    .shop-selection.selected {
+      color: #0f5f54;
+      font-weight: 600;
     }
 
     .shop-filter {
@@ -299,6 +366,41 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 2px 6px;
+    }
+
+    .shop-options-action {
+      grid-column: 1 / -1;
+      position: sticky;
+      top: -6px;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: -6px -6px 4px;
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      color: #233247;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .shop-options-action:hover {
+      background: #f8fafc;
+    }
+
+    .shop-options-action-main {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+      font-weight: 600;
+    }
+
+    .shop-options-action-count {
+      color: var(--muted);
+      white-space: nowrap;
     }
 
     .shop-option {
@@ -318,6 +420,7 @@
     }
 
     .shop-option input,
+    .shop-options-action input,
     .listing-select {
       width: 15px;
       height: 15px;
@@ -333,7 +436,6 @@
       white-space: nowrap;
     }
 
-    .shop-selection,
     .listing-selection {
       min-height: 42px;
       border: 1px solid var(--line);
@@ -345,14 +447,16 @@
       line-height: 1.55;
     }
 
-    .shop-selection {
-      cursor: pointer;
-    }
-
     .listing-selection.selected {
       border-color: #a7d7c9;
       background: #f0fdf8;
       color: #0f5f54;
+    }
+
+    .listing-picker-panel {
+      position: relative;
+      z-index: 2;
+      overflow: visible;
     }
 
     .btn {
@@ -1162,7 +1266,7 @@
 
     <div class="layout">
       <main class="main">
-        <section class="panel">
+        <section class="panel listing-picker-panel">
           <div class="panel-head">
             <div>
               <h2>选择上传ASIN</h2>
@@ -1178,10 +1282,21 @@
               <div class="field shop-field">
                 <label for="shopFilterInput">选择店铺</label>
                 <div class="shop-picker" id="shopPicker">
-                  <input class="control shop-filter" id="shopFilterInput" placeholder="搜索店铺" />
-                  <div class="shop-options" id="shopOptions"></div>
+                  <button
+                    aria-controls="shopOptions"
+                    aria-expanded="false"
+                    class="shop-selection"
+                    id="shopSelection"
+                    type="button"
+                  >
+                    <span id="shopSelectionText">未选择店铺</span>
+                    <span aria-hidden="true" class="shop-picker-caret"></span>
+                  </button>
+                  <div class="shop-picker-menu">
+                    <input class="control shop-filter" id="shopFilterInput" placeholder="搜索店铺" />
+                    <div class="shop-options" id="shopOptions"></div>
+                  </div>
                 </div>
-                <div class="shop-selection" id="shopSelection">未选择店铺</div>
               </div>
               <div class="field listing-query-field">
                 <label>&nbsp;</label>
@@ -1236,7 +1351,15 @@
               </span>
             </button>
             <div class="actions asset-panel-actions">
-              <button class="btn btn-soft" id="gpsrImageButton" type="button">GPSR图片</button>
+              <button
+                aria-label="GPSR图片，仅欧洲和英国可用"
+                class="btn btn-soft"
+                id="gpsrImageButton"
+                title="仅欧洲和英国可用"
+                type="button"
+              >
+                GPSR图片
+              </button>
               <span class="mini" id="gpsrImageStatus">未选择</span>
               <button class="btn btn-danger" id="resetGallery" type="button">重置橱窗图</button>
               <button class="btn btn-primary" id="downloadGallery" type="button">
@@ -1280,6 +1403,15 @@
             </div>
           </div>
           <div class="panel-body" id="aPlusPanelBody">
+            <div class="dropzone" id="aPlusDrop">
+              <div>
+                <strong>把全部 A+ 图片和视频拖到这里</strong>
+                <span>系统按默认文件名自动分配到对应图片组；未识别或冲突文件保留给人工调整</span>
+              </div>
+            </div>
+            <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
+            <div class="notice hidden" id="aPlusPool"></div>
+            <div class="mapping-list" id="aPlusRules"></div>
             <div class="aplus-module-frame">
               <div class="aplus-module-picker">
                 <div class="aplus-module-title">
@@ -1293,15 +1425,6 @@
                 <div class="aplus-module-count" id="aPlusModuleLimitText">已选择 0/7 个模块</div>
               </div>
             </div>
-            <div class="dropzone" id="aPlusDrop">
-              <div>
-                <strong>把全部 A+ 图片和视频拖到这里</strong>
-                <span>系统按默认文件名自动分配到对应图片组；未识别或冲突文件保留给人工调整</span>
-              </div>
-            </div>
-            <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
-            <div class="notice hidden" id="aPlusPool"></div>
-            <div class="mapping-list" id="aPlusRules"></div>
           </div>
         </section>
 
@@ -1318,9 +1441,8 @@
               </span>
             </button>
             <div class="actions asset-panel-actions">
-              <button class="btn btn-soft" id="addBrandMedia" type="button">新增品牌卡媒体资产</button>
               <button class="btn btn-danger" id="resetBrand" type="button">重置品牌故事</button>
-              <button class="btn btn-green" id="downloadBrand" type="button">
+              <button class="btn btn-primary" id="downloadBrand" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                 下载
               </button>
@@ -1336,6 +1458,16 @@
             <input class="hidden" id="brandBulkInput" type="file" multiple accept="image/*" />
             <div class="notice hidden" id="brandPool"></div>
             <div class="mapping-list" id="brandRules"></div>
+            <div class="aplus-module-frame">
+              <div class="aplus-module-picker">
+                <div class="aplus-module-title">品牌卡媒体资产</div>
+                <div class="aplus-module-actions">
+                  <button class="btn btn-aplus-module" id="addBrandMedia" type="button">
+                    新增品牌卡媒体资产
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1392,6 +1524,9 @@
       shopOptionsLoading: false,
       shopOptionsLoaded: false,
       queriedSpu: "",
+      listingRequestSequence: 0,
+      activeListingRequestId: 0,
+      listingAbortController: null,
       authToken: "",
       taskLog: {
         items: [],
@@ -1417,6 +1552,7 @@
       shopFilter: document.getElementById("shopFilterInput"),
       shopOptions: document.getElementById("shopOptions"),
       shopSelection: document.getElementById("shopSelection"),
+      shopSelectionText: document.getElementById("shopSelectionText"),
       spu: document.getElementById("spuInput"),
       listingSelection: document.getElementById("listingSelection"),
       aPlusZip: document.getElementById("aPlusZipName"),
@@ -1845,9 +1981,15 @@
       return [...state.selectedShops].sort((left, right) => left.localeCompare(right, "zh-CN"));
     }
 
+    function visibleShopOptions() {
+      const keyword = (els.shopFilter.value || "").trim().toLowerCase();
+      return state.shopOptions.filter((shop) => !keyword || shop.toLowerCase().includes(keyword));
+    }
+
     function setShopPickerExpanded(expanded) {
       state.shopPickerExpanded = Boolean(expanded);
       els.shopPicker.classList.toggle("is-expanded", state.shopPickerExpanded);
+      els.shopSelection.setAttribute("aria-expanded", String(state.shopPickerExpanded));
       if (!state.shopPickerExpanded) {
         els.shopFilter.value = "";
       }
@@ -1856,12 +1998,24 @@
 
     function renderShopSelection() {
       const shops = selectedShopValues();
-      els.shopSelection.textContent = shops.length
+      const summary = shops.length
         ? `已选 ${shops.length} 个：${shops.join("，")}`
         : "未选择店铺";
+      els.shopSelectionText.textContent = summary;
+      els.shopSelection.title = summary;
+      els.shopSelection.classList.toggle("selected", shops.length > 0);
+    }
+
+    function cancelListingRequest() {
+      state.listingRequestSequence += 1;
+      state.listingAbortController?.abort();
+      state.listingAbortController = null;
+      state.activeListingRequestId = 0;
+      els.fetchListingBtn.disabled = false;
     }
 
     function resetListingResults(message = "") {
+      cancelListingRequest();
       state.listings = [];
       state.listingGroups = [];
       state.selectedListingKeys.clear();
@@ -1876,20 +2030,31 @@
       if (message) setListingStatus(message);
     }
 
-    function selectShop(shop, checked) {
-      if (checked) {
-        state.selectedShops.add(shop);
-      } else {
-        state.selectedShops.delete(shop);
-      }
+    function applyShopSelection(shops, checked) {
+      let changed = false;
+      shops.forEach((shop) => {
+        if (checked) {
+          if (!state.selectedShops.has(shop)) {
+            state.selectedShops.add(shop);
+            changed = true;
+          }
+        } else if (state.selectedShops.delete(shop)) {
+          changed = true;
+        }
+      });
+      if (!changed) return;
       renderShopSelection();
+      renderShopOptions();
       resetListingResults("店铺选择已变化，请重新查询 Listing");
+    }
+
+    function selectShop(shop, checked) {
+      applyShopSelection([shop], checked);
     }
 
     function renderShopOptions() {
       els.shopPicker.classList.toggle("is-expanded", state.shopPickerExpanded);
-      const keyword = (els.shopFilter.value || "").trim().toLowerCase();
-      const options = state.shopOptions.filter((shop) => !keyword || shop.toLowerCase().includes(keyword));
+      const options = visibleShopOptions();
       els.shopOptions.innerHTML = "";
       if (!options.length) {
         const empty = document.createElement("div");
@@ -1898,6 +2063,28 @@
         els.shopOptions.appendChild(empty);
         return;
       }
+      const selectedVisibleCount = options.filter((shop) => state.selectedShops.has(shop)).length;
+      const allVisibleSelected = selectedVisibleCount === options.length;
+      const action = document.createElement("label");
+      action.className = "shop-options-action";
+      action.title = allVisibleSelected ? "取消全选当前筛选结果" : "全选当前筛选结果";
+      const actionMain = document.createElement("span");
+      actionMain.className = "shop-options-action-main";
+      const actionCheckbox = document.createElement("input");
+      actionCheckbox.type = "checkbox";
+      actionCheckbox.checked = allVisibleSelected;
+      actionCheckbox.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
+      actionCheckbox.addEventListener("change", () => {
+        applyShopSelection(options, actionCheckbox.checked);
+      });
+      const actionText = document.createElement("span");
+      actionText.textContent = allVisibleSelected ? "取消全选当前筛选" : "全选当前筛选";
+      const actionCount = document.createElement("span");
+      actionCount.className = "shop-options-action-count";
+      actionCount.textContent = `${selectedVisibleCount}/${options.length}`;
+      actionMain.append(actionCheckbox, actionText);
+      action.append(actionMain, actionCount);
+      els.shopOptions.appendChild(action);
       options.forEach((shop) => {
         const label = document.createElement("label");
         label.className = "shop-option";
@@ -2361,7 +2548,7 @@
       els.listingTableWrap.classList.remove("hidden");
     }
 
-    async function fetchListingForShop(shop, sku, fulfillment, token) {
+    async function fetchListingForShop(shop, sku, fulfillment, token, signal) {
       const body = {
         siteName: shop,
         search_field: "local_sku",
@@ -2377,22 +2564,34 @@
         method: "POST",
         headers,
         body: JSON.stringify(body),
+        signal,
       });
       const payload = await readJsonResponse(response);
       return extractRows(payload).map((row) => ({ ...row, _queriedShop: shop }));
     }
 
-    async function fetchListingsWithLimit(shops, sku, fulfillment, token, concurrency = 3) {
+    async function fetchListingsWithLimit(
+      shops,
+      sku,
+      fulfillment,
+      token,
+      signal,
+      concurrency = 3,
+    ) {
       const results = new Array(shops.length);
       let cursor = 0;
       async function worker() {
-        while (cursor < shops.length) {
+        while (cursor < shops.length && !signal.aborted) {
           const index = cursor;
           cursor += 1;
           const shop = shops[index];
           try {
-            results[index] = { rows: await fetchListingForShop(shop, sku, fulfillment, token), shop };
+            results[index] = {
+              rows: await fetchListingForShop(shop, sku, fulfillment, token, signal),
+              shop,
+            };
           } catch (error) {
+            if (error.name === "AbortError") throw error;
             results[index] = { error, rows: [], shop };
           }
         }
@@ -2426,10 +2625,22 @@
         return;
       }
 
+      state.listingAbortController?.abort();
+      const requestId = ++state.listingRequestSequence;
+      const abortController = new AbortController();
+      state.activeListingRequestId = requestId;
+      state.listingAbortController = abortController;
       els.fetchListingBtn.disabled = true;
       setListingStatus(`正在查询 ${shops.length} 个店铺的在线 Listing...`);
       try {
-        const results = await fetchListingsWithLimit(shops, sku, fulfillment, authToken());
+        const results = await fetchListingsWithLimit(
+          shops,
+          sku,
+          fulfillment,
+          authToken(),
+          abortController.signal,
+        );
+        if (state.activeListingRequestId !== requestId) return;
         const failures = results.filter((result) => result.error);
         if (failures.length === results.length) {
           throw new Error(failures.map((result) => `${result.shop}: ${result.error.message}`).join("；"));
@@ -2464,10 +2675,20 @@
           rows.length && !failures.length ? "normal" : "warn",
         );
       } catch (error) {
+        if (
+          error.name === "AbortError" ||
+          state.activeListingRequestId !== requestId
+        ) {
+          return;
+        }
         resetListingResults();
         setListingStatus(`查询失败：${error.message}`, "warn");
       } finally {
-        els.fetchListingBtn.disabled = false;
+        if (state.activeListingRequestId === requestId) {
+          state.activeListingRequestId = 0;
+          state.listingAbortController = null;
+          els.fetchListingBtn.disabled = false;
+        }
       }
     }
 
@@ -4815,7 +5036,10 @@
       });
       els.mediaMode.addEventListener("input", render);
       els.spu.addEventListener("input", () => {
-        if (state.listings.length && (els.spu.value || "").trim() !== state.queriedSpu) {
+        if (
+          (state.listings.length || state.activeListingRequestId) &&
+          (els.spu.value || "").trim() !== state.queriedSpu
+        ) {
           resetListingResults("SPU 已变化，请重新查询 Listing");
         }
         syncZipNamesWithSpu();
@@ -4840,14 +5064,13 @@
         addTypedShop();
       });
       els.shopSelection.addEventListener("click", () => {
-        setShopPickerExpanded(true);
-        els.shopFilter.focus();
+        setShopPickerExpanded(!state.shopPickerExpanded);
+        if (state.shopPickerExpanded) {
+          els.shopFilter.focus();
+        }
       });
       document.addEventListener("click", (event) => {
-        if (
-          els.shopPicker.contains(event.target) ||
-          els.shopSelection.contains(event.target)
-        ) {
+        if (els.shopPicker.contains(event.target)) {
           return;
         }
         if (state.shopPickerExpanded) {

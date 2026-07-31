@@ -439,10 +439,31 @@ export interface SearchTermReportParentAsinsResult {
   rows: SearchTermReportParentAsinRow[];
 }
 
+export interface SearchTermReportCampaignRow {
+  adGroupCount: number;
+  campaignId: string;
+  campaignName: string;
+  parentAsinList: string;
+  sponsoredType: string;
+  spuList: string;
+  updatedAt: string;
+}
+
+export interface SearchTermReportCampaignsResult {
+  query: {
+    parentAsins: string[];
+    shopName: string;
+    spu: string;
+  };
+  rows: SearchTermReportCampaignRow[];
+}
+
 export interface SearchTermReportPayload {
   adAnalyzerEndDate?: null | string;
   adAnalyzerSearchField?: 'asin' | 'msku';
   adAnalyzerStartDate?: null | string;
+  campaignId?: null | string;
+  campaignIds?: string[];
   endDate: string;
   includeAdAnalyzer?: boolean;
   parentAsin?: null | string;
@@ -461,6 +482,7 @@ export interface SearchTermReportSheet {
 }
 
 export interface SearchTermReportResult {
+  campaignIds?: string[];
   downloadUrl: string;
   extraFiles?: SearchTermReportExtraFile[];
   fileName: string;
@@ -643,6 +665,92 @@ export interface AdMonitorOverview {
   period: AdMonitorPeriod;
   responsibleRows: AdResponsibleRow[];
   summary: AdMonitorSummary;
+}
+
+export interface AdCampaignDrilldownRow {
+  acoas: null | number;
+  acoasChangePp: number;
+  acos: null | number;
+  acosChangePp: number;
+  adCvr: number;
+  adGroupCount: number;
+  adOrders: number;
+  adSales: number;
+  adSalesChange: number;
+  adSalesChangeRate: number;
+  adSpend: number;
+  adSpendChange: number;
+  adSpendChangeRate: number;
+  adUnits: number;
+  adUnitsChange: number;
+  adUnitsChangeRate: number;
+  allocatedExcessSpend: number;
+  campaignId: string;
+  campaignName: string;
+  clicks: number;
+  country: string;
+  cvrChangePp: number;
+  excessContribution: number;
+  parentAsin: string;
+  poorReasons: string[];
+  previousAcoas: null | number;
+  previousAcos: null | number;
+  previousAdCvr: number;
+  previousAdSales: number;
+  previousAdSpend: number;
+  previousAdUnits: number;
+  previousSalesAmount: number;
+  salesAmount: number;
+  shop: string;
+  sponsoredType: string;
+  spu: string;
+  status: AdMonitorStatus;
+}
+
+export interface AdCampaignDrilldown {
+  campaignAdSpend: number;
+  dataUpdatedAt: string;
+  department: string;
+  listedExcessSpend: number;
+  period: AdMonitorPeriod;
+  qualifiedCampaignCount: number;
+  responsible: string;
+  responsibleAcoas: number;
+  responsibleExcessSpend: number;
+  rows: AdCampaignDrilldownRow[];
+  targetAcoas: number;
+  totalCampaignCount: number;
+}
+
+export interface AdTrendMetrics {
+  acos: number;
+  adOrders: number;
+  adSales: number;
+  adUnitPrice: number;
+  adUnits: number;
+  clicks: number;
+  cpa: number;
+  cpc: number;
+  ctr: number;
+  cvr: number;
+  directOrders: number;
+  directSales: number;
+  impressions: number;
+  indirectOrders: number;
+  indirectUnits: number;
+  roas: number;
+  spend: number;
+}
+
+export interface AdTrendPoint extends AdTrendMetrics {
+  date: string;
+}
+
+export interface AdMonitorTrend {
+  dataUpdatedAt: string;
+  period: AdMonitorPeriod;
+  rows: AdTrendPoint[];
+  summary: AdTrendMetrics;
 }
 
 export interface AnalyticsFilters {

@@ -3,6 +3,7 @@ import type { TableColumnsType } from 'ant-design-vue';
 
 import type { AdMonitorFollowSummary } from './compact-ad-monitor-summary';
 
+import type { AdMonitorOverviewParams } from '#/api/kanban';
 import type {
   AdMonitorOverview,
   AdMonitorStatus,
@@ -37,6 +38,8 @@ import dayjs from 'dayjs';
 
 import { fetchAdMonitorOverview } from '#/api/kanban';
 
+import AdMetricTrendPanel from '../../../kanban/ads/components/AdMetricTrendPanel.vue';
+import ResponsibleCampaignDrilldownModal from '../../../kanban/ads/components/ResponsibleCampaignDrilldownModal.vue';
 import { mergeAdMonitorFollowSummary } from './compact-ad-monitor-summary';
 
 type PeriodMode = '7d' | '30d' | 'follow' | 'month' | 'range';
@@ -48,6 +51,7 @@ const props = withDefaults(
     endDate?: string;
     followSummary?: AdMonitorFollowSummary | null;
     projectTags?: string[];
+    refreshKey?: number;
     responsibles?: string[];
     startDate?: string;
   }>(),
@@ -57,6 +61,7 @@ const props = withDefaults(
     endDate: '',
     followSummary: null,
     projectTags: () => [],
+    refreshKey: 0,
     responsibles: () => [],
     startDate: '',
   },
@@ -72,6 +77,7 @@ const dateRange = ref<[string, string]>([
 const query = reactive({
   shops: [] as string[],
 });
+const drilldownResponsible = ref('');
 let loadController: AbortController | null = null;
 let loadTimer: ReturnType<typeof setTimeout> | undefined;
 let activeLoadKey = '';
@@ -159,6 +165,26 @@ const shopOptions = computed(() =>
     value: shop,
   })),
 );
+const drilldownOpen = computed(() => Boolean(drilldownResponsible.value));
+const drilldownParams = computed<AdMonitorOverviewParams>(() => ({
+  countries: [...props.countries],
+  departments: [...props.departments],
+  ...requestPeriodParams(),
+  projectTags: [...props.projectTags],
+  responsibles: [...props.responsibles],
+  shops: [...query.shops],
+}));
+const trendParams = computed<AdMonitorOverviewParams>(() => {
+  const params = drilldownParams.value;
+  if (!params.endDate || params.startDate !== params.endDate) {
+    return params;
+  }
+  return {
+    ...params,
+    rangePreset: '7d',
+    startDate: dayjs(params.endDate).subtract(6, 'day').format('YYYY-MM-DD'),
+  };
+});
 
 function requestPeriodParams() {
   if (periodMode.value === 'follow') {
@@ -306,29 +332,27 @@ function statusFor(row: { status?: AdMonitorStatus }) {
   return statusMeta[row.status ?? 'flat'];
 }
 
+function openCampaignDrilldown(row: { responsible?: string }) {
+  drilldownResponsible.value = String(row.responsible || '').trim();
+}
+
+function closeCampaignDrilldown() {
+  drilldownResponsible.value = '';
+}
+
 watch(
-  () => [
-    props.countries.join('|'),
-    props.departments.join('|'),
-    props.projectTags.join('|'),
-    props.responsibles.join('|'),
-  ],
+  () => props.refreshKey,
   () => {
     query.shops = [];
     scheduleLoadData();
   },
 );
 
-watch(
-  () => [props.endDate, props.startDate],
-  () => {
-    if (periodMode.value === 'follow') {
-      scheduleLoadData();
-    }
-  },
-);
-
-onMounted(loadData);
+onMounted(() => {
+  if (props.refreshKey > 0) {
+    scheduleLoadData();
+  }
+});
 onBeforeUnmount(() => {
   if (loadTimer) clearTimeout(loadTimer);
   loadController?.abort();
@@ -336,228 +360,254 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="compact-ad-monitor">
-    <header class="compact-head">
-      <div class="compact-title">
-        <div>
-          <h2>广告监控</h2>
-          <span>{{ periodText }}</span>
-        </div>
-        <div class="scope-text">
-          <span :title="departmentText">{{ departmentText }}</span>
-          <span :title="countryText">{{ countryText }}</span>
-        </div>
-        <div class="period-control">
-          <Segmented
-            v-model:value="periodMode"
-            :options="periodOptions"
-            size="small"
-            @change="handlePeriodModeChange"
-          />
-          <DatePicker.RangePicker
-            v-model:value="dateRange"
-            :allow-clear="false"
-            :disabled-date="disabledFutureDate"
-            class="custom-date-range"
-            size="small"
-            value-format="YYYY-MM-DD"
-            @change="handleDateChange"
-          />
-        </div>
-      </div>
-      <div class="compact-actions">
-        <Button
-          class="video-guide-button"
-          href="https://lx7tto3sgdg.feishu.cn/minutes/obcnzxk19sde1y6141b9ctkn"
-          rel="noopener noreferrer"
-          size="small"
-          target="_blank"
-          type="primary"
-        >
-          <ExternalLink :size="14" aria-hidden="true" />
-          <span>视频讲解</span>
-        </Button>
-        <Select
-          v-model:value="query.shops"
-          allow-clear
-          class="shop-select"
-          max-tag-count="responsive"
-          mode="multiple"
-          placeholder="全部店铺"
-          show-search
-          size="small"
-          :options="shopOptions"
-          @change="scheduleLoadData"
-        />
-        <Button v-if="query.shops.length > 0" size="small" @click="resetShops">
-          重置
-        </Button>
-        <Button :loading="loading" size="small" @click="loadData">刷新</Button>
-      </div>
-    </header>
-
-    <Spin :spinning="loading">
-      <div class="metric-strip">
-        <div class="metric-cell">
-          <span>广告总花费</span>
-          <strong>{{ formatMoney(summary?.totalSpend) }}</strong>
-          <small>
-            环比
-            <b :class="deltaClass(summary?.spendChangeRate, true)">
-              {{ formatSignedPercent(summary?.spendChangeRate) }}
-            </b>
-          </small>
-        </div>
-        <div class="metric-cell">
-          <span>广告销量 / 总销量</span>
-          <strong>
-            {{ formatInteger(summary?.adOrders) }}
-            <i>/</i>
-            {{ formatInteger(summary?.totalSalesQty) }}
-          </strong>
-          <small>广告订单占比 {{ formatPercent(summary?.adOrderShare) }}</small>
-        </div>
-        <div class="metric-cell">
-          <span>广告 CVR</span>
-          <strong>{{ formatPercent(summary?.adCvr) }}</strong>
-          <small>
-            上一周期 {{ formatPercent(summary?.previousAdCvr) }}
-            <b :class="deltaClass(summary?.cvrChangePp)">
-              {{ formatSignedPp(summary?.cvrChangePp) }}
-            </b>
-          </small>
-        </div>
-        <div class="metric-cell emphasis">
-          <span>广告占比 ACoAS</span>
-          <strong>{{ formatPercent(summary?.acoas) }}</strong>
-          <small>
-            目标 {{ formatPercent(summary?.targetAcoas) }} · 超标
-            <b :class="deltaClass(summary?.overTargetPp, true)">
-              {{ formatSignedPp(summary?.overTargetPp) }}
-            </b>
-          </small>
-        </div>
-      </div>
-
-      <div class="compact-content">
-        <div class="responsible-table">
-          <div class="content-head">
-            <strong>负责人广告表现</strong>
-            <span>
-              目标覆盖 {{ formatPercent(summary?.targetCoverage) }} · 有效超标
-              {{ formatMoney(summary?.totalExcessSpend) }}
-            </span>
+  <div class="compact-ad-monitor-stack">
+    <section class="compact-ad-monitor">
+      <header class="compact-head">
+        <div class="compact-title">
+          <div>
+            <h2>广告监控</h2>
+            <span>{{ periodText }}</span>
           </div>
-          <Table
-            bordered
-            :columns="columns"
-            :data-source="overview?.responsibleRows ?? []"
-            :pagination="false"
-            row-key="responsible"
-            :scroll="{ x: 734, y: 214 }"
+          <div class="scope-text">
+            <span :title="departmentText">{{ departmentText }}</span>
+            <span :title="countryText">{{ countryText }}</span>
+          </div>
+          <div class="period-control">
+            <Segmented
+              v-model:value="periodMode"
+              :options="periodOptions"
+              size="small"
+              @change="handlePeriodModeChange"
+            />
+            <DatePicker.RangePicker
+              v-model:value="dateRange"
+              :allow-clear="false"
+              :disabled-date="disabledFutureDate"
+              class="custom-date-range"
+              size="small"
+              value-format="YYYY-MM-DD"
+              @change="handleDateChange"
+            />
+          </div>
+        </div>
+        <div class="compact-actions">
+          <Button
+            class="video-guide-button"
+            href="https://lx7tto3sgdg.feishu.cn/minutes/obcnzxk19sde1y6141b9ctkn"
+            rel="noopener noreferrer"
             size="small"
+            target="_blank"
+            type="primary"
           >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.dataIndex === 'responsible'">
-                <div class="owner-cell">
-                  <b>{{ record.responsible }}</b>
-                  <span>{{ record.department }}</span>
-                </div>
-              </template>
-              <template v-else-if="column.dataIndex === 'adSpend'">
-                <b class="money-value">{{ formatMoney(record.adSpend) }}</b>
-              </template>
-              <template v-else-if="column.dataIndex === 'orders'">
-                <b>
-                  {{ formatInteger(record.adOrders) }}
-                  /
-                  {{ formatInteger(record.totalSalesQty) }}
-                </b>
-                <small>{{ formatPercent(record.adOrderShare) }}</small>
-              </template>
-              <template v-else-if="column.dataIndex === 'adCvr'">
-                <b>{{ formatPercent(record.adCvr) }}</b>
-                <small :class="deltaClass(record.cvrChangePp)">
-                  {{ formatSignedPp(record.cvrChangePp) }}
-                </small>
-              </template>
-              <template v-else-if="column.dataIndex === 'acoas'">
-                <b>{{ formatPercent(record.acoas) }}</b>
-                <small v-if="record.targetConfigured">
-                  目标 {{ formatPercent(record.targetAcoas) }}
-                </small>
-                <small v-else class="is-warning">未配置目标</small>
-              </template>
-              <template v-else-if="column.dataIndex === 'excessContribution'">
-                <Tooltip
-                  :title="`有效超标 ${formatMoney(record.effectiveExcessSpend)}`"
-                >
-                  <div class="contribution-cell">
-                    <Progress
-                      :percent="record.excessContribution * 100"
-                      :show-info="false"
-                      size="small"
-                      :stroke-color="contributionStroke(record)"
-                    />
-                    <b>{{ formatPercent(record.excessContribution) }}</b>
-                  </div>
-                </Tooltip>
-              </template>
-              <template v-else-if="column.dataIndex === 'status'">
-                <Tag :color="statusFor(record).color">
-                  {{ statusFor(record).symbol }} {{ statusFor(record).label }}
-                </Tag>
-              </template>
-            </template>
-            <template #emptyText>
-              <Empty
-                :image="Empty.PRESENTED_IMAGE_SIMPLE"
-                description="当前范围暂无广告数据"
-              />
-            </template>
-          </Table>
+            <ExternalLink :size="14" aria-hidden="true" />
+            <span>视频讲解</span>
+          </Button>
+          <Select
+            v-model:value="query.shops"
+            allow-clear
+            class="shop-select"
+            max-tag-count="responsive"
+            mode="multiple"
+            placeholder="全部店铺"
+            show-search
+            size="small"
+            :options="shopOptions"
+            @change="scheduleLoadData"
+          />
+          <Button
+            v-if="query.shops.length > 0"
+            size="small"
+            @click="resetShops"
+          >
+            重置
+          </Button>
+          <Button :loading="loading" size="small" @click="loadData">刷新</Button>
+        </div>
+      </header>
+
+      <AdMetricTrendPanel compact :params="trendParams" />
+
+      <Spin :spinning="loading">
+        <div class="metric-strip">
+          <div class="metric-cell">
+            <span>广告总花费</span>
+            <strong>{{ formatMoney(summary?.totalSpend) }}</strong>
+            <small>
+              环比
+              <b :class="deltaClass(summary?.spendChangeRate, true)">
+                {{ formatSignedPercent(summary?.spendChangeRate) }}
+              </b>
+            </small>
+          </div>
+          <div class="metric-cell">
+            <span>广告销量 / 总销量</span>
+            <strong>
+              {{ formatInteger(summary?.adOrders) }}
+              <i>/</i>
+              {{ formatInteger(summary?.totalSalesQty) }}
+            </strong>
+            <small>广告订单占比 {{ formatPercent(summary?.adOrderShare) }}</small>
+          </div>
+          <div class="metric-cell">
+            <span>广告 CVR</span>
+            <strong>{{ formatPercent(summary?.adCvr) }}</strong>
+            <small>
+              上一周期 {{ formatPercent(summary?.previousAdCvr) }}
+              <b :class="deltaClass(summary?.cvrChangePp)">
+                {{ formatSignedPp(summary?.cvrChangePp) }}
+              </b>
+            </small>
+          </div>
+          <div class="metric-cell emphasis">
+            <span>广告占比 ACoAS</span>
+            <strong>{{ formatPercent(summary?.acoas) }}</strong>
+            <small>
+              目标 {{ formatPercent(summary?.targetAcoas) }} · 超标
+              <b :class="deltaClass(summary?.overTargetPp, true)">
+                {{ formatSignedPp(summary?.overTargetPp) }}
+              </b>
+            </small>
+          </div>
         </div>
 
-        <aside class="impact-panel">
-          <div class="content-head">
-            <strong>超标影响</strong>
-            <span>按有效超标金额</span>
-          </div>
-          <div v-if="overview?.impactRows.length" class="impact-list">
-            <div
-              v-for="(row, index) in overview.impactRows.slice(0, 6)"
-              :key="row.responsible"
-              class="impact-row"
-            >
-              <span class="rank" :class="{ top: index < 3 }">{{
-                index + 1
-              }}</span>
-              <div>
-                <b>{{ row.responsible }}</b>
-                <small>ACoAS {{ formatPercent(row.acoas) }}</small>
-              </div>
-              <div class="impact-value">
-                <b>{{ formatMoney(row.effectiveExcessSpend) }}</b>
-                <small>
-                  影响比例 {{ formatPercent(row.excessContribution) }}
-                </small>
-              </div>
+        <div class="compact-content">
+          <div class="responsible-table">
+            <div class="content-head">
+              <strong>负责人广告表现</strong>
+              <span>
+                目标覆盖 {{ formatPercent(summary?.targetCoverage) }} · 有效超标
+                {{ formatMoney(summary?.totalExcessSpend) }}
+              </span>
             </div>
+            <Table
+              bordered
+              :columns="columns"
+              :data-source="overview?.responsibleRows ?? []"
+              :pagination="false"
+              row-key="responsible"
+              :scroll="{ x: 734, y: 214 }"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.dataIndex === 'responsible'">
+                  <div class="owner-cell">
+                    <button
+                      class="owner-drilldown-button"
+                      type="button"
+                      @click="openCampaignDrilldown(record)"
+                    >
+                      {{ record.responsible }}
+                    </button>
+                    <span>{{ record.department }}</span>
+                  </div>
+                </template>
+                <template v-else-if="column.dataIndex === 'adSpend'">
+                  <b class="money-value">{{ formatMoney(record.adSpend) }}</b>
+                </template>
+                <template v-else-if="column.dataIndex === 'orders'">
+                  <b>
+                    {{ formatInteger(record.adOrders) }}
+                    /
+                    {{ formatInteger(record.totalSalesQty) }}
+                  </b>
+                  <small>{{ formatPercent(record.adOrderShare) }}</small>
+                </template>
+                <template v-else-if="column.dataIndex === 'adCvr'">
+                  <b>{{ formatPercent(record.adCvr) }}</b>
+                  <small :class="deltaClass(record.cvrChangePp)">
+                    {{ formatSignedPp(record.cvrChangePp) }}
+                  </small>
+                </template>
+                <template v-else-if="column.dataIndex === 'acoas'">
+                  <b>{{ formatPercent(record.acoas) }}</b>
+                  <small v-if="record.targetConfigured">
+                    目标 {{ formatPercent(record.targetAcoas) }}
+                  </small>
+                  <small v-else class="is-warning">未配置目标</small>
+                </template>
+                <template v-else-if="column.dataIndex === 'excessContribution'">
+                  <Tooltip
+                    :title="`有效超标 ${formatMoney(record.effectiveExcessSpend)}`"
+                  >
+                    <div class="contribution-cell">
+                      <Progress
+                        :percent="record.excessContribution * 100"
+                        :show-info="false"
+                        size="small"
+                        :stroke-color="contributionStroke(record)"
+                      />
+                      <b>{{ formatPercent(record.excessContribution) }}</b>
+                    </div>
+                  </Tooltip>
+                </template>
+                <template v-else-if="column.dataIndex === 'status'">
+                  <Tag :color="statusFor(record).color">
+                    {{ statusFor(record).symbol }} {{ statusFor(record).label }}
+                  </Tag>
+                </template>
+              </template>
+              <template #emptyText>
+                <Empty
+                  :image="Empty.PRESENTED_IMAGE_SIMPLE"
+                  description="当前范围暂无广告数据"
+                />
+              </template>
+            </Table>
           </div>
-          <Empty
-            v-else
-            :image="Empty.PRESENTED_IMAGE_SIMPLE"
-            description="暂无超标数据"
-          />
-        </aside>
-      </div>
-    </Spin>
-  </section>
+
+          <aside class="impact-panel">
+            <div class="content-head">
+              <strong>超标影响</strong>
+              <span>点击可下钻到具体广告</span>
+            </div>
+            <div v-if="overview?.impactRows.length" class="impact-list">
+              <button
+                v-for="(row, index) in overview.impactRows"
+                :key="row.responsible"
+                class="impact-row"
+                type="button"
+                @click="openCampaignDrilldown(row)"
+              >
+                <span class="rank" :class="{ top: index < 3 }">{{
+                  index + 1
+                }}</span>
+                <div>
+                  <b>{{ row.responsible }}</b>
+                  <small>ACoAS {{ formatPercent(row.acoas) }}</small>
+                </div>
+                <div class="impact-value">
+                  <b>{{ formatMoney(row.effectiveExcessSpend) }}</b>
+                  <small>
+                    影响比例 {{ formatPercent(row.excessContribution) }}
+                  </small>
+                </div>
+              </button>
+            </div>
+            <Empty
+              v-else
+              :image="Empty.PRESENTED_IMAGE_SIMPLE"
+              description="暂无超标数据"
+            />
+          </aside>
+        </div>
+      </Spin>
+    </section>
+
+    <ResponsibleCampaignDrilldownModal
+      :open="drilldownOpen"
+      :params="drilldownParams"
+      :responsible="drilldownResponsible"
+      @close="closeCampaignDrilldown"
+    />
+  </div>
 </template>
 
 <style scoped>
-.compact-ad-monitor {
+.compact-ad-monitor-stack {
   margin-bottom: 8px;
+}
+
+.compact-ad-monitor {
   overflow: hidden;
   color: var(--analytics-text, #334155);
   background: var(--analytics-panel, #fff);
@@ -777,6 +827,27 @@ onBeforeUnmount(() => {
   color: var(--analytics-subtle, #64748b);
 }
 
+.owner-drilldown-button {
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: #175cd3;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.owner-drilldown-button:hover {
+  color: #004eeb;
+  text-decoration: underline;
+}
+
+.owner-drilldown-button:focus-visible,
+.impact-row:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: -2px;
+}
+
 .money-value {
   color: #1d4ed8;
 }
@@ -800,14 +871,45 @@ onBeforeUnmount(() => {
   max-height: 224px;
   padding: 0 10px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.impact-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.impact-list::-webkit-scrollbar-thumb {
+  background: var(--analytics-border, #cbd5e1);
+  border-radius: 4px;
+}
+
+.impact-list::-webkit-scrollbar-track {
+  background: var(--analytics-panel-muted, #f8fafc);
 }
 
 .impact-row {
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 8px;
+  width: 100%;
   min-height: 37px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
   border-bottom: 1px solid var(--analytics-border, #e2e8f0);
+}
+
+.impact-row:hover {
+  background: color-mix(
+    in srgb,
+    var(--analytics-panel-muted, #f8fafc) 82%,
+    #dbeafe
+  );
 }
 
 .impact-row > div {
