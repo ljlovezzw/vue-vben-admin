@@ -32,6 +32,12 @@ import type {
   SearchTermReportParentAsinsResult,
   SearchTermReportPayload,
   SearchTermReportTask,
+  ShippingAllocationMeta,
+  ShippingReceipt,
+  ShippingSimulationPayload,
+  ShippingSimulationResult,
+  ShippingSkuPlan,
+  ShippingWorkspaceState,
   SpuManagerFilters,
   SpuManagerOptions,
   SpuManagerOverview,
@@ -430,6 +436,72 @@ export async function fetchAdCampaignDrilldown(
     params,
     signal,
   });
+}
+
+export async function fetchShippingAllocationMeta(): Promise<ShippingAllocationMeta> {
+  return requestClient.get('/kanban/shipping/meta');
+}
+
+export async function simulateShippingAllocation(
+  data: ShippingSimulationPayload,
+): Promise<ShippingSimulationResult> {
+  return requestClient.post('/kanban/shipping/simulate', data);
+}
+
+export async function fetchShippingWorkspace(): Promise<ShippingWorkspaceState> {
+  return requestClient.get('/kanban/shipping/workspace');
+}
+
+export async function saveShippingWorkspace(
+  data: ShippingWorkspaceState,
+): Promise<ShippingWorkspaceState> {
+  return requestClient.put('/kanban/shipping/workspace', data);
+}
+
+export async function resetShippingWorkspace(): Promise<ShippingWorkspaceState> {
+  return requestClient.delete('/kanban/shipping/workspace');
+}
+
+export async function importShippingReceipts(
+  file: File,
+): Promise<ShippingReceipt[]> {
+  return requestClient.post(
+    '/kanban/shipping/import/receipts',
+    await file.arrayBuffer(),
+    {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': encodeURIComponent(file.name),
+      },
+    },
+  );
+}
+
+export async function importShippingSkuPlans(
+  file: File,
+): Promise<ShippingSkuPlan[]> {
+  return requestClient.post(
+    '/kanban/shipping/import/sku-plans',
+    await file.arrayBuffer(),
+    {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': encodeURIComponent(file.name),
+      },
+    },
+  );
+}
+
+export function downloadShippingReceiptTemplate(): Promise<Blob> {
+  return requestClient.download('/kanban/shipping/templates/receipt');
+}
+
+export function downloadShippingSkuPlanTemplate(): Promise<Blob> {
+  return requestClient.download('/kanban/shipping/templates/sku-plan');
+}
+
+export function exportShippingWorkspace(): Promise<Blob> {
+  return requestClient.download('/kanban/shipping/export');
 }
 
 export async function fetchTargetTrackerOverview(

@@ -1374,3 +1374,157 @@ export interface TargetTrackerOverview {
   topSpuRows: TargetTrackerSpuRow[];
   updatedAt: string;
 }
+
+export type ShippingMode = 'air' | 'sea' | 'truck';
+
+export interface ShippingChannelPlan {
+  code: string;
+  country: string;
+  deadline: string;
+  enabled?: boolean;
+  mode: ShippingMode;
+  name: string;
+  plannedQty: number;
+  primaryMarket?: boolean;
+  priority: number;
+  priorityLevel: 'P0' | 'P1' | 'P2';
+  rule: string;
+}
+
+export interface ShippingReceipt {
+  boxQty?: number;
+  goodQty: number;
+  note?: string;
+  receiptDate?: string;
+  receiptId: string;
+  returnedQty?: number;
+  sku: string;
+  spu?: string;
+  status?: string;
+  supplier?: string;
+  unitsPerBox?: number;
+}
+
+export interface ShippingSkuPlan {
+  channelTargets: Record<string, number>;
+  sku?: string;
+  spu?: string;
+}
+
+export interface ShippingLockedAllocation {
+  allocationId: string;
+  channelCode: string;
+  qty: number;
+  receiptId: string;
+  sku: string;
+  spu?: string;
+}
+
+export interface ShippingAllocationRules {
+  primaryCompletionRate: number;
+  ukIenThreshold: number;
+  usWaitHours: number;
+  usCartonDeadline: string;
+  usMinBoxes: number;
+  warehouseDailyCapacity: number;
+}
+
+export interface ShippingWorkspaceState extends ShippingSimulationPayload {
+  updatedAt: string;
+  version: number;
+}
+
+export interface ShippingSimulationPayload {
+  asOfDate: string;
+  channels: ShippingChannelPlan[];
+  lockedAllocations: ShippingLockedAllocation[];
+  receipts: ShippingReceipt[];
+  rules: ShippingAllocationRules;
+  skuPlans: ShippingSkuPlan[];
+}
+
+export interface ShippingAllocationRow {
+  allocationId: string;
+  channelCode: string;
+  channelName: string;
+  estimatedBoxes: null | number;
+  locked: boolean;
+  note: string;
+  qty: number;
+  receiptDate: string;
+  receiptId: string;
+  sku: string;
+  spu: string;
+  status:
+    | 'locked'
+    | 'needs_review'
+    | 'proposed'
+    | 'waiting_uk_ien'
+    | 'waiting_us_carton';
+  usedSkuPlan: boolean;
+}
+
+export interface ShippingSimulationResult {
+  allocations: ShippingAllocationRow[];
+  channels: Array<{
+    allocatedQty: number;
+    code: string;
+    completionRate: number;
+    country: string;
+    deadline: string;
+    mode: ShippingMode;
+    name: string;
+    plannedQty: number;
+    priority: number;
+    priorityLevel: 'P0' | 'P1' | 'P2';
+    remainingQty: number;
+    rule: string;
+  }>;
+  summary: {
+    balanced: boolean;
+    lockedQty: number;
+    primaryCompletionRate: number;
+    proposedQty: number;
+    totalGoodQty: number;
+    totalPlanQty: number;
+    unallocatedQty: number;
+  };
+  unallocated: Array<{
+    qty: number;
+    reason: string;
+    receiptDate: string;
+    receiptId: string;
+    sku: string;
+    spu: string;
+  }>;
+}
+
+export interface ShippingAllocationMeta {
+  businessRules: {
+    dailyRegisterFields: string[];
+    marketPriority: Array<{
+      level: string;
+      markets: string[];
+    }>;
+    monitorMilestones: Array<{
+      date: string;
+      focus: string;
+      receiptTarget: number;
+      shipmentTarget: number;
+    }>;
+    shippingDeadlines: Array<{
+      channel: string;
+      date: string;
+      market: string;
+    }>;
+  };
+  externalWritesEnabled: boolean;
+  mode: 'simulation';
+  rules: ShippingAllocationRules;
+  sourceCapabilities: Array<{
+    key: string;
+    mode: string;
+    status: string;
+  }>;
+  version: string;
+}

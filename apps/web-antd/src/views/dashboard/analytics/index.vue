@@ -717,9 +717,9 @@ const productDetailBaseParams = computed(() => {
     endDate: dateRange.endDate,
     projectTags: [...committedFilters.projectTags],
     responsibles: hasOwnerFilter
-      ? resolvedResponsibles.length > 0
+      ? (resolvedResponsibles.length > 0
         ? [...resolvedResponsibles]
-        : ['__NO_ACCESS__']
+        : ['__NO_ACCESS__'])
       : [],
     sites: [...committedFilters.sites],
     startDate: dateRange.startDate,
@@ -3313,8 +3313,15 @@ onBeforeUnmount(() => {
                   {{ item.name }} &gt;
                 </button>
                 <p>
+                  实际销售额
+                  <b :title="formatSalesMoney(item.salesAmount)">
+                    {{ formatSalesMoney(item.salesAmount) }}
+                  </b>
+                </p>
+                <p>
                   销售额完成率
                   <b
+                    v-if="item.dailyTargetSales > 0"
                     :class="
                       completionTextClass(
                         ratio(item.salesAmount, item.dailyTargetSales),
@@ -3327,23 +3334,42 @@ onBeforeUnmount(() => {
                       )
                     }}
                   </b>
+                  <b v-else class="target-missing">未设目标</b>
                 </p>
                 <p>
                   目标销售额
                   <b :title="formatSalesMoney(item.dailyTargetSales)">
-                    {{ formatSalesMoney(item.dailyTargetSales) }}
+                    {{
+                      item.dailyTargetSales > 0
+                        ? formatSalesMoney(item.dailyTargetSales)
+                        : '未设置'
+                    }}
+                  </b>
+                </p>
+                <p>
+                  实际销量
+                  <b :title="formatInteger(item.salesQty)">
+                    {{ formatInteger(item.salesQty) }}
                   </b>
                 </p>
                 <p>
                   销量完成率
-                  <b :class="completionTextClass(item.completionRate)">
+                  <b
+                    v-if="item.dailyTargetUnits > 0"
+                    :class="completionTextClass(item.completionRate)"
+                  >
                     {{ formatPercent(item.completionRate) }}
                   </b>
+                  <b v-else class="target-missing">未设目标</b>
                 </p>
                 <p>
                   目标销量
                   <b :title="formatInteger(item.dailyTargetUnits)">
-                    {{ formatInteger(item.dailyTargetUnits) }}
+                    {{
+                      item.dailyTargetUnits > 0
+                        ? formatInteger(item.dailyTargetUnits)
+                        : '未设置'
+                    }}
                   </b>
                 </p>
                 <p>
@@ -5380,6 +5406,10 @@ h2 {
   font-weight: 850;
   color: #0b63ce;
   text-align: right;
+}
+
+.responsible-grid .target-missing {
+  color: var(--analytics-subtle);
 }
 
 .group-track-body b:hover,

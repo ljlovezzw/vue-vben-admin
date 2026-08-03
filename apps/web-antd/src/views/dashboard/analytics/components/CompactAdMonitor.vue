@@ -421,7 +421,9 @@ onBeforeUnmount(() => {
           >
             重置
           </Button>
-          <Button :loading="loading" size="small" @click="loadData">刷新</Button>
+          <Button :loading="loading" size="small" @click="loadData">
+            刷新
+          </Button>
         </div>
       </header>
 

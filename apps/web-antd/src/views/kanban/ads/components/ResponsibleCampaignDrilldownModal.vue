@@ -69,7 +69,7 @@ const campaignFilters = computed(() => {
     uniqueRows.set(campaignFilterValue(row), row);
   }
   return [...uniqueRows.entries()]
-    .sort(([, left], [, right]) => {
+    .toSorted(([, left], [, right]) => {
       const nameResult = compareText(left.campaignName, right.campaignName);
       return (
         nameResult ||
@@ -90,7 +90,7 @@ const scopeFilters = computed(() => {
     uniqueRows.set(scopeFilterValue(row), row);
   }
   return [...uniqueRows.entries()]
-    .sort(([, left], [, right]) =>
+    .toSorted(([, left], [, right]) =>
       compareText(scopeFilterText(left), scopeFilterText(right)),
     )
     .map(([value, row]) => ({
@@ -556,8 +556,8 @@ onBeforeUnmount(() => controller?.abort());
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin: -2px 0 -2px 6px;
   padding: 0;
+  margin: -2px 0 -2px 6px;
   color: #175cd3;
   background: #eff6ff;
   border: 1px solid #93c5fd;

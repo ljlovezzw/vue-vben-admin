@@ -128,6 +128,7 @@ const permissionOptions = [
   { label: '新品监控', value: 'kanban:monitor' },
   { label: 'SPU管理', value: 'kanban:spus' },
   { label: '广告监控', value: 'kanban:ads' },
+  { label: '发货分配', value: 'kanban:shipping' },
   { label: '目标跟踪', value: 'kanban:targets' },
   { label: 'ASIN360', value: 'kanban:asin360' },
   { label: '配置中心', value: 'kanban:config' },
