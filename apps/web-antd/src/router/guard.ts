@@ -2,13 +2,20 @@ import type { Router } from 'vue-router';
 
 import { LOGIN_PATH } from '@vben/constants';
 import { preferences } from '@vben/preferences';
-import { useAccessStore, useUserStore } from '@vben/stores';
+import { useAccessStore, useTabbarStore, useUserStore } from '@vben/stores';
 import { startProgress, stopProgress } from '@vben/utils';
 
 import { accessRoutes, coreRouteNames } from '#/router/routes';
 import { useAuthStore } from '#/store';
 
 import { generateAccess } from './access';
+
+const WAREHOUSE_DEPARTMENT = '仓库';
+const WAREHOUSE_HOME_PATH = '/kanban/shipping';
+
+function isWarehouseDepartment(department?: string) {
+  return String(department || '').trim() === WAREHOUSE_DEPARTMENT;
+}
 
 /**
  * 通用守卫配置
@@ -85,6 +92,21 @@ function setupAccessGuard(router: Router) {
       return to;
     }
 
+    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
+    const warehouseOnly = isWarehouseDepartment(userInfo.department);
+
+    if (warehouseOnly && !accessStore.isAccessChecked) {
+      useTabbarStore().$reset();
+    }
+
+    if (
+      warehouseOnly &&
+      accessStore.isAccessChecked &&
+      to.path !== WAREHOUSE_HOME_PATH
+    ) {
+      return { path: WAREHOUSE_HOME_PATH, replace: true };
+    }
+
     // 是否已经生成过动态路由
     if (accessStore.isAccessChecked) {
       return true;
@@ -92,27 +114,33 @@ function setupAccessGuard(router: Router) {
 
     // 生成路由表
     // 当前登录用户拥有的角色标识列表
-    const userInfo = userStore.userInfo || (await authStore.fetchUserInfo());
     const userRoles = userInfo.roles ?? [];
     const accessCodes = await authStore.fetchAccessCodes();
-    const userAuthorities = [...userRoles, ...accessCodes];
+    const userAuthorities = warehouseOnly
+      ? ['kanban:shipping']
+      : [...userRoles, ...accessCodes];
+    const routes = warehouseOnly
+      ? accessRoutes.filter((route) => route.name === 'Warehouse')
+      : accessRoutes;
 
     // 生成菜单和路由
     const { accessibleMenus, accessibleRoutes } = await generateAccess({
       roles: userAuthorities,
       router,
       // 则会在菜单中显示，但是访问会被重定向到403
-      routes: accessRoutes,
+      routes,
     });
 
     // 保存菜单信息和路由信息
     accessStore.setAccessMenus(accessibleMenus);
     accessStore.setAccessRoutes(accessibleRoutes);
     accessStore.setIsAccessChecked(true);
-    const redirectPath = (from.query.redirect ??
-      (to.path === preferences.app.defaultHomePath
-        ? userInfo.homePath || preferences.app.defaultHomePath
-        : to.fullPath)) as string;
+    const redirectPath = warehouseOnly
+      ? WAREHOUSE_HOME_PATH
+      : ((from.query.redirect ??
+          (to.path === preferences.app.defaultHomePath
+            ? userInfo.homePath || preferences.app.defaultHomePath
+            : to.fullPath)) as string);
 
     return {
       ...router.resolve(decodeURIComponent(redirectPath)),

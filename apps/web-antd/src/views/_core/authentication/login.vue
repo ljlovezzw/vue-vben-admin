@@ -17,14 +17,13 @@ const authStore = useAuthStore();
 const route = useRoute();
 
 const labels = {
-  adminLogin: '\u8D85\u7EA7\u7BA1\u7406\u5458\u767B\u5F55',
+  accountLogin: '\u8D26\u53F7\u5BC6\u7801\u767B\u5F55',
   feishuLogin: '\u4F7F\u7528\u98DE\u4E66\u767B\u5F55',
   loginTitle: '\u8FD0\u8425\u770B\u677F\u767B\u5F55',
   normalUserTip:
-    '\u666E\u901A\u7528\u6237\u8BF7\u4F7F\u7528\u98DE\u4E66\u7EDF\u4E00\u767B\u5F55',
+    '\u516C\u53F8\u5458\u5DE5\u53EF\u4F7F\u7528\u98DE\u4E66\u767B\u5F55\uFF1B\u5916\u90E8\u7528\u6237\u8BF7\u4F7F\u7528\u7BA1\u7406\u5458\u5206\u914D\u7684\u8D26\u53F7\u5BC6\u7801',
   or: '\u6216',
-  usernamePlaceholder:
-    '\u8D85\u7EA7\u7BA1\u7406\u5458\u8D26\u53F7 / \u90AE\u7BB1',
+  usernamePlaceholder: '\u8D26\u53F7 / \u90AE\u7BB1',
 };
 
 const feishuLoginUrl = computed(() => {
@@ -87,7 +86,7 @@ onMounted(async () => {
     :show-register="false"
     :show-remember-me="false"
     :show-third-party-login="false"
-    :submit-button-text="labels.adminLogin"
+    :submit-button-text="labels.accountLogin"
     :sub-title="labels.normalUserTip"
     :title="labels.loginTitle"
     @submit="authStore.authLogin"

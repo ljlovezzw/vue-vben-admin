@@ -634,8 +634,11 @@ const weekCompareLabel = computed(() =>
   periodDays.value > 1 ? secondaryLabel.value : '上周这一天',
 );
 
+const HIDDEN_RESPONSIBLE_CARD_NAMES = new Set(['张雪婷', '王淳']);
+
 const allResponsibleCards = computed<ResponsibleCard[]>(() => {
   return (operations.value?.responsibleRows ?? [])
+    .filter((row) => !HIDDEN_RESPONSIBLE_CARD_NAMES.has(row.responsible.trim()))
     .map((row) => ({
       adCvr: row.adCvr ?? 0,
       adSpendRate: row.adSpendRate ?? 0,
@@ -3452,6 +3455,8 @@ onBeforeUnmount(() => {
 
       <ProductDetailTable
         :base-params="productDetailBaseParams"
+        :department-options="overview?.filters.departments ?? []"
+        :operation-group-options="overview?.filters.operationGroups ?? []"
         :responsible-options="dashboardResponsibleOptionsForChildren"
       />
 
@@ -5231,7 +5236,7 @@ h2 {
 .responsible-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  min-height: 392px;
+  min-height: 478px;
 }
 
 .responsible-heading {
@@ -5337,9 +5342,9 @@ h2 {
 .responsible-grid {
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
   gap: 8px;
-  height: 348px;
-  min-height: 348px;
-  max-height: 348px;
+  height: 430px;
+  min-height: 430px;
+  max-height: 430px;
   padding-right: 4px;
   margin-top: 8px;
   overflow-y: auto;
@@ -5349,8 +5354,8 @@ h2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  height: 344px;
-  min-height: 344px;
+  height: 426px;
+  min-height: 426px;
   padding: 10px 12px;
   background: var(--analytics-panel);
   border: 1px solid var(--analytics-border);

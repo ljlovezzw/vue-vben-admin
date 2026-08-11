@@ -51,7 +51,9 @@ interface EditableCategoryConfig {
 
 interface NewConfigUser {
   avatarColor: string;
+  department: string;
   email: string;
+  password: string;
   role: string;
   username: string;
 }
@@ -88,7 +90,9 @@ const newCategory = reactive<EditableCategoryConfig>({
 
 const newUser = reactive<NewConfigUser>({
   avatarColor: '#4F8EF7',
+  department: '',
   email: '',
+  password: '',
   role: 'operator',
   username: '',
 });
@@ -96,6 +100,7 @@ const newGroup = reactive({
   memberUserIds: [] as number[],
   name: '',
 });
+const passwordDrafts = reactive<Record<number, string>>({});
 
 const roleOptions = [
   { label: 'super', value: 'super' },
@@ -112,6 +117,18 @@ const roleDescriptions: Record<string, string> = {
   operator: '普通运营：仅可查看本人数据',
   super: '超级管理员：可查看全部数据并维护配置',
 };
+
+const WAREHOUSE_DEPARTMENT = '仓库';
+
+function isWarehouseDepartment(department?: null | string) {
+  return String(department || '').trim() === WAREHOUSE_DEPARTMENT;
+}
+
+function syncWarehousePermissions(row: ConfigUserRow) {
+  if (isWarehouseDepartment(row.department)) {
+    row.permissions = ['kanban:shipping'];
+  }
+}
 
 const statusOptions = [
   { label: '启用', value: 'active' },
@@ -164,6 +181,7 @@ const userColumns: TableColumnsType<ConfigUserRow> = [
   { dataIndex: 'username', title: '用户名', width: 140 },
   { dataIndex: 'email', title: '邮箱', width: 220 },
   { dataIndex: 'authProvider', title: '登录方式', width: 100 },
+  { dataIndex: 'password', title: '重置登录密码', width: 180 },
   { dataIndex: 'department', title: '部门', width: 150 },
   { dataIndex: 'role', title: '角色', width: 130 },
   { dataIndex: 'managedUserIds', title: '组员范围', width: 300 },
@@ -380,19 +398,31 @@ async function addUser() {
     message.warning('只有 admin 及以上角色可以新增用户');
     return;
   }
-  if (!newUser.username.trim() || !newUser.email.trim()) {
-    message.warning('用户名和邮箱不能为空');
+  if (
+    !newUser.username.trim() ||
+    !newUser.email.trim() ||
+    !newUser.department.trim()
+  ) {
+    message.warning('用户名、邮箱和部门不能为空');
+    return;
+  }
+  if (newUser.password.length < 8) {
+    message.warning('登录密码至少 8 位');
     return;
   }
   const saved = await createConfigUser({
     avatarColor: newUser.avatarColor,
+    department: newUser.department.trim(),
     email: newUser.email.trim(),
+    password: newUser.password,
     role: newUser.role,
     username: newUser.username.trim(),
   });
   overview.value?.users.unshift(saved);
   newUser.username = '';
   newUser.email = '';
+  newUser.department = '';
+  newUser.password = '';
   message.success(`${saved.username} 已创建`);
 }
 
@@ -447,6 +477,12 @@ async function saveUserAuth(row: ConfigUserRow) {
     message.warning('当前角色只能修改自己的组员范围');
     return;
   }
+  const passwordDraft = passwordDrafts[row.id] || '';
+  if (passwordDraft && passwordDraft.length < 8) {
+    message.warning('登录密码至少 8 位');
+    return;
+  }
+  syncWarehousePermissions(row);
   savingUserId.value = row.id;
   try {
     const saved = await updateConfigUserAuth(row.id, {
@@ -454,6 +490,7 @@ async function saveUserAuth(row: ConfigUserRow) {
       countryScope: row.countryScope,
       managedUserIds: canEditMembers(row) ? row.managedUserIds : [],
       permissions: row.permissions,
+      password: passwordDraft || undefined,
       role: row.role,
       status: row.status,
     });
@@ -466,6 +503,7 @@ async function saveUserAuth(row: ConfigUserRow) {
       }
     }
     message.success(`${saved.username} 权限已保存`);
+    passwordDrafts[row.id] = '';
   } finally {
     savingUserId.value = null;
   }
@@ -575,6 +613,15 @@ onMounted(loadData);
             <div class="user-form">
               <Input v-model:value="newUser.username" placeholder="用户名" />
               <Input v-model:value="newUser.email" placeholder="邮箱" />
+              <Input
+                v-model:value="newUser.department"
+                placeholder="部门（必填）"
+              />
+              <Input.Password
+                v-model:value="newUser.password"
+                autocomplete="new-password"
+                placeholder="登录密码（至少 8 位）"
+              />
               <Select v-model:value="newUser.role" :options="roleOptions" />
               <Input
                 v-model:value="newUser.avatarColor"
@@ -810,7 +857,7 @@ onMounted(loadData);
                   :data-source="filteredUsers"
                   :pagination="userPagination"
                   row-key="id"
-                  :scroll="{ x: 1980 }"
+                  :scroll="{ x: 2160 }"
                   size="small"
                 >
                   <template #bodyCell="{ column, record, text }">
@@ -824,6 +871,20 @@ onMounted(loadData);
                         v-model:value="(record as ConfigUserRow).department"
                         :disabled="!canEditAdminFields"
                         placeholder="部门"
+                        size="small"
+                        @change="
+                          syncWarehousePermissions(record as ConfigUserRow)
+                        "
+                      />
+                    </template>
+                    <template v-else-if="column.dataIndex === 'password'">
+                      <Input.Password
+                        v-model:value="
+                          passwordDrafts[(record as ConfigUserRow).id]
+                        "
+                        :disabled="!canEditAdminFields"
+                        autocomplete="new-password"
+                        placeholder="留空则不修改"
                         size="small"
                       />
                     </template>
@@ -865,13 +926,28 @@ onMounted(loadData);
                     <template v-else-if="column.dataIndex === 'permissions'">
                       <Select
                         v-model:value="(record as ConfigUserRow).permissions"
-                        :disabled="!canEditAdminFields"
+                        :disabled="
+                          !canEditAdminFields ||
+                          isWarehouseDepartment(
+                            (record as ConfigUserRow).department,
+                          )
+                        "
                         :max-tag-count="2"
                         :options="permissionOptions"
                         mode="multiple"
                         placeholder="选择可访问模块"
                         size="small"
                       />
+                      <div
+                        v-if="
+                          isWarehouseDepartment(
+                            (record as ConfigUserRow).department,
+                          )
+                        "
+                        class="role-help"
+                      >
+                        仓库部门固定仅可访问“仓库 → 发货分配”
+                      </div>
                     </template>
                     <template v-else-if="column.dataIndex === 'countryScope'">
                       <Select
@@ -908,7 +984,7 @@ onMounted(loadData);
         <Card
           v-if="canManageModules"
           class="config-card login-log-card"
-          title="飞书 / 管理员登录记录"
+          title="飞书 / 账号密码登录记录"
           :body-style="{ padding: 0 }"
         >
           <Table
@@ -1020,7 +1096,7 @@ onMounted(loadData);
 
 .user-form {
   display: grid;
-  grid-template-columns: 1fr 1.3fr 0.9fr 0.9fr auto;
+  grid-template-columns: 1fr 1.3fr 1fr 1.1fr 0.9fr 0.9fr auto;
   gap: 10px;
 }
 

@@ -4,7 +4,7 @@ const routes: RouteRecordRaw[] = [
   {
     meta: {
       icon: 'lucide:wrench',
-      order: 2,
+      order: 3,
       title: '工具',
     },
     name: 'Tools',

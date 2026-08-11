@@ -1,6 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-08-03
+更新时间：2026-08-10
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
@@ -139,9 +139,12 @@ apps/web-antd/src/
   router/
     guard.ts                    登录和动态权限路由守卫
     routes/core.ts              登录页、403、根路由
-    routes/modules/dashboard.ts 公司经营驾驶舱路由
-    routes/modules/kanban.ts    看板业务路由
+    routes/modules/dashboard.ts 公司经营驾驶舱和纯利计算路由
+    routes/modules/kanban.ts    运营看板路由
+    routes/modules/config-management.ts  SPU 和配置中心路由
     routes/modules/tools.ts     工具路由
+    routes/modules/warehouse.ts 仓库和发货分配路由
+    routes/modules/test.ts      测试功能路由
 
   store/auth.ts                 登录状态、用户信息、权限码加载
 
@@ -156,10 +159,12 @@ apps/web-antd/src/
     kanban/spus/                SPU 管理
     kanban/tools/               工具页
     kanban/config/              配置中心
+    kanban/shipping/            发货分配
+    test/ad-automation/         广告自动化建议
     kanban/shared/              页面共用辅助
 ```
 
-## 3.1 最新代码地图（2026-06-22）
+## 3.1 核心代码地图（更新至 2026-08-10）
 
 当前前端最新改动主要集中在这些文件：
 
@@ -212,7 +217,7 @@ Authorization: Bearer <accessToken>
 
 | 页面 | 路由 | 权限码 |
 | --- | --- | --- |
-| 公司经营驾驶舱 | `/analytics` | `kanban:analytics`，仅用于菜单展示 |
+| 公司经营驾驶舱 | `/analytics` | `kanban:analytics` |
 | 新品监控 | `/kanban/monitor` | `kanban:monitor` |
 | 广告监控 | `/kanban/ads` | `kanban:ads` |
 | 纯利计算 | `/net-profit`，位于概览分组 | 仅 `super` 角色 |
@@ -231,7 +236,7 @@ Authorization: Bearer <accessToken>
 - `manager`、`admin`、`super` 默认拥有全部模块权限。
 - 工具菜单属于最低权限入口，只要求用户已登录；`operator`、`leader`、`manager`、`admin`、`super` 都可见可用，不跟随 `kanban:*` 模块权限。
 - 模块可见性不代表数据全量可见；后端会按接口场景应用登录人的负责人、部门或国家范围。
-- 公司经营驾驶舱 `/analytics` 是全员可见页面，后端 `/kanban/analytics/overview` 不做模块权限码校验。`super/admin/manager` 可查看公司范围；`operator/leader` 按 `users.department` 查看所属部门全部成员，不再只看本人或直属组员，并继续受 `countryScope` 裁剪。页面上的负责人和运营组筛选只能在后端允许范围内继续缩小，前端必须以后端返回的 `filters/query` 为准。
+- 公司经营驾驶舱 `/analytics` 是默认权限页面，前端和后端都校验 `kanban:analytics`。该权限默认发给全部正常业务角色，但仍必须经过后端权限中间件。`super/admin/manager` 可查看公司范围；`operator/leader` 按 `users.department` 查看所属部门全部成员，并继续受 `countryScope` 裁剪。页面上的负责人和运营组筛选只能在后端允许范围内继续缩小，前端必须以后端返回的 `filters/query` 为准。
 
 ## 4.4 公司经营驾驶舱交互口径
 
@@ -272,6 +277,7 @@ apps\web-antd\src\api\kanban\types.ts
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail`，支持新品详情表 `dateRangeType/startDate/endDate`、国家、负责人、类目、状态、预警和站点筛选；响应包含 `query` 回显 |
 | `fetchKanbanProductDetailMeta` | `GET /kanban/monitor/product-detail/meta`，轻量返回列配置、国家候选和查询回显 |
 | `fetchKanbanProductDetailRows` | `GET /kanban/monitor/product-detail/rows`，分页返回当前页宽表、全量汇总、排序结果和精确总数 |
+| `downloadKanbanProductDetail` | `GET /kanban/monitor/product-detail/export`，按当前筛选和列配置下载完整 Excel，或下载包含主图附件与附件清单的 ZIP |
 | `fetchKanbanProductDetailFbaInventory` | `GET /kanban/monitor/product-detail/fba-inventory`，按 `spu + site` 返回当前 FBA SKU 库存弹窗数据 |
 | `fetchSpuDailyMetrics` | `GET /kanban/monitor/spu-daily` |
 | `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
@@ -341,9 +347,12 @@ src\views\dashboard\analytics\components\ProductDetailTable.vue
 - 负责人维度卡片区按独立小卡展示，桌面端使用 `auto-fit + minmax(184px, 1fr)` 并固定可滚动高度，不能用连续表格边框挤压文本；负责人姓名必须作为卡片顶部的主标题清晰展示。卡片字段按“实际值、完成率、目标值”的顺序展示实际销售额、销售额完成率、目标销售额、实际销量、销量完成率、目标销量，再展示毛利润、目标毛利、毛利完成率、毛利率、目标毛利率、毛利率完成率、FBA 可售、周转周期（月）、广告占比和广告 CVR；推广费占比和 ACoAS 不展示。广告占比公式为广告花费 / 销售额，广告 CVR 为广告订单量 / 点击。
 - 负责人缺少当前站点目标时，实际销售额、实际销量、毛利润和库存必须照常展示；销售额/销量完成率显示“未设目标”，目标销售额/目标销量显示“未设置”，不得格式化成 `0.0%` 或因此隐藏整张卡。`全站点` 目标在后端只汇总到泛欧一次，该去重规则不能被前端理解成其它站点没有实际数据。
 - 负责人面板右上角提供独立的运营组/负责人级联筛选状态，不要复用顶部筛选 Dropdown 的 open/draft 状态。该筛选下拉要通过 `getPopupContainer` 挂到 `document.body`，避免被 `responsible-panel/top-board` 网格或滚动区域裁切；弹层背景必须不透明，不能透出下方表格文字。忽略原图右侧收藏/评论/导出/告警侧栏和“每日运营完成率动态追踪”装饰字。
-- 新品详情表位于商品维度明细报表下方。表格不展示 `No.` 行号列，表头第一行按业务分组展示基础信息、销售、利润费用、广告、表现、库存；基础信息包含 `SPU`、`父ASIN`、`主图`、`店铺`、`等级`、`运营负责人`、`一级类目`、`二级分类`、`国家`、`创建时间`、`开售时间`、`上线天数` 和 `销售均价`，销售/广告/库存字段按各自业务组展示。列配置分组与表头分组保持一致。指标单元格使用左对齐填色表达占比或完成度，颜色使用更深的蓝/绿/橙/红；上线天数显示数字在前、红点在后。
+- 新品详情表位于商品维度明细报表下方。表格不展示 `No.` 行号列，表头第一行按业务分组展示基础信息、销售、利润费用、广告、表现、库存；基础信息包含 `SPU`、`父ASIN`、`主图`、`店铺`、`等级`、`运营负责人`、`一级类目`、`二级分类`、`国家`、`创建时间`、`开售时间`、`上线天数` 和 `销售均价`。等级按 SPU 读取后端每日缓存：US、CA、UK/EU 使用各自飞书产品等级，不允许跨站点兜底。销售/广告/库存字段按各自业务组展示，列配置分组与表头分组保持一致。指标单元格使用左对齐填色表达占比或完成度，颜色使用更深的蓝/绿/橙/红；上线天数显示数字在前、红点在后。
+- 新品详情表必须同时继承顶部国家与部门作用域。顶部只选一部或只选二部时，都不能展示明确属于三部的 `VIDUSSA-* / SEXYCHRM-*` 店铺；即使站点同时选择美国，也不能被 US 默认部门兜底重新纳入。后端会在负责人/站点兜底之外额外按三部标识和店铺前缀做排他过滤，前端不得丢弃 `baseParams.departments`。
+- 新品详情表筛选区分为两行并保持确认式查询：时间范围与店铺、SPU、分类放在第一行，部门、运营小组、负责人、国家和操作按钮放在第二行。店铺、部门、小组、负责人都启用搜索；分类搜索同时匹配一级和二级分类；SPU 可切换精准或模糊匹配。所有子筛选必须与顶部主筛选及登录权限取交集，不能扩大父级范围。切换顶部国家、部门或负责人后需要清理已经失效的本地店铺、部门和小组选择。
 - 左侧三个完成率环形图内部比例单独维护：ECharts gauge 只画环形，中心数字用覆盖层；图表中心下移到 `55%`，图表区域随卡片伸展，避免底部说明上方出现大块空白。
 - 新品详情表所有字段都支持点击排序，排序取指标对象的真实 `value`，不是格式化后的文本；排序由后端 `/kanban/monitor/product-detail/rows` 对完整结果排序后再分页。表格底部汇总行读取后端 `summary`，不是当前页前端本地求和。
+- 新品详情表下载调用 `/kanban/monitor/product-detail/export`，必须携带当前筛选、负责人作用域和列配置。普通下载返回 xlsx；选择附件下载返回包含 xlsx 及附件的 ZIP，不能在前端只导出当前页。
 - 新品详情表父 ASIN 展示为 Amazon 链接，按行内站点/国家映射到对应 Amazon 域名，打开新标签；无站点兜底到 `www.amazon.com`。
 
 已完成：
@@ -618,39 +627,12 @@ powershell -ExecutionPolicy Bypass -File apps/web-antd/deploy/deploy-production.
 - 配置中心增加用户筛选，并将成员范围维护与管理员权限维护拆成独立页签。
 - 根目录增加 `dev:web`、`build:web`、`preview:web` 脚本，应用级 preview 固定为 `0.0.0.0:5666`。
 
-## 8. 当前 Git 状态
+## 8. Git 协作规则
 
-截至 2026-06-02：
-
-- 前端是独立 Git 仓库。
-- 当前分支是 `main`。
-- 当前 `HEAD` 是 `b77b73f98 feat: update kanban dashboard`。
-- 仓库中存在较多已暂存修改，包含业务页面、登录、路由、配置和部分仓库清理。
-- `src\views\kanban\config\index.vue` 还有 2 行仅用于模板缩进的未暂存修改。
-- 不要执行 `git reset --hard`、`git checkout -- .` 或批量清理。
-- 继续开发时只修改任务相关文件，并先查看 `git status --short`。
-
-当前已暂存业务文件包括：
-
-```text
-apps/web-antd/.env.development
-apps/web-antd/.env.production
-apps/web-antd/src/api/core/auth.ts
-apps/web-antd/src/api/kanban/index.ts
-apps/web-antd/src/api/kanban/types.ts
-apps/web-antd/src/layouts/basic.vue
-apps/web-antd/src/router/guard.ts
-apps/web-antd/src/router/routes/core.ts
-apps/web-antd/src/router/routes/modules/dashboard.ts
-apps/web-antd/src/router/routes/modules/kanban.ts
-apps/web-antd/src/store/auth.ts
-apps/web-antd/src/views/_core/authentication/login.vue
-apps/web-antd/src/views/dashboard/analytics/index.vue
-apps/web-antd/src/views/kanban/*
-package.json
-```
-
-此外，仓库中已有一批 `.github` 和 `.changeset` 删除项。这些不是本轮文档任务产生的，不要擅自恢复或删除。
+- 前端是独立 Git 仓库，任何修改前先执行 `git status --short`。
+- 工作区可能同时存在其他开发中的改动；只提交本任务涉及的文件，不要用 `git reset --hard`、`git checkout -- .` 或批量清理覆盖他人工作。
+- 构建产物不能代替源码提交；正式发布前记录源码提交、构建时间和部署目录。
+- 文档不记录某次临时 HEAD、暂存文件清单或未提交状态，这类信息会快速失效，应在提交或发布记录中维护。
 
 ## 9. 开发验收清单
 

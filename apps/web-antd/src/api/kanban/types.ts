@@ -314,21 +314,34 @@ export interface KanbanProductDetailRow {
   site: string;
 }
 
+export interface KanbanProductDetailFilterOptions {
+  category1: string[];
+  category2: string[];
+  shops: string[];
+}
+
 export interface KanbanProductDetailOverview {
   columns: KanbanProductDetailColumn[];
   countries: string[];
+  filterOptions?: KanbanProductDetailFilterOptions;
   page: number;
   pageSize: number;
   query: {
+    categorySearch: string;
     countries: string[];
     dateRangeType: string;
     days: number;
+    departments: string[];
     endDate: string;
+    operationGroupIds: number[];
     previousEndDate: string;
     previousStartDate: string;
     projectTags: string[];
     responsibles: string[];
+    shopNames: string[];
     sites: string[];
+    spuMatchMode: 'exact' | 'fuzzy';
+    spuSearch: string;
     startDate: string;
   };
   rows: KanbanProductDetailRow[];
@@ -339,6 +352,7 @@ export interface KanbanProductDetailOverview {
 export interface KanbanProductDetailMeta {
   columns: KanbanProductDetailColumn[];
   countries: string[];
+  filterOptions: KanbanProductDetailFilterOptions;
   query: KanbanProductDetailOverview['query'];
   totalRows: number;
 }
@@ -751,6 +765,149 @@ export interface AdMonitorTrend {
   period: AdMonitorPeriod;
   rows: AdTrendPoint[];
   summary: AdTrendMetrics;
+}
+
+export type AdAutomationAction = 'decrease' | 'hold' | 'increase' | 'observe';
+
+export interface AdAutomationCampaignRow {
+  acos: number;
+  action: AdAutomationAction;
+  adGroupCount: number;
+  adjustmentPct: number;
+  aov: number;
+  campaignId: string;
+  campaignName: string;
+  clicks: number;
+  confidence: 'high' | 'low' | 'medium';
+  country: string;
+  cpc: number;
+  cvr: number;
+  breakEvenAcos: null | number;
+  effectiveTargetAcos: number;
+  confirmedInbound: number;
+  daysSupply: null | number;
+  daysSupplySource: 'fba_historical' | 'missing' | 'spu_metrics_cache';
+  fbaAvailable: number;
+  guarded: boolean;
+  inventoryReason: string;
+  inventoryStatus: string;
+  impressions: number;
+  latestFetchedAt: string;
+  latestMetricDate: string;
+  mappedSkuCount: number;
+  mappedSkus: string[];
+  mappedSpus: string[];
+  orders: number;
+  profileId: string;
+  profitEstimated: boolean;
+  profitReason: string;
+  profitStatus: string;
+  profitTargetAcos: null | number;
+  profitMonth: string;
+  reason: string;
+  sales: number;
+  serviceStatus: string;
+  skuMappingConfidence: string;
+  sponsoredType: string;
+  state: string;
+  storeName: string;
+  targetAcosSource: string;
+  targetCpc: null | number;
+  spends: number;
+  workingInbound: number;
+}
+
+export interface AdAutomationOverview {
+  filters: {
+    countries: string[];
+    shops: string[];
+    sponsoredTypes: string[];
+  };
+  pagination: { page: number; pageSize: number; total: number };
+  policy: {
+    adjustmentBounds: number[];
+    attributionLagDays: number;
+    automaticExecution: boolean;
+    minimumClicks: number;
+    minimumHourlyDays: number;
+    profitFactor: number;
+    version: string;
+  };
+  query: {
+    endDate: string;
+    page: number;
+    pageSize: number;
+    startDate: string;
+    targetAcos: number;
+  };
+  rows: AdAutomationCampaignRow[];
+  summary: {
+    decrease: number;
+    guarded: number;
+    hold: number;
+    increase: number;
+    inventoryReady: number;
+    observe: number;
+    profitReady: number;
+    sales: number;
+    spends: number;
+    total: number;
+  };
+}
+
+export interface AdAutomationPlacementRow {
+  action: AdAutomationAction;
+  acos: number;
+  adjustmentPct: number;
+  clicks: number;
+  confidence: string;
+  cpc: number;
+  cvr: number;
+  currentPlacementAdjustment: number;
+  bidable: boolean;
+  impressions: number;
+  orders: number;
+  placement: string;
+  placementName: string;
+  reason: string;
+  sales: number;
+  spends: number;
+  suggestedPlacementAdjustment: number;
+}
+
+export interface AdAutomationHourRow {
+  acos: number;
+  action: AdAutomationAction;
+  adjustmentPct: number;
+  clicks: number;
+  confidence: string;
+  cpc: number;
+  cvr: number;
+  daysObserved: number;
+  hour: number;
+  hourLabel: string;
+  impressions: number;
+  orders: number;
+  reason: string;
+  sales: number;
+  spends: number;
+}
+
+export interface AdAutomationAnalysis {
+  campaign: Pick<
+    AdAutomationCampaignRow,
+    | 'campaignId'
+    | 'campaignName'
+    | 'country'
+    | 'profileId'
+    | 'sponsoredType'
+    | 'storeName'
+  > & { adGroupCount: number };
+  fetchedAt: string;
+  hours: AdAutomationHourRow[];
+  placements: AdAutomationPlacementRow[];
+  query: { endDate: string; startDate: string; targetAcos: number };
+  warnings: string[];
 }
 
 export interface AnalyticsFilters {
@@ -1183,6 +1340,7 @@ export interface ConfigUserAuthPayload {
   department?: null | string;
   managedUserIds: number[];
   permissions: string[];
+  password?: string;
   countryScope: string[];
   role: string;
   status: 'active' | 'disabled';
@@ -1377,6 +1535,52 @@ export interface TargetTrackerOverview {
 
 export type ShippingMode = 'air' | 'sea' | 'truck';
 
+export type ShippingPackagingModel =
+  | 'compressible_socks'
+  | 'rigid_regular'
+  | 'soft_garment';
+
+export interface ShippingCartonCalculationPayload {
+  maxGrossWeightKg?: number;
+  packagingModel: ShippingPackagingModel;
+  packingEfficiency?: number;
+  productHeightCm: number;
+  productLengthCm: number;
+  productWeightG: number;
+  productWidthCm: number;
+  quantity: number;
+  safetyFactor?: number;
+  tareWeightKg?: number;
+}
+
+export interface ShippingCartonCalculationRow {
+  boxQty: number;
+  cartonVolumeCm3: number;
+  code: string;
+  fullBoxGrossWeightKg: null | number;
+  fullBoxQty: number;
+  geometricLimit: number;
+  heightCm: number;
+  lengthCm: number;
+  limitingFactor: 'geometry' | 'not_fit' | 'volume' | 'weight';
+  packingEfficiency: number;
+  tailBoxGrossWeightKg: null | number;
+  tailUnits: number;
+  unitsPerBox: number;
+  volumeLimit: number;
+  volumeUtilization: number;
+  weightLimit: number;
+  widthCm: number;
+}
+
+export interface ShippingCartonCalculationResult {
+  cartons: ShippingCartonCalculationRow[];
+  packagingModel: ShippingPackagingModel;
+  packingEfficiency: number;
+  productVolumeCm3: number;
+  quantity: number;
+}
+
 export interface ShippingChannelPlan {
   code: string;
   country: string;
@@ -1393,11 +1597,13 @@ export interface ShippingChannelPlan {
 
 export interface ShippingReceipt {
   boxQty?: number;
+  cartonCode?: string;
   goodQty: number;
   note?: string;
   receiptDate?: string;
   receiptId: string;
   returnedQty?: number;
+  shop?: string;
   sku: string;
   spu?: string;
   status?: string;
@@ -1421,7 +1627,14 @@ export interface ShippingLockedAllocation {
 }
 
 export interface ShippingAllocationRules {
+  allocationUnit: number;
+  canadaSeaReleaseRate: number;
+  deadlineWarningDays: number;
   primaryCompletionRate: number;
+  sampleReserveQty: number;
+  seaFreightTargetMaxRate: number;
+  seaFreightTargetMinRate: number;
+  ukIenMinBoxes: number;
   ukIenThreshold: number;
   usWaitHours: number;
   usCartonDeadline: string;
@@ -1430,8 +1643,39 @@ export interface ShippingAllocationRules {
 }
 
 export interface ShippingWorkspaceState extends ShippingSimulationPayload {
+  revision: number;
   updatedAt: string;
   version: number;
+}
+
+export interface ShippingReceiptSyncResult {
+  summary: {
+    preservedLocks: number;
+    preservedReceiptMetadata: number;
+    remoteRecords: number;
+    removedLocks: number;
+    skippedRecords: number;
+    source: {
+      tableId: string;
+      viewId: string;
+    };
+    syncedReceipts: number;
+  };
+  workspace: ShippingWorkspaceState;
+}
+
+export interface ShippingSkuPlanSyncResult {
+  summary: {
+    mergedRecords: number;
+    remoteRecords: number;
+    skippedRecords: number;
+    source: {
+      tableId: string;
+      viewId: string;
+    };
+    syncedSkuPlans: number;
+  };
+  workspace: ShippingWorkspaceState;
 }
 
 export interface ShippingSimulationPayload {
@@ -1445,27 +1689,137 @@ export interface ShippingSimulationPayload {
 
 export interface ShippingAllocationRow {
   allocationId: string;
+  cartonEstimateSource:
+    | 'carton_code_rough_volume'
+    | 'entered_units_per_box'
+    | 'missing'
+    | 'recorded_box_qty'
+    | 'same_sku_units_per_box'
+    | 'transport_mode_common_carton';
+  cartonEstimateDetail?: string;
+  cartonWarning: string;
   channelCode: string;
   channelName: string;
   estimatedBoxes: null | number;
+  estimatedUnitsPerBox: null | number;
   locked: boolean;
   note: string;
   qty: number;
   receiptDate: string;
   receiptId: string;
+  shop: string;
   sku: string;
   spu: string;
   status:
     | 'locked'
     | 'needs_review'
     | 'proposed'
-    | 'waiting_uk_ien'
-    | 'waiting_us_carton';
+    | 'waiting_ca_consolidation'
+    | 'waiting_sku_carton'
+    | 'waiting_uk_ien';
   usedSkuPlan: boolean;
+}
+
+export interface ShippingBuildBlocker {
+  affectedSkuCount?: number;
+  code: string;
+  detail?: string;
+  label: string;
+  qty?: number;
+}
+
+export type ShippingBatchStatus =
+  | 'ambiguous_listing'
+  | 'missed_deadline'
+  | 'missing_listing'
+  | 'needs_review'
+  | 'ready'
+  | 'waiting_air_target'
+  | 'waiting_ca_batch'
+  | 'waiting_carton'
+  | 'waiting_ien'
+  | 'waiting_qty_rounding';
+
+export interface ShippingBatchItem {
+  allocationQty: number;
+  blockers: ShippingBuildBlocker[];
+  channelCode: string;
+  destinationCountryCode: string;
+  estimatedBoxes: null | number;
+  estimatedUnitsPerBox: null | number;
+  fnsku: string;
+  itemId: string;
+  listingCandidates: Array<{
+    destinationCountryCode: string;
+    fnsku: string;
+    lastUsedAt: string;
+    marketplaceId: string;
+    msku: string;
+    sellerName: string;
+    sid: number;
+    source: 'fba_inventory' | 'sta_history';
+  }>;
+  marketplaceId: string;
+  msku: string;
+  sellerName: string;
+  shippedQty: number;
+  shop: string;
+  sid: number;
+  sku: string;
+  sourceReceipts: Array<{
+    qty: number;
+    receiptDate: string;
+    receiptId: string;
+    shop: string;
+  }>;
+  spu: string;
+  targetAfterBuildQty: number;
+  targetQty: number;
+}
+
+export interface ShippingShipmentBatch {
+  batchId: string;
+  blockers: ShippingBuildBlocker[];
+  canCreateStaPlan: boolean;
+  channelCode: string;
+  channelName: string;
+  country: string;
+  deadline: string;
+  destinationCountryCode: string;
+  estimatedBoxes: null | number;
+  fiveBoxConfiguration: {
+    composition: Array<{ sku: string; unitsPerBox: number }>;
+    detail: string;
+    matched: boolean;
+    repeatableBoxes: number;
+  };
+  items: ShippingBatchItem[];
+  mode: ShippingMode;
+  plannedDispatchDate: string;
+  qty: number;
+  readyForDispatch: boolean;
+  sellerName: string;
+  shop: string;
+  sid: number;
+  skuCount: number;
+  status: ShippingBatchStatus;
+  warehouseReadyDate: string;
+  warehouseStartDate: string;
 }
 
 export interface ShippingSimulationResult {
   allocations: ShippingAllocationRow[];
+  buildBlockers: ShippingBuildBlocker[];
+  buildSummary: {
+    blockedBatchCount: number;
+    blockedQty: number;
+    dispatchReadyBatchCount: number;
+    dispatchReadyQty: number;
+    staPlanReadyBatchCount: number;
+    staPlanReadyQty: number;
+    totalBatchCount: number;
+    totalQty: number;
+  };
   channels: Array<{
     allocatedQty: number;
     code: string;
@@ -1479,21 +1833,39 @@ export interface ShippingSimulationResult {
     priorityLevel: 'P0' | 'P1' | 'P2';
     remainingQty: number;
     rule: string;
+    shippedCompletionRate: number;
+    shippedQty: number;
+    shippedRemainingQty: number;
   }>;
   summary: {
     balanced: boolean;
+    deductedShippedQty: number;
     lockedQty: number;
     primaryCompletionRate: number;
     proposedQty: number;
+    seaFreightQty: number;
+    seaFreightRate: number;
+    seaFreightTargetMaxRate: number;
+    seaFreightTargetMinRate: number;
+    shippedPrimaryCompletionRate: number;
+    shippedQty: number;
+    shippedSeaFreightQty: number;
+    shippedSeaFreightRate: number;
+    todayExpectedDispatchQty: number;
+    todayReceiptQty: number;
     totalGoodQty: number;
+    totalPlanCompletionRate: number;
     totalPlanQty: number;
     unallocatedQty: number;
   };
+  shipmentBatches: ShippingShipmentBatch[];
   unallocated: Array<{
     qty: number;
     reason: string;
+    reasonCode?: string;
     receiptDate: string;
     receiptId: string;
+    shop: string;
     sku: string;
     spu: string;
   }>;

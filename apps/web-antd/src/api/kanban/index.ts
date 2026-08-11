@@ -1,4 +1,6 @@
 import type {
+  AdAutomationAnalysis,
+  AdAutomationOverview,
   AdCampaignDrilldown,
   AdMonitorFilters,
   AdMonitorOverview,
@@ -33,10 +35,14 @@ import type {
   SearchTermReportPayload,
   SearchTermReportTask,
   ShippingAllocationMeta,
+  ShippingCartonCalculationPayload,
+  ShippingCartonCalculationResult,
   ShippingReceipt,
+  ShippingReceiptSyncResult,
   ShippingSimulationPayload,
   ShippingSimulationResult,
   ShippingSkuPlan,
+  ShippingSkuPlanSyncResult,
   ShippingWorkspaceState,
   SpuManagerFilters,
   SpuManagerOptions,
@@ -90,6 +96,19 @@ export interface AdMonitorOverviewParams extends Partial<AdMonitorFilters> {
 
 export interface AdCampaignDrilldownParams extends AdMonitorOverviewParams {
   responsible: string;
+}
+
+export interface AdAutomationParams {
+  action?: string;
+  endDate?: string;
+  page?: number;
+  pageSize?: number;
+  projectTags?: string[];
+  search?: string;
+  shops?: string[];
+  sponsoredTypes?: string[];
+  startDate?: string;
+  targetAcos?: number;
 }
 
 export interface AnalyticsReportParams {
@@ -147,11 +166,22 @@ export type SpuManagerParams = Partial<SpuManagerFilters>;
 
 export interface KanbanProductDetailParams extends KanbanOverviewParams {
   analyticsDepartmentScope?: boolean;
+  categorySearch?: string;
   countries?: string[];
   dateRangeType?: string;
+  departments?: string[];
   endDate?: string;
+  operationGroupIds?: number[];
+  shopNames?: string[];
+  spuMatchMode?: 'exact' | 'fuzzy';
+  spuSearch?: string;
   startDate?: string;
   year?: number;
+}
+
+export interface KanbanProductDetailExportParams extends KanbanProductDetailParams {
+  columns?: string[];
+  includeAttachments?: boolean;
 }
 
 export interface KanbanProductDetailRowsParams extends KanbanProductDetailParams {
@@ -197,7 +227,9 @@ export interface TargetTrackerParams {
 
 export interface CreateConfigUserPayload {
   avatarColor: string;
+  department: string;
   email: string;
+  password: string;
   role: string;
   username: string;
 }
@@ -369,6 +401,15 @@ export async function fetchKanbanProductDetailRows(
   return requestClient.get('/kanban/monitor/product-detail/rows', { params });
 }
 
+export function downloadKanbanProductDetail(
+  params: KanbanProductDetailExportParams = {},
+): Promise<Blob> {
+  return requestClient.download('/kanban/monitor/product-detail/export', {
+    params,
+    timeout: 300_000,
+  });
+}
+
 export async function fetchKanbanProductDetailFbaInventory(
   params: KanbanProductDetailFbaInventoryParams,
 ): Promise<KanbanFbaInventorySkuBreakdown> {
@@ -438,6 +479,29 @@ export async function fetchAdCampaignDrilldown(
   });
 }
 
+export async function fetchAdAutomationCampaigns(
+  params: AdAutomationParams = {},
+  signal?: AbortSignal,
+): Promise<AdAutomationOverview> {
+  return requestClient.get('/kanban/ad-automation/campaigns', {
+    params,
+    signal,
+  });
+}
+
+export async function fetchAdAutomationAnalysis(
+  profileId: string,
+  campaignId: string,
+  params: Pick<AdAutomationParams, 'endDate' | 'startDate' | 'targetAcos'> & {
+    refresh?: boolean;
+  } = {},
+): Promise<AdAutomationAnalysis> {
+  return requestClient.get(
+    `/kanban/ad-automation/campaigns/${profileId}/${campaignId}/analysis`,
+    { params },
+  );
+}
+
 export async function fetchShippingAllocationMeta(): Promise<ShippingAllocationMeta> {
   return requestClient.get('/kanban/shipping/meta');
 }
@@ -446,6 +510,12 @@ export async function simulateShippingAllocation(
   data: ShippingSimulationPayload,
 ): Promise<ShippingSimulationResult> {
   return requestClient.post('/kanban/shipping/simulate', data);
+}
+
+export async function calculateShippingCartons(
+  data: ShippingCartonCalculationPayload,
+): Promise<ShippingCartonCalculationResult> {
+  return requestClient.post('/kanban/shipping/cartons/calculate', data);
 }
 
 export async function fetchShippingWorkspace(): Promise<ShippingWorkspaceState> {
@@ -458,8 +528,12 @@ export async function saveShippingWorkspace(
   return requestClient.put('/kanban/shipping/workspace', data);
 }
 
-export async function resetShippingWorkspace(): Promise<ShippingWorkspaceState> {
-  return requestClient.delete('/kanban/shipping/workspace');
+export async function syncShippingReceipts(): Promise<ShippingReceiptSyncResult> {
+  return requestClient.post('/kanban/shipping/workspace/sync-receipts');
+}
+
+export async function syncShippingSkuPlans(): Promise<ShippingSkuPlanSyncResult> {
+  return requestClient.post('/kanban/shipping/workspace/sync-sku-plans');
 }
 
 export async function importShippingReceipts(

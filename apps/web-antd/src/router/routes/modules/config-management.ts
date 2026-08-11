@@ -7,7 +7,7 @@ const routes: RouteRecordRaw[] = [
     meta: {
       authority: configAuthorities,
       icon: 'lucide:sliders-horizontal',
-      order: 1,
+      order: 2,
       title: '配置管理',
     },
     name: 'ConfigManagement',

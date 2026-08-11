@@ -20,27 +20,37 @@ import {
   watch,
 } from 'vue';
 
+import { Download } from '@vben/icons';
+
 import {
+  AutoComplete,
   Button,
   Card,
   Checkbox,
   DatePicker,
   Dropdown,
   Input,
+  message,
   Modal,
   Popover,
   Select,
-  Space,
   Spin,
   Table,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
 import {
+  downloadKanbanProductDetail,
   fetchKanbanProductDetailFbaInventory,
   fetchKanbanProductDetailMeta,
   fetchKanbanProductDetailRows,
 } from '#/api/kanban';
+
+interface ProductDetailOperationGroupOption {
+  id: number;
+  memberNames: string[];
+  name: string;
+}
 
 type ProductDetailDateRangeType =
   | 'currentMonth'
@@ -70,10 +80,14 @@ interface BaseProductDetailParams {
 const props = withDefaults(
   defineProps<{
     baseParams?: BaseProductDetailParams;
+    departmentOptions?: string[];
+    operationGroupOptions?: ProductDetailOperationGroupOption[];
     responsibleOptions?: string[];
   }>(),
   {
     baseParams: () => ({}),
+    departmentOptions: () => [],
+    operationGroupOptions: () => [],
     responsibleOptions: () => [],
   },
 );
@@ -83,6 +97,7 @@ const productDetailPageRows = ref<KanbanProductDetailRow[]>([]);
 const productDetailSummary = ref<Record<string, any>>({});
 const productDetailLoading = ref(false);
 const productDetailRowsLoading = ref(false);
+const productDetailDownloading = ref(false);
 const selectedProductCountries = ref<string[]>([]);
 const selectedProductColumns = ref<string[]>([]);
 const productColumnsInitialized = ref(false);
@@ -167,9 +182,15 @@ const productDetailDateRangeOptions = [
 ];
 
 const productDetailQuery = reactive({
+  categorySearch: '',
   dateRangeType: 'yesterday' as ProductDetailDateRangeType,
+  departments: [] as string[],
   endDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
+  operationGroupIds: [] as number[],
   responsibles: [] as string[],
+  shopNames: [] as string[],
+  spuMatchMode: 'fuzzy' as 'exact' | 'fuzzy',
+  spuSearch: '',
   startDate: dayjs().subtract(1, 'day').format('YYYY-MM-DD'),
 });
 
@@ -182,6 +203,19 @@ const effectiveProductCountries = computed(() => {
   return selectedProductCountries.value.filter((country) =>
     allowed.has(country),
   );
+});
+const effectiveProductDepartments = computed(() => {
+  const baseDepartments = [...(props.baseParams.departments ?? [])].filter(
+    Boolean,
+  );
+  const selectedDepartments = productDetailQuery.departments.filter(Boolean);
+  if (baseDepartments.length === 0) return selectedDepartments;
+  if (selectedDepartments.length === 0) return baseDepartments;
+  const allowed = new Set(baseDepartments);
+  const narrowed = selectedDepartments.filter((department) =>
+    allowed.has(department),
+  );
+  return narrowed.length > 0 ? narrowed : ['__NO_ACCESS__'];
 });
 const effectiveProductResponsibles = computed(() => {
   const baseResponsibles = [...(props.baseParams.responsibles ?? [])].filter(
@@ -211,6 +245,36 @@ const productCountryFilterLabel = computed(() => {
     return selectedProductCountries.value[0] ?? '国家';
   return `国家(${selectedProductCountries.value.length})`;
 });
+const productShopOptions = computed(() =>
+  (productDetail.value?.filterOptions?.shops ?? []).map((value) => ({
+    label: value,
+    value,
+  })),
+);
+const productCategoryOptions = computed(() => {
+  const options = new Map<string, string>();
+  for (const value of productDetail.value?.filterOptions?.category1 ?? []) {
+    options.set(value, `一级分类 · ${value}`);
+  }
+  for (const value of productDetail.value?.filterOptions?.category2 ?? []) {
+    if (!options.has(value)) options.set(value, `二级分类 · ${value}`);
+  }
+  return [...options].map(([value, label]) => ({ label, value }));
+});
+const productDepartmentOptions = computed(() => {
+  const baseDepartments = new Set(props.baseParams.departments);
+  const values =
+    baseDepartments.size > 0
+      ? props.departmentOptions.filter((value) => baseDepartments.has(value))
+      : props.departmentOptions;
+  return values.map((value) => ({ label: value, value }));
+});
+const productOperationGroupOptions = computed(() =>
+  props.operationGroupOptions.map((group) => ({
+    label: `${group.name}（${group.memberNames.length}人）`,
+    value: group.id,
+  })),
+);
 const productColumnMap = computed(() => {
   const map = new Map<string, KanbanProductDetailColumn>();
   for (const column of productDetailColumnDefs.value)
@@ -400,6 +464,7 @@ function productDetailParamsSignature(params?: BaseProductDetailParams) {
     categories: normalizeProductParamValues(params?.categories),
     countries: normalizeProductParamValues(params?.countries),
     dateRangeType: params?.dateRangeType ?? '',
+    departments: normalizeProductParamValues(params?.departments),
     endDate: params?.endDate ?? '',
     projectTags: normalizeProductParamValues(params?.projectTags),
     responsibles: normalizeProductParamValues(params?.responsibles),
@@ -497,14 +562,9 @@ async function loadProductDetailData() {
   productDetailMetaInFlight.value = metaRequestKey;
   productDetailLoading.value = true;
   try {
-    const detailMeta = await fetchKanbanProductDetailMeta({
-      ...props.baseParams,
-      countries: effectiveProductCountries.value,
-      dateRangeType: productDetailQuery.dateRangeType,
-      endDate: productDetailQuery.endDate,
-      responsibles: effectiveProductResponsibles.value,
-      startDate: productDetailQuery.startDate,
-    });
+    const detailMeta = await fetchKanbanProductDetailMeta(
+      productDetailRequestParams(),
+    );
     if (requestSeq !== productDetailMetaRequestSeq) return;
     productDetailPageRows.value = [];
     productDetailSummary.value = {};
@@ -539,10 +599,16 @@ async function loadProductDetailData() {
 function productDetailRequestParams() {
   return {
     ...props.baseParams,
+    categorySearch: productDetailQuery.categorySearch.trim() || undefined,
     countries: effectiveProductCountries.value,
     dateRangeType: productDetailQuery.dateRangeType,
+    departments: effectiveProductDepartments.value,
     endDate: productDetailQuery.endDate,
+    operationGroupIds: productDetailQuery.operationGroupIds,
     responsibles: effectiveProductResponsibles.value,
+    shopNames: productDetailQuery.shopNames,
+    spuMatchMode: productDetailQuery.spuMatchMode,
+    spuSearch: productDetailQuery.spuSearch.trim() || undefined,
     startDate: productDetailQuery.startDate,
   };
 }
@@ -598,6 +664,53 @@ async function loadProductDetailRows() {
 async function applyProductDetailFilters() {
   resetProductDetailPagination();
   await loadProductDetailData();
+}
+
+async function resetProductDetailFilters() {
+  productDetailQuery.categorySearch = '';
+  productDetailQuery.departments = [];
+  productDetailQuery.operationGroupIds = [];
+  productDetailQuery.responsibles = [];
+  productDetailQuery.shopNames = [];
+  productDetailQuery.spuMatchMode = 'fuzzy';
+  productDetailQuery.spuSearch = '';
+  selectedProductCountries.value = [];
+  productCountryDraft.value = [];
+  syncProductDetailDateFromBaseParams();
+  await applyProductDetailFilters();
+}
+
+async function downloadProductDetail(includeAttachments: boolean) {
+  if (productDetailDownloading.value) return;
+  productDetailDownloading.value = true;
+  try {
+    const blob = await downloadKanbanProductDetail({
+      ...productDetailRequestParams(),
+      columns: [...selectedProductColumns.value],
+      includeAttachments,
+    });
+    const suffix = `${productDetailQuery.startDate.replaceAll('-', '')}-${productDetailQuery.endDate.replaceAll('-', '')}`;
+    const fileName = includeAttachments
+      ? `新品详情-${suffix}-含附件.zip`
+      : `新品详情-${suffix}.xlsx`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    message.success(
+      includeAttachments ? '含附件数据包已下载' : '新品详情已下载',
+    );
+  } catch (error) {
+    message.error(
+      error instanceof Error ? error.message : '下载失败，请稍后重试',
+    );
+  } finally {
+    productDetailDownloading.value = false;
+  }
 }
 
 function ensureProductColumnsInitialized(detail: KanbanProductDetailOverview) {
@@ -1795,6 +1908,9 @@ watch(selectedProductColumns, () => {
 watch(productDetailBaseParamsSignature, () => {
   syncProductDetailDateFromBaseParams();
   syncProductDetailResponsiblesWithOptions();
+  productDetailQuery.departments = [];
+  productDetailQuery.operationGroupIds = [];
+  productDetailQuery.shopNames = [];
   selectedProductCountries.value = [];
   productCountryDraft.value = [];
   void applyProductDetailFilters();
@@ -1831,7 +1947,7 @@ onBeforeUnmount(() => {
             <span>SPU维度</span>
           </div>
         </div>
-        <Space class="product-detail-controls" wrap>
+        <div class="product-detail-header-actions">
           <span class="product-detail-meta">
             {{
               productDetailDateRangeLabel(productDetail?.query.dateRangeType)
@@ -1841,48 +1957,157 @@ onBeforeUnmount(() => {
           <span class="product-detail-meta">
             共 {{ productDetail?.totalRows ?? productDetailRows.length }} 条
           </span>
-          <label class="product-detail-label">时间</label>
+          <Dropdown :trigger="['click']">
+            <Button :loading="productDetailDownloading" size="small">
+              <Download :size="15" />
+              下载
+            </Button>
+            <template #overlay>
+              <div class="product-download-menu">
+                <button type="button" @click="downloadProductDetail(false)">
+                  <b>下载 Excel</b>
+                  <span>当前筛选结果与已选列</span>
+                </button>
+                <button type="button" @click="downloadProductDetail(true)">
+                  <b>下载含附件</b>
+                  <span>Excel、主图附件及附件清单</span>
+                </button>
+              </div>
+            </template>
+          </Dropdown>
+        </div>
+      </div>
+    </template>
+
+    <div class="product-filter-panel">
+      <div class="product-filter-grid">
+        <label class="product-filter-field product-filter-field-time">
+          <span>时间范围</span>
+          <div class="product-time-controls">
+            <Select
+              v-model:value="productDetailQuery.dateRangeType"
+              :options="productDetailDateRangeOptions"
+              size="small"
+              style="width: 104px"
+              @change="
+                () =>
+                  applyProductDetailDateRangeType(
+                    productDetailQuery.dateRangeType,
+                  )
+              "
+            />
+            <DatePicker.RangePicker
+              v-if="productDetailQuery.dateRangeType === 'custom'"
+              v-model:value="productDetailDateRangeValue"
+              :allow-clear="false"
+              :disabled-date="disabledFutureDate"
+              size="small"
+              value-format="YYYY-MM-DD"
+            />
+          </div>
+        </label>
+
+        <label class="product-filter-field">
+          <span>店铺</span>
           <Select
-            v-model:value="productDetailQuery.dateRangeType"
-            :options="productDetailDateRangeOptions"
+            v-model:value="productDetailQuery.shopNames"
+            :options="productShopOptions"
+            allow-clear
+            max-tag-count="responsive"
+            mode="multiple"
+            option-filter-prop="label"
+            placeholder="全部店铺"
+            show-search
             size="small"
-            style="width: 104px"
-            @change="
-              () => {
-                applyProductDetailDateRangeType(
-                  productDetailQuery.dateRangeType,
-                );
-                applyProductDetailFilters();
-              }
-            "
           />
-          <DatePicker.RangePicker
-            v-if="productDetailQuery.dateRangeType === 'custom'"
-            v-model:value="productDetailDateRangeValue"
-            :allow-clear="false"
-            :disabled-date="disabledFutureDate"
+        </label>
+
+        <label class="product-filter-field">
+          <span>SPU</span>
+          <div class="product-spu-search">
+            <Select
+              v-model:value="productDetailQuery.spuMatchMode"
+              :options="[
+                { label: '模糊', value: 'fuzzy' },
+                { label: '精准', value: 'exact' },
+              ]"
+              size="small"
+            />
+            <Input
+              v-model:value="productDetailQuery.spuSearch"
+              allow-clear
+              placeholder="输入 SPU"
+              size="small"
+              @press-enter="applyProductDetailFilters"
+            />
+          </div>
+        </label>
+
+        <label class="product-filter-field">
+          <span>分类</span>
+          <AutoComplete
+            v-model:value="productDetailQuery.categorySearch"
+            :options="productCategoryOptions"
+            allow-clear
+            placeholder="一级/二级分类"
             size="small"
-            value-format="YYYY-MM-DD"
-            @change="applyProductDetailFilters"
+            @press-enter="applyProductDetailFilters"
           />
-          <label class="product-detail-label">负责人</label>
+        </label>
+
+        <label class="product-filter-field">
+          <span>部门</span>
+          <Select
+            v-model:value="productDetailQuery.departments"
+            :options="productDepartmentOptions"
+            allow-clear
+            max-tag-count="responsive"
+            mode="multiple"
+            option-filter-prop="label"
+            placeholder="继承主筛选"
+            show-search
+            size="small"
+          />
+        </label>
+
+        <label class="product-filter-field">
+          <span>运营小组</span>
+          <Select
+            v-model:value="productDetailQuery.operationGroupIds"
+            :options="productOperationGroupOptions"
+            allow-clear
+            max-tag-count="responsive"
+            mode="multiple"
+            option-filter-prop="label"
+            placeholder="全部小组"
+            show-search
+            size="small"
+          />
+        </label>
+
+        <label class="product-filter-field">
+          <span>负责人</span>
           <Select
             v-model:value="productDetailQuery.responsibles"
             :options="productDetailResponsibleOptions"
             allow-clear
             max-tag-count="responsive"
             mode="multiple"
+            option-filter-prop="label"
             placeholder="继承主筛选"
+            show-search
             size="small"
-            style="min-width: 180px"
-            @change="applyProductDetailFilters"
           />
+        </label>
+
+        <div class="product-filter-field">
+          <span>国家</span>
           <Dropdown
             v-model:open="productCountryDropdownOpen"
             :trigger="['click']"
             @open-change="handleProductCountryDropdownOpen"
           >
-            <Button class="product-filter-trigger">
+            <Button class="product-filter-trigger" size="small">
               {{ productCountryFilterLabel }}
             </Button>
             <template #overlay>
@@ -1918,20 +2143,25 @@ onBeforeUnmount(() => {
               </div>
             </template>
           </Dropdown>
-          <Button @click="openProductColumnConfig">
+        </div>
+
+        <div class="product-filter-actions">
+          <Button size="small" @click="resetProductDetailFilters">重置</Button>
+          <Button size="small" @click="openProductColumnConfig">
             列配置（{{ selectedProductColumns.length }}）
           </Button>
-          <Button @click="resetProductColumns">默认列</Button>
+          <Button size="small" @click="resetProductColumns">默认列</Button>
           <Button
             type="primary"
             :loading="productDetailLoading || productDetailRowsLoading"
+            size="small"
             @click="applyProductDetailFilters"
           >
-            应用
+            查询
           </Button>
-        </Space>
+        </div>
       </div>
-    </template>
+    </div>
 
     <Table
       ref="productDetailTableRef"
@@ -2321,6 +2551,112 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.product-detail-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.product-filter-panel {
+  padding: 10px 12px 12px;
+  background: var(--product-panel-muted, #f8fafc);
+  border-bottom: 1px solid var(--product-border, #e2e8f0);
+}
+
+.product-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 9px 12px;
+  align-items: end;
+}
+
+.product-filter-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.product-filter-field > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 700 !important;
+  color: var(--product-subtle, #475569);
+  white-space: nowrap;
+}
+
+.product-filter-field-time {
+  grid-column: span 2;
+}
+
+.product-time-controls,
+.product-spu-search {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.product-time-controls :deep(.ant-picker),
+.product-spu-search :deep(.ant-input-affix-wrapper) {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-spu-search :deep(.ant-select) {
+  flex: 0 0 78px;
+}
+
+.product-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.product-filter-actions :deep(.ant-btn) {
+  flex: 0 0 auto;
+}
+
+.product-download-menu {
+  display: grid;
+  width: 230px;
+  padding: 6px;
+  background: var(--product-panel, #fff);
+  border: 1px solid var(--product-border, #e2e8f0);
+  border-radius: 6px;
+  box-shadow: 0 12px 30px rgb(15 23 42 / 14%);
+}
+
+.product-download-menu button {
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+  color: var(--product-text, #1e293b);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.product-download-menu button:hover {
+  background: var(--product-hover, #eff6ff);
+}
+
+.product-download-menu b {
+  font-size: 13px;
+  font-weight: 700 !important;
+}
+
+.product-download-menu span {
+  font-size: 11px;
+  color: var(--product-muted, #64748b);
+}
+
 .product-detail-heading {
   display: inline-flex;
   flex: none;
@@ -2351,15 +2687,43 @@ onBeforeUnmount(() => {
   color: var(--product-subtle, #64748b);
 }
 
-.product-detail-controls {
-  justify-content: flex-end;
-  margin-bottom: 20px;
-}
-
 .product-detail-meta {
   font-size: 12px;
   font-weight: 700;
   color: var(--product-subtle, #475569);
+}
+
+@media (width <= 1320px) {
+  .product-filter-grid {
+    grid-template-columns: repeat(3, minmax(170px, 1fr));
+  }
+
+  .product-filter-actions {
+    grid-column: span 2;
+  }
+}
+
+@media (width <= 760px) {
+  .product-detail-toolbar {
+    align-items: flex-start;
+  }
+
+  .product-detail-header-actions {
+    justify-content: flex-start;
+  }
+
+  .product-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .product-filter-actions,
+  .product-filter-field-time {
+    grid-column: auto;
+  }
+
+  .product-time-controls {
+    flex-wrap: wrap;
+  }
 }
 
 .product-detail-label {

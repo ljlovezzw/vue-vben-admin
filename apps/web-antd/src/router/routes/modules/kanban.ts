@@ -42,16 +42,6 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'KanbanShipping',
-        path: 'shipping',
-        component: () => import('#/views/kanban/shipping/index.vue'),
-        meta: {
-          authority: ['kanban:shipping'],
-          icon: 'lucide:truck',
-          title: '发货分配',
-        },
-      },
-      {
         name: 'KanbanAsin360',
         path: 'asin360',
         component: () => import('#/views/kanban/asin360/index.vue'),
