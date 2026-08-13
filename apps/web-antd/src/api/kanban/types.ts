@@ -1851,14 +1851,33 @@ export interface ShippingSimulationResult {
     shippedQty: number;
     shippedSeaFreightQty: number;
     shippedSeaFreightRate: number;
+    todayAllocatedQty: number;
+    todayBlockedQty: number;
     todayExpectedDispatchQty: number;
+    todayReceiptCount: number;
     todayReceiptQty: number;
+    todayReceiptSkuCount: number;
+    todayShipmentBatchCount: number;
+    todayStaPlanReadyQty: number;
+    todayUnallocatedQty: number;
     totalGoodQty: number;
     totalPlanCompletionRate: number;
     totalPlanQty: number;
     unallocatedQty: number;
   };
   shipmentBatches: ShippingShipmentBatch[];
+  todayBuildBlockers: ShippingBuildBlocker[];
+  todayBuildSummary: {
+    blockedBatchCount: number;
+    blockedQty: number;
+    dispatchReadyBatchCount: number;
+    dispatchReadyQty: number;
+    staPlanReadyBatchCount: number;
+    staPlanReadyQty: number;
+    totalBatchCount: number;
+    totalQty: number;
+  };
+  todayShipmentBatches: ShippingShipmentBatch[];
   unallocated: Array<{
     qty: number;
     reason: string;
@@ -1869,6 +1888,15 @@ export interface ShippingSimulationResult {
     sku: string;
     spu: string;
   }>;
+}
+
+export interface ShippingWorkspaceBootstrap {
+  result: Pick<ShippingSimulationResult, 'channels' | 'summary'>;
+  totalReturnedQty: number;
+  workspace: Pick<
+    ShippingWorkspaceState,
+    'asOfDate' | 'channels' | 'revision' | 'rules' | 'updatedAt' | 'version'
+  >;
 }
 
 export interface ShippingAllocationMeta {
@@ -1899,4 +1927,56 @@ export interface ShippingAllocationMeta {
     status: string;
   }>;
   version: string;
+}
+
+export interface ShippingLocationModeEstimate {
+  averageDays: null | number;
+  averagePrice: null | number;
+  estimatedMaxDays: null | number;
+  estimatedMinDays: null | number;
+  mode: string;
+  risk: 'HIGH' | 'LOW' | 'MEDIUM';
+  riskLabel: string;
+  sampleCount: number;
+  topVendors: Array<{
+    sampleCount: number;
+    vendor: string;
+  }>;
+}
+
+export interface ShippingLocationFinderItem {
+  city: string;
+  countryCode: string;
+  recommendation: string;
+  recommendedModes: ShippingLocationModeEstimate[];
+  region: 'CENTRAL' | 'EAST' | 'NON_US' | 'SOUTH' | 'UNKNOWN' | 'WEST';
+  regionLabel: string;
+  source: string;
+  stateCode: string;
+  subRegionLabel: string;
+  warehouseId: string;
+}
+
+export interface ShippingLocationFinderResult {
+  cacheTtlSeconds: number;
+  codes: string[];
+  items: ShippingLocationFinderItem[];
+  logisticsSampleCount: number;
+  regionCards: Array<{
+    count: number;
+    region: 'CENTRAL' | 'EAST' | 'SOUTH' | 'WEST';
+    regionLabel: string;
+  }>;
+}
+
+export interface ShippingLocationFinderBootstrap {
+  loadedAt: string;
+  logisticsSampleCount: number;
+  modeEstimates: ShippingLocationModeEstimate[];
+  regionCards: Array<{
+    count: number;
+    region: 'CENTRAL' | 'EAST' | 'SOUTH' | 'WEST';
+    regionLabel: string;
+  }>;
+  warehouses: ShippingLocationFinderItem[];
 }

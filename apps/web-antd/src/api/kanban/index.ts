@@ -37,12 +37,15 @@ import type {
   ShippingAllocationMeta,
   ShippingCartonCalculationPayload,
   ShippingCartonCalculationResult,
+  ShippingLocationFinderBootstrap,
+  ShippingLocationFinderResult,
   ShippingReceipt,
   ShippingReceiptSyncResult,
   ShippingSimulationPayload,
   ShippingSimulationResult,
   ShippingSkuPlan,
   ShippingSkuPlanSyncResult,
+  ShippingWorkspaceBootstrap,
   ShippingWorkspaceState,
   SpuManagerFilters,
   SpuManagerOptions,
@@ -506,6 +509,18 @@ export async function fetchShippingAllocationMeta(): Promise<ShippingAllocationM
   return requestClient.get('/kanban/shipping/meta');
 }
 
+export async function searchShippingLocations(
+  codes: string[],
+): Promise<ShippingLocationFinderResult> {
+  return requestClient.post('/kanban/shipping/location-finder/search', {
+    codes,
+  });
+}
+
+export async function fetchShippingLocationFinderBootstrap(): Promise<ShippingLocationFinderBootstrap> {
+  return requestClient.get('/kanban/shipping/location-finder/bootstrap');
+}
+
 export async function simulateShippingAllocation(
   data: ShippingSimulationPayload,
 ): Promise<ShippingSimulationResult> {
@@ -520,6 +535,14 @@ export async function calculateShippingCartons(
 
 export async function fetchShippingWorkspace(): Promise<ShippingWorkspaceState> {
   return requestClient.get('/kanban/shipping/workspace');
+}
+
+export async function fetchShippingWorkspaceBootstrap(): Promise<ShippingWorkspaceBootstrap> {
+  return requestClient.get('/kanban/shipping/workspace/bootstrap');
+}
+
+export async function fetchShippingWorkspaceSimulation(): Promise<ShippingSimulationResult> {
+  return requestClient.get('/kanban/shipping/workspace/simulation');
 }
 
 export async function saveShippingWorkspace(
@@ -576,6 +599,10 @@ export function downloadShippingSkuPlanTemplate(): Promise<Blob> {
 
 export function exportShippingWorkspace(): Promise<Blob> {
   return requestClient.download('/kanban/shipping/export');
+}
+
+export function exportTodayShippingWorkspace(): Promise<Blob> {
+  return requestClient.download('/kanban/shipping/export/today');
 }
 
 export async function fetchTargetTrackerOverview(

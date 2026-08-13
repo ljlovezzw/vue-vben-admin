@@ -5,6 +5,7 @@ import type {
   ShippingBatchStatus,
   ShippingShipmentBatch,
   ShippingSimulationResult,
+  ShippingWorkspaceBootstrap,
   ShippingWorkspaceState,
 } from '#/api/kanban/types';
 
@@ -16,8 +17,11 @@ import { message, Spin } from 'ant-design-vue';
 
 import {
   exportShippingWorkspace,
+  exportTodayShippingWorkspace,
   fetchShippingAllocationMeta,
   fetchShippingWorkspace,
+  fetchShippingWorkspaceBootstrap,
+  fetchShippingWorkspaceSimulation,
   saveShippingWorkspace,
   simulateShippingAllocation,
   syncShippingReceipts,
@@ -30,10 +34,12 @@ type TabKey =
   | 'dashboard'
   | 'receipts'
   | 'rules'
-  | 'sku';
+  | 'sku'
+  | 'today';
 
 const tabs: Array<{ key: TabKey; label: string }> = [
   { key: 'dashboard', label: '总控看板' },
+  { key: 'today', label: '今日到货分配' },
   { key: 'receipts', label: '来货数据' },
   { key: 'sku', label: 'SKU渠道计划' },
   { key: 'allocation', label: '自动分配结果' },
@@ -56,6 +62,11 @@ const defaultRules = ref<null | ShippingWorkspaceState['rules']>(null);
 const syncingReceipts = ref(false);
 const syncingSkuPlans = ref(false);
 const exportingBuildPlan = ref(false);
+const exportingTodayPlan = ref(false);
+const allocatingToday = ref(false);
+const workspaceDetailsLoaded = ref(false);
+const fullResultLoaded = ref(false);
+const bootstrapTotalReturnedQty = ref(0);
 
 const channels = computed(() => workspace.value?.channels ?? []);
 const receipts = computed(() => workspace.value?.receipts ?? []);
@@ -87,12 +98,29 @@ const filteredShipmentBatches = computed(() =>
 const summary = computed(() => result.value?.summary);
 const channelResults = computed(() => result.value?.channels ?? []);
 const totalReturned = computed(() =>
-  receipts.value.reduce(
-    (sum, row) => sum + Number(row.returnedQty || row.goodQty || 0),
-    0,
-  ),
+  workspaceDetailsLoaded.value
+    ? receipts.value.reduce(
+        (sum, row) => sum + Number(row.returnedQty || row.goodQty || 0),
+        0,
+      )
+    : bootstrapTotalReturnedQty.value,
 );
 const totalShipped = computed(() => Number(summary.value?.shippedQty || 0));
+const todayDate = computed(() => latestAsOfDate());
+const todayReceipts = computed(() =>
+  receipts.value.filter((row) => row.receiptDate === todayDate.value),
+);
+const todayReceiptIds = computed(
+  () => new Set(todayReceipts.value.map((row) => row.receiptId)),
+);
+const todayUnallocated = computed(() =>
+  (result.value?.unallocated ?? []).filter((row) =>
+    todayReceiptIds.value.has(row.receiptId),
+  ),
+);
+const todayShipmentBatches = computed(
+  () => result.value?.todayShipmentBatches ?? [],
+);
 
 function errorText(error: any, fallback: string) {
   return error?.response?.data?.detail || error?.message || fallback;
@@ -201,6 +229,19 @@ function batchSchedule(batch: ShippingShipmentBatch) {
     : `${batch.warehouseStartDate} 至 ${batch.warehouseReadyDate}`;
 }
 
+function batchSkuSummary(batch: ShippingShipmentBatch) {
+  return batch.items
+    .map((item) => `${item.sku} × ${integer(item.allocationQty)}`)
+    .join('；');
+}
+
+function batchBlockerSummary(batch: ShippingShipmentBatch) {
+  return batch.blockers
+    .map((blocker) => blocker.detail || blocker.label)
+    .filter(Boolean)
+    .join('；');
+}
+
 function cartonEstimateLabel(row: ShippingAllocationRow) {
   if (row.cartonEstimateSource === 'same_sku_units_per_box') {
     return row.estimatedUnitsPerBox
@@ -240,7 +281,9 @@ function shippingModeLabel(
 }
 
 function workspacePayload() {
-  if (!workspace.value) throw new Error('工作区尚未加载');
+  if (!workspace.value || !workspaceDetailsLoaded.value) {
+    throw new Error('工作区明细尚未加载');
+  }
   return {
     asOfDate: refreshWorkspaceAsOfDate(),
     channels: workspace.value.channels,
@@ -253,6 +296,7 @@ function workspacePayload() {
 
 async function recalculate() {
   result.value = await simulateShippingAllocation(workspacePayload());
+  fullResultLoaded.value = true;
 }
 
 async function persist(showSuccess = false) {
@@ -272,6 +316,7 @@ async function recoverWorkspaceAfterFailure(error: any, fallback: string) {
   const conflict = Number(error?.response?.status || 0) === 409;
   try {
     workspace.value = await fetchShippingWorkspace();
+    workspaceDetailsLoaded.value = true;
     persistedWorkspace.value = cloneWorkspaceState(workspace.value);
     await recalculate();
   } catch {
@@ -305,18 +350,35 @@ async function downloadBuildPlan() {
   exportingBuildPlan.value = true;
   try {
     const blob = await exportShippingWorkspace();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `圣诞发货建单计划_${latestAsOfDate()}.xlsx`;
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `圣诞发货建单计划_${latestAsOfDate()}.xlsx`);
   } catch (error: any) {
     message.error(errorText(error, '建单计划导出失败'));
   } finally {
     exportingBuildPlan.value = false;
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadTodayBuildPlan() {
+  if (exportingTodayPlan.value) return;
+  exportingTodayPlan.value = true;
+  try {
+    const blob = await exportTodayShippingWorkspace();
+    downloadBlob(blob, `今日到货建单计划_${latestAsOfDate()}.xlsx`);
+  } catch (error: any) {
+    message.error(errorText(error, '今日建单表导出失败'));
+  } finally {
+    exportingTodayPlan.value = false;
   }
 }
 
@@ -361,11 +423,13 @@ async function restoreDefaultRules() {
 }
 
 async function synchronizeReceipts() {
-  if (!workspace.value || syncingReceipts.value) return;
+  if (!workspace.value || syncingReceipts.value || allocatingToday.value)
+    return;
   syncingReceipts.value = true;
   try {
     const synchronized = await syncShippingReceipts();
     workspace.value = synchronized.workspace;
+    workspaceDetailsLoaded.value = true;
     persistedWorkspace.value = cloneWorkspaceState(synchronized.workspace);
     await recalculate();
     const { removedLocks, skippedRecords, syncedReceipts } =
@@ -384,12 +448,34 @@ async function synchronizeReceipts() {
   }
 }
 
+async function allocateTodayArrivals() {
+  if (!workspace.value || allocatingToday.value || syncingReceipts.value)
+    return;
+  allocatingToday.value = true;
+  try {
+    const synchronized = await syncShippingReceipts();
+    workspace.value = synchronized.workspace;
+    workspaceDetailsLoaded.value = true;
+    persistedWorkspace.value = cloneWorkspaceState(synchronized.workspace);
+    await recalculate();
+    activeTab.value = 'today';
+    message.success(
+      `今日同步 ${integer(summary.value?.todayReceiptCount)} 条来货，自动分配 ${integer(summary.value?.todayAllocatedQty)} 件，未分配 ${integer(summary.value?.todayUnallocatedQty)} 件`,
+    );
+  } catch (error: any) {
+    await recoverWorkspaceAfterFailure(error, '今日到货同步与自动分配失败');
+  } finally {
+    allocatingToday.value = false;
+  }
+}
+
 async function synchronizeSkuPlans() {
   if (!workspace.value || syncingSkuPlans.value) return;
   syncingSkuPlans.value = true;
   try {
     const synchronized = await syncShippingSkuPlans();
     workspace.value = synchronized.workspace;
+    workspaceDetailsLoaded.value = true;
     persistedWorkspace.value = cloneWorkspaceState(synchronized.workspace);
     await recalculate();
     const { mergedRecords, skippedRecords, syncedSkuPlans } =
@@ -408,17 +494,97 @@ async function synchronizeSkuPlans() {
   }
 }
 
+function lightweightSimulationResult(
+  bootstrap: ShippingWorkspaceBootstrap,
+): ShippingSimulationResult {
+  const emptyBuildSummary = {
+    blockedBatchCount: 0,
+    blockedQty: 0,
+    dispatchReadyBatchCount: 0,
+    dispatchReadyQty: 0,
+    staPlanReadyBatchCount: 0,
+    staPlanReadyQty: 0,
+    totalBatchCount: 0,
+    totalQty: 0,
+  };
+  return {
+    allocations: [],
+    buildBlockers: [],
+    buildSummary: { ...emptyBuildSummary },
+    channels: bootstrap.result.channels,
+    shipmentBatches: [],
+    summary: bootstrap.result.summary,
+    todayBuildBlockers: [],
+    todayBuildSummary: { ...emptyBuildSummary },
+    todayShipmentBatches: [],
+    unallocated: [],
+  };
+}
+
+async function ensureWorkspaceDetails(includeSimulation = false) {
+  if (
+    workspaceDetailsLoaded.value &&
+    (!includeSimulation || fullResultLoaded.value)
+  ) {
+    return;
+  }
+  const [loadedWorkspace, loadedResult] = await Promise.all([
+    workspaceDetailsLoaded.value
+      ? Promise.resolve(null)
+      : fetchShippingWorkspace(),
+    includeSimulation && !fullResultLoaded.value
+      ? fetchShippingWorkspaceSimulation()
+      : Promise.resolve(null),
+  ]);
+  if (loadedWorkspace) {
+    workspace.value = loadedWorkspace;
+    persistedWorkspace.value = cloneWorkspaceState(loadedWorkspace);
+    workspaceDetailsLoaded.value = true;
+    bootstrapTotalReturnedQty.value = loadedWorkspace.receipts.reduce(
+      (sum, row) => sum + Number(row.returnedQty || row.goodQty || 0),
+      0,
+    );
+  }
+  if (loadedResult) {
+    result.value = loadedResult;
+    fullResultLoaded.value = true;
+  }
+}
+
+async function selectTab(key: TabKey) {
+  activeTab.value = key;
+  if (key === 'dashboard') return;
+  loading.value = true;
+  try {
+    await ensureWorkspaceDetails(key === 'allocation' || key === 'today');
+  } catch (error: any) {
+    activeTab.value = 'dashboard';
+    message.error(errorText(error, '发货分配明细加载失败'));
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function loadPage() {
   loading.value = true;
   try {
-    [meta.value, workspace.value] = await Promise.all([
+    const [loadedMeta, bootstrap] = await Promise.all([
       fetchShippingAllocationMeta(),
-      fetchShippingWorkspace(),
+      fetchShippingWorkspaceBootstrap(),
     ]);
-    refreshWorkspaceAsOfDate();
-    persistedWorkspace.value = cloneWorkspaceState(workspace.value);
+    meta.value = loadedMeta;
+    workspace.value = {
+      ...bootstrap.workspace,
+      lockedAllocations: [],
+      receipts: [],
+      skuPlans: [],
+    };
+    result.value = lightweightSimulationResult(bootstrap);
+    bootstrapTotalReturnedQty.value = bootstrap.totalReturnedQty;
+    workspaceDetailsLoaded.value = false;
+    fullResultLoaded.value = false;
+    persistedWorkspace.value = null;
     defaultRules.value = cloneRules(meta.value.rules);
-    await recalculate();
   } catch (error: any) {
     message.error(errorText(error, '发货分配工作区加载失败'));
   } finally {
@@ -451,7 +617,7 @@ onMounted(loadPage);
           class="tab-button"
           :class="[{ active: activeTab === tab.key }]"
           type="button"
-          @click="activeTab = tab.key"
+          @click="selectTab(tab.key)"
         >
           {{ tab.label }}
         </button>
@@ -469,28 +635,44 @@ onMounted(loadPage);
 
             <div class="kpi-grid">
               <article class="kpi-card blue">
-                <span>国家渠道总计划</span><strong>{{ integer(summary?.totalPlanQty) }}</strong><small>{{ channels.length }} 个发货渠道</small>
+                <span>国家渠道总计划</span
+                ><strong>{{ integer(summary?.totalPlanQty) }}</strong
+                ><small>{{ channels.length }} 个发货渠道</small>
               </article>
               <article class="kpi-card green">
-                <span>今日收货数量</span><strong>{{ integer(summary?.todayReceiptQty) }}</strong><small>按今日来货良品数量统计</small>
+                <span>今日收货数量</span
+                ><strong>{{ integer(summary?.todayReceiptQty) }}</strong
+                ><small>按今日来货良品数量统计</small>
               </article>
               <article class="kpi-card cyan">
-                <span>今日预计可发出</span><strong>{{
+                <span>今日预计可发出</span
+                ><strong>{{
                   integer(summary?.todayExpectedDispatchQty)
-                }}</strong><small>当前可直接交仓批次数量合计</small>
+                }}</strong
+                ><small>当前可直接交仓批次数量合计</small>
               </article>
               <article class="kpi-card green">
-                <span>累计回货数量</span><strong>{{ integer(totalReturned) }}</strong><small>良品 {{ integer(summary?.totalGoodQty) }}</small>
+                <span>累计回货数量</span
+                ><strong>{{ integer(totalReturned) }}</strong
+                ><small>良品 {{ integer(summary?.totalGoodQty) }}</small>
               </article>
               <article class="kpi-card cyan">
-                <span>已发货数量</span><strong>{{ integer(totalShipped) }}</strong><small>来自 STA 货件详情，仅统计目标 SKU</small>
+                <span>已发货数量</span
+                ><strong>{{ integer(totalShipped) }}</strong
+                ><small>来自 STA 货件详情，仅统计目标 SKU</small>
               </article>
               <article class="kpi-card orange">
-                <span>总计划完成率</span><strong>{{ percent(summary?.totalPlanCompletionRate) }}</strong><small>已发货数量 / 国家渠道总计划</small>
+                <span>总计划完成率</span
+                ><strong>{{ percent(summary?.totalPlanCompletionRate) }}</strong
+                ><small>已发货数量 / 国家渠道总计划</small>
               </article>
               <article class="kpi-card gold">
-                <span>海运发货占比</span><strong>{{ percent(summary?.shippedSeaFreightRate) }}</strong><small>目标 {{ percent(summary?.seaFreightTargetMinRate) }} -
-                  {{ percent(summary?.seaFreightTargetMaxRate) }}</small>
+                <span>海运发货占比</span
+                ><strong>{{ percent(summary?.shippedSeaFreightRate) }}</strong
+                ><small
+                  >目标 {{ percent(summary?.seaFreightTargetMinRate) }} -
+                  {{ percent(summary?.seaFreightTargetMaxRate) }}</small
+                >
               </article>
             </div>
 
@@ -519,10 +701,12 @@ onMounted(loadPage);
                         <span
                           class="priority"
                           :class="[channel.priorityLevel.toLowerCase()]"
-                          >{{ channel.priorityLevel }}</span>
+                          >{{ channel.priorityLevel }}</span
+                        >
                       </td>
                       <td>
-                        <strong>{{ channel.name }}</strong><small>{{ channel.code }}</small>
+                        <strong>{{ channel.name }}</strong
+                        ><small>{{ channel.code }}</small>
                       </td>
                       <td>{{ integer(channel.plannedQty) }}</td>
                       <td class="number-positive">
@@ -550,6 +734,238 @@ onMounted(loadPage);
             </div>
           </section>
 
+          <section v-show="activeTab === 'today'" class="page-section">
+            <div class="section-heading">
+              <div>
+                <h2>今日到货分配</h2>
+                <p>
+                  {{ todayDate }}
+                  到货货件；历史来货按已发送处理，只生成今日建单批次
+                </p>
+              </div>
+              <div class="toolbar">
+                <button
+                  class="button sync-button"
+                  :disabled="
+                    exportingTodayPlan ||
+                    allocatingToday ||
+                    syncingReceipts ||
+                    todayReceipts.length === 0
+                  "
+                  type="button"
+                  @click="downloadTodayBuildPlan"
+                >
+                  <Download :size="15" />
+                  {{ exportingTodayPlan ? '正在导出...' : '导出今日建单表' }}
+                </button>
+                <button
+                  class="button primary sync-button"
+                  :disabled="allocatingToday || syncingReceipts"
+                  type="button"
+                  @click="allocateTodayArrivals"
+                >
+                  <RotateCw :size="15" />
+                  {{
+                    allocatingToday ? '同步分配中...' : '同步今日来货并自动分配'
+                  }}
+                </button>
+              </div>
+            </div>
+
+            <div class="kpi-grid today-kpi-grid">
+              <article class="kpi-card blue">
+                <span>今日到货</span>
+                <strong>{{ integer(summary?.todayReceiptQty) }}</strong>
+                <small
+                  >{{ integer(summary?.todayReceiptCount) }} 条来货 /
+                  {{ integer(summary?.todayReceiptSkuCount) }} 个 SKU</small
+                >
+              </article>
+              <article class="kpi-card green">
+                <span>生成建单</span>
+                <strong>{{ integer(summary?.todayAllocatedQty) }}</strong>
+                <small
+                  >{{
+                    integer(summary?.todayShipmentBatchCount)
+                  }}
+                  个建单批次</small
+                >
+              </article>
+              <article class="kpi-card cyan">
+                <span>可直接交仓</span>
+                <strong>{{
+                  integer(summary?.todayExpectedDispatchQty)
+                }}</strong>
+                <small
+                  >可创建 STA
+                  {{ integer(summary?.todayStaPlanReadyQty) }} 件</small
+                >
+              </article>
+              <article class="kpi-card orange">
+                <span>未分配</span>
+                <strong>{{ integer(summary?.todayUnallocatedQty) }}</strong>
+                <small>留样、凑整、缺计划或渠道不可发</small>
+              </article>
+            </div>
+
+            <div v-if="todayReceipts.length === 0" class="data-panel">
+              <div class="empty today-empty">
+                今日暂无来货记录，请先同步来货数据。
+              </div>
+            </div>
+
+            <template v-else>
+              <div
+                v-if="Number(summary?.todayBlockedQty || 0) > 0"
+                class="warning-bar"
+              >
+                已生成建单中有
+                {{ integer(summary?.todayBlockedQty) }}
+                件尚未满足直接交仓条件，具体原因见下表状态列。
+              </div>
+              <div class="data-panel">
+                <div class="panel-title">
+                  <h3>今日建单清单</h3>
+                  <span>历史分配已计入渠道占用，但不会混入以下批次</span>
+                </div>
+                <div class="table-scroll today-batch-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>建单批次</th>
+                        <th>渠道 / 运输</th>
+                        <th>店铺 / 目的站</th>
+                        <th>SKU 建单数量</th>
+                        <th>总件数 / 箱数</th>
+                        <th>仓库排程 / 发走</th>
+                        <th>状态 / 处理要求</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr
+                        v-for="batch in todayShipmentBatches"
+                        :key="batch.batchId"
+                      >
+                        <td>
+                          <strong>{{ batch.batchId }}</strong>
+                          <small>{{
+                            batch.destinationCountryCode || '-'
+                          }}</small>
+                        </td>
+                        <td>
+                          <strong>{{ batch.channelName }}</strong>
+                          <small
+                            >{{ shippingModeLabel(batch.mode) }} ·
+                            {{ batch.channelCode }}</small
+                          >
+                        </td>
+                        <td>
+                          <strong>{{ batch.sellerName || '-' }}</strong>
+                          <small
+                            >SID {{ batch.sid || '-' }} ·
+                            {{ batch.destinationCountryCode || '-' }}</small
+                          >
+                        </td>
+                        <td
+                          class="today-sku-cell"
+                          :title="batchSkuSummary(batch)"
+                        >
+                          <div
+                            v-for="item in batch.items"
+                            :key="item.itemId"
+                            class="today-sku-line"
+                          >
+                            <strong
+                              >{{ item.sku }} ×
+                              {{ integer(item.allocationQty) }}</strong
+                            >
+                            <small
+                              >{{ item.msku || '缺 MSKU' }} /
+                              {{ item.fnsku || '缺 FNSKU' }}</small
+                            >
+                          </div>
+                        </td>
+                        <td>
+                          <strong>{{ integer(batch.qty) }} 件</strong>
+                          <small
+                            >{{ batch.estimatedBoxes ?? '-' }} 箱 /
+                            {{ integer(batch.skuCount) }} 个 SKU</small
+                          >
+                        </td>
+                        <td>
+                          {{ batchSchedule(batch) }}
+                          <small
+                            >发走 {{ batch.plannedDispatchDate || '-' }} / 截止
+                            {{ batch.deadline || '-' }}</small
+                          >
+                        </td>
+                        <td>
+                          <span
+                            class="status"
+                            :class="[batchStatusClass(batch.status)]"
+                            >{{ batchStatusLabel(batch.status) }}</span
+                          >
+                          <small class="today-blocker-text">
+                            {{
+                              batchBlockerSummary(batch) ||
+                              '规则校验通过，可按此批次建单发货'
+                            }}
+                          </small>
+                        </td>
+                      </tr>
+                      <tr v-if="todayShipmentBatches.length === 0">
+                        <td class="empty" colspan="7">
+                          今日分配尚未形成建单批次
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <template v-if="todayUnallocated.length > 0">
+                <div class="subsection-heading">
+                  <h3>今日未分配明细</h3>
+                  <span
+                    >{{
+                      integer(summary?.todayUnallocatedQty)
+                    }}
+                    件需要处理</span
+                  >
+                </div>
+                <div class="data-panel">
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>店铺</th>
+                          <th>SPU</th>
+                          <th>SKU</th>
+                          <th>未分配数量</th>
+                          <th>原因</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="row in todayUnallocated"
+                          :key="`${row.receiptId}-${row.reasonCode || row.reason}`"
+                        >
+                          <td>{{ row.shop || '-' }}</td>
+                          <td>{{ row.spu || '-' }}</td>
+                          <td>
+                            <strong>{{ row.sku }}</strong>
+                          </td>
+                          <td class="number-danger">{{ integer(row.qty) }}</td>
+                          <td class="rule-cell">{{ row.reason }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </template>
+            </template>
+          </section>
+
           <section v-show="activeTab === 'receipts'" class="page-section">
             <div class="section-heading">
               <div>
@@ -559,7 +975,7 @@ onMounted(loadPage);
               <div class="toolbar">
                 <button
                   class="button primary sync-button"
-                  :disabled="syncingReceipts"
+                  :disabled="syncingReceipts || allocatingToday"
                   type="button"
                   @click="synchronizeReceipts"
                 >
@@ -682,21 +1098,21 @@ onMounted(loadPage);
                     :value="channel.code"
                   >
                     {{ channel.name }}
-                  </option>
-</select><select v-model="buildStateFilter">
+                  </option></select
+                ><select v-model="buildStateFilter">
                   <option value="">全部建单状态</option>
                   <option value="dispatch_ready">可直接交仓</option>
                   <option value="sta_ready">可创建 STA（含可交仓）</option>
-                  <option value="blocked">存在阻断</option>
-</select><button
+                  <option value="blocked">存在阻断</option></select
+                ><button
                   class="button sync-button"
                   :disabled="exportingBuildPlan"
                   type="button"
                   @click="downloadBuildPlan"
                 >
                   <Download :size="15" />
-                  {{ exportingBuildPlan ? '正在导出' : '导出建单表' }}
-</button><button
+                  {{ exportingBuildPlan ? '正在导出' : '导出建单表' }}</button
+                ><button
                   class="button primary"
                   type="button"
                   @click="recalculateAndSave('未锁定数据已重新分配')"
@@ -706,20 +1122,30 @@ onMounted(loadPage);
               </div>
             </div>
             <div class="allocation-scope-bar">
-              <span>到货良品
-                <strong>{{ integer(summary?.totalGoodQty) }}</strong></span>
-              <span>STA 已发货抵扣
+              <span
+                >到货良品
+                <strong>{{ integer(summary?.totalGoodQty) }}</strong></span
+              >
+              <span
+                >STA 已发货抵扣
                 <strong>{{
                   integer(summary?.deductedShippedQty)
-                }}</strong></span>
-              <span>本次建议
-                <strong>{{ integer(summary?.proposedQty) }}</strong></span><span>可创建 STA 计划
+                }}</strong></span
+              >
+              <span
+                >本次建议
+                <strong>{{ integer(summary?.proposedQty) }}</strong></span
+              ><span
+                >可创建 STA 计划
                 <strong>{{
                   integer(result?.buildSummary.staPlanReadyQty)
-                }}</strong></span><span>可直接交仓
+                }}</strong></span
+              ><span
+                >可直接交仓
                 <strong>{{
                   integer(result?.buildSummary.dispatchReadyQty)
-                }}</strong></span>
+                }}</strong></span
+              >
             </div>
             <div v-if="result?.buildBlockers.length" class="build-blocker-bar">
               <strong>当前阻断</strong>
@@ -774,10 +1200,12 @@ onMounted(loadPage);
                       <tr>
                         <td>
                           <strong>{{ batch.batchId }}</strong>
-                          <small>{{
+                          <small
+                            >{{
                               batch.canCreateStaPlan ? '标识完整' : '不可建单'
                             }}
-                            / {{ shippingModeLabel(batch.mode) }}</small>
+                            / {{ shippingModeLabel(batch.mode) }}</small
+                          >
                         </td>
                         <td>
                           {{ batch.channelName
@@ -802,17 +1230,22 @@ onMounted(loadPage);
                         </td>
                         <td>
                           {{ batchSchedule(batch) }}
-                          <small v-if="batch.warehouseReadyDate">按仓库日产能排程</small>
+                          <small v-if="batch.warehouseReadyDate"
+                            >按仓库日产能排程</small
+                          >
                         </td>
                         <td>
                           {{ batch.plannedDispatchDate || '-' }}
-                          <small v-if="batch.deadline">截止 {{ batch.deadline }}</small>
+                          <small v-if="batch.deadline"
+                            >截止 {{ batch.deadline }}</small
+                          >
                         </td>
                         <td>
                           <span
                             class="status"
                             :class="[batchStatusClass(batch.status)]"
-                            >{{ batchStatusLabel(batch.status) }}</span>
+                            >{{ batchStatusLabel(batch.status) }}</span
+                          >
                           <small
                             v-if="
                               batch.canCreateStaPlan && !batch.readyForDispatch
@@ -915,12 +1348,14 @@ onMounted(loadPage);
                                     <span
                                       v-if="item.blockers.length === 0"
                                       class="validation-ok"
-                                      >通过</span>
+                                      >通过</span
+                                    >
                                     <template v-else>
                                       <span
                                         v-for="blocker in item.blockers"
                                         :key="blocker.code"
-                                        >{{ blocker.label }}</span>
+                                        >{{ blocker.label }}</span
+                                      >
                                     </template>
                                     <small
                                       v-if="item.listingCandidates.length > 1"
@@ -985,7 +1420,8 @@ onMounted(loadPage);
                         <small
                           v-if="cartonEstimateLabel(row)"
                           :title="row.cartonEstimateDetail"
-                          >{{ cartonEstimateLabel(row) }}</small>
+                          >{{ cartonEstimateLabel(row) }}</small
+                        >
                       </td>
                       <td>
                         <span class="status" :class="[statusClass(row.status)]">
@@ -1000,7 +1436,8 @@ onMounted(loadPage);
                           type="button"
                           @click="toggleLock(row)"
                         >
-                          <i></i><span>{{ row.locked ? '已锁定' : '未锁定' }}</span>
+                          <i></i
+                          ><span>{{ row.locked ? '已锁定' : '未锁定' }}</span>
                         </button>
                       </td>
                     </tr>
@@ -1067,10 +1504,12 @@ onMounted(loadPage);
             <div class="data-panel">
               <div class="panel-title">
                 <h3>国家渠道</h3>
-                <span>{{
+                <span
+                  >{{
                     channels.length
                   }}
-                  个渠道，名称、代码和运输方式由系统维护</span>
+                  个渠道，名称、代码和运输方式由系统维护</span
+                >
               </div>
               <div class="table-scroll channel-plan-table">
                 <table>
@@ -1096,7 +1535,9 @@ onMounted(loadPage);
                             {{ shippingModeLabel(channel.mode) }}
                           </span>
                         </div>
-                        <small>{{ channel.code }} · {{ channel.country }}</small>
+                        <small
+                          >{{ channel.code }} · {{ channel.country }}</small
+                        >
                       </td>
                       <td class="channel-plan-qty">
                         <strong>{{ integer(channel.plannedQty) }}</strong>
@@ -1161,8 +1602,8 @@ onMounted(loadPage);
                   type="button"
                   @click="restoreDefaultRules"
                 >
-                  恢复默认
-</button><button
+                  恢复默认</button
+                ><button
                   class="button primary"
                   type="button"
                   @click="saveRules"
@@ -1172,25 +1613,45 @@ onMounted(loadPage);
               </div>
             </div>
             <div class="settings-grid">
-              <label><span>美国 SKU 货件凑整单位</span><input disabled type="number" value="5" /><small>美国固定按 5 件凑整；其他国家按实际可发数量发货</small></label>
-              <label><span>美国一致装箱核心箱数</span><input
+              <label
+                ><span>美国 SKU 货件凑整单位</span
+                ><input disabled type="number" value="5" /><small
+                  >美国固定按 5 件凑整；其他国家按实际可发数量发货</small
+                ></label
+              >
+              <label
+                ><span>美国一致装箱核心箱数</span
+                ><input
                   v-model.number="workspace.rules.usMinBoxes"
                   min="1"
                   type="number"
-                /><small>同一建单批次前 5 箱配置一致，可多 SKU
-                  混装；后续箱自由混装</small></label>
-              <label><span>美国 SKU 凑箱等待时间（小时）</span><input
+                /><small
+                  >同一建单批次前 5 箱配置一致，可多 SKU
+                  混装；后续箱自由混装</small
+                ></label
+              >
+              <label
+                ><span>美国 SKU 凑箱等待时间（小时）</span
+                ><input
                   v-model.number="workspace.rules.usWaitHours"
                   min="0"
                   type="number"
-                /><small>到期后转为人工复核</small></label>
-              <label><span>交仓节点预警天数</span><input
+                /><small>到期后转为人工复核</small></label
+              >
+              <label
+                ><span>交仓节点预警天数</span
+                ><input
                   v-model.number="workspace.rules.deadlineWarningDays"
                   max="30"
                   min="0"
                   type="number"
-                /><small>临近节点时，美国优先美东；加拿大不再继续等整批</small></label>
-              <label><span>加拿大海运整批释放比例（%）</span><input
+                /><small
+                  >临近节点时，美国优先美东；加拿大不再继续等整批</small
+                ></label
+              >
+              <label
+                ><span>加拿大海运整批释放比例（%）</span
+                ><input
                   :value="
                     Math.round(workspace.rules.canadaSeaReleaseRate * 100)
                   "
@@ -1201,15 +1662,30 @@ onMounted(loadPage);
                     workspace.rules.canadaSeaReleaseRate =
                       Number(($event.target as HTMLInputElement).value) / 100
                   "
-                /><small>未达比例先进入加拿大整批池，固定空运量已独立保留</small></label>
-              <label><span>英国 IEN 最低箱数</span><input :value="workspace.rules.ukIenMinBoxes" disabled /><small>不按件数限制；同一店铺、同一非空运渠道可合并多个 SKU，至少 6
-                  箱才可直接交仓</small></label>
-              <label><span>仓库每日处理能力（件）</span><input
+                /><small
+                  >未达比例先进入加拿大整批池，固定空运量已独立保留</small
+                ></label
+              >
+              <label
+                ><span>英国 IEN 最低箱数</span
+                ><input :value="workspace.rules.ukIenMinBoxes" disabled /><small
+                  >不按件数限制；同一店铺、同一非空运渠道可合并多个 SKU，至少 6
+                  箱才可直接交仓</small
+                ></label
+              >
+              <label
+                ><span>仓库每日处理能力（件）</span
+                ><input
                   v-model.number="workspace.rules.warehouseDailyCapacity"
                   min="1"
                   type="number"
-                /><small>用于按到货日期安排建单批次的仓库开始和完成时间</small></label>
-              <label><span>主市场完成率门槛（%）</span><input
+                /><small
+                  >用于按到货日期安排建单批次的仓库开始和完成时间</small
+                ></label
+              >
+              <label
+                ><span>主市场完成率门槛（%）</span
+                ><input
                   :value="
                     Math.round(workspace.rules.primaryCompletionRate * 100)
                   "
@@ -1220,12 +1696,20 @@ onMounted(loadPage);
                     workspace.rules.primaryCompletionRate =
                       Number(($event.target as HTMLInputElement).value) / 100
                   "
-                /><small>超过门槛后才释放澳洲、中东全部渠道</small></label>
-              <label><span>5箱凑箱统一处理截止日</span><input
+                /><small>超过门槛后才释放澳洲、中东全部渠道</small></label
+              >
+              <label
+                ><span>5箱凑箱统一处理截止日</span
+                ><input
                   v-model="workspace.rules.usCartonDeadline"
                   type="date"
-                /><small>与等待时间取较早日期；到期转运营确认拼箱、拆分或升级</small></label>
-              <label><span>海运占比目标下限（%）</span><input
+                /><small
+                  >与等待时间取较早日期；到期转运营确认拼箱、拆分或升级</small
+                ></label
+              >
+              <label
+                ><span>海运占比目标下限（%）</span
+                ><input
                   :value="
                     Math.round(workspace.rules.seaFreightTargetMinRate * 100)
                   "
@@ -1236,8 +1720,11 @@ onMounted(loadPage);
                     workspace.rules.seaFreightTargetMinRate =
                       Number(($event.target as HTMLInputElement).value) / 100
                   "
-                /><small>会议目标下限为 70%</small></label>
-              <label><span>海运占比目标上限（%）</span><input
+                /><small>会议目标下限为 70%</small></label
+              >
+              <label
+                ><span>海运占比目标上限（%）</span
+                ><input
                   :value="
                     Math.round(workspace.rules.seaFreightTargetMaxRate * 100)
                   "
@@ -1248,7 +1735,8 @@ onMounted(loadPage);
                     workspace.rules.seaFreightTargetMaxRate =
                       Number(($event.target as HTMLInputElement).value) / 100
                   "
-                /><small>会议目标上限为 80%</small></label>
+                /><small>会议目标上限为 80%</small></label
+              >
             </div>
           </section>
         </template>
@@ -1428,6 +1916,10 @@ textarea:focus {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.today-kpi-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .kpi-card {
@@ -1831,6 +2323,34 @@ th small {
   min-width: 1450px;
 }
 
+.today-batch-table table {
+  min-width: 1280px;
+}
+
+.today-empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+}
+
+.today-sku-cell {
+  min-width: 260px;
+  white-space: normal;
+}
+
+.today-sku-line + .today-sku-line {
+  padding-top: 7px;
+  margin-top: 7px;
+  border-top: 1px solid #edf1f5;
+}
+
+.today-blocker-text {
+  max-width: 300px;
+  line-height: 1.4;
+  color: #64748b;
+  white-space: normal;
+}
+
 .detail-button {
   min-width: 48px;
   padding: 4px 8px;
@@ -2124,7 +2644,8 @@ th small {
 }
 
 @media (max-width: 1080px) {
-  .kpi-grid {
+  .kpi-grid,
+  .today-kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
@@ -2150,6 +2671,7 @@ th small {
   }
 
   .kpi-grid,
+  .today-kpi-grid,
   .settings-grid {
     grid-template-columns: 1fr;
   }

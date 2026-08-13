@@ -22,6 +22,16 @@ const routes: RouteRecordRaw[] = [
           title: '发货分配',
         },
       },
+      {
+        name: 'KanbanShippingLocationFinder',
+        path: '/kanban/shipping/location-finder',
+        component: () => import('#/views/kanban/shipping-location/index.vue'),
+        meta: {
+          authority: ['kanban:shipping'],
+          icon: 'lucide:map-pinned',
+          title: '仓库代码查询',
+        },
+      },
     ],
   },
 ];

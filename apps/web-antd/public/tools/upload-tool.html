@@ -1372,7 +1372,7 @@
             <div class="dropzone" id="galleryDrop">
               <div>
                 <strong>点击选择文件夹或拖入</strong>
-                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色</span>
+                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色；图片必须小于 10MB（亚马逊口径：1000KB = 1MB）</span>
               </div>
             </div>
             <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept="image/*" />
@@ -1406,7 +1406,7 @@
             <div class="dropzone" id="aPlusDrop">
               <div>
                 <strong>把全部 A+ 图片和视频拖到这里</strong>
-                <span>系统按默认文件名自动分配到对应图片组；未识别或冲突文件保留给人工调整</span>
+                <span>系统按默认文件名自动分配到对应图片组；图片必须小于 10MB（视频不套用此限制）</span>
               </div>
             </div>
             <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
@@ -1452,7 +1452,7 @@
             <div class="dropzone" id="brandDrop">
               <div>
                 <strong>把全部品牌故事图片拖到这里</strong>
-                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序，并为每张图生成一个品牌卡媒体资产</span>
+                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序；图片必须小于 10MB（亚马逊口径：1000KB = 1MB）</span>
               </div>
             </div>
             <input class="hidden" id="brandBulkInput" type="file" multiple accept="image/*" />
@@ -2890,9 +2890,141 @@
       sensitivity: "base",
     });
 
+    // Amazon's image limit uses decimal units: 1000 KB = 1 MB.
+    const AMAZON_KB_BYTES = 1000;
+    const AMAZON_MB_BYTES = AMAZON_KB_BYTES * 1000;
+    const AMAZON_IMAGE_MAX_BYTES = 10 * AMAZON_MB_BYTES;
+
     function isImageFile(file) {
       return String(file?.type || "").startsWith("image/") ||
         /\.(avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(file?.name || "");
+    }
+
+    function formatAmazonImageSize(bytes) {
+      const size = Number(bytes || 0);
+      return `${(size / AMAZON_MB_BYTES).toFixed(2)}MB`;
+    }
+
+    function validateImageFile(file) {
+      if (!file) {
+        return { level: "error", message: "未选择图片文件" };
+      }
+      if (!isImageFile(file)) {
+        return { level: "error", message: "只支持图片文件" };
+      }
+      const size = Number(file.size || 0);
+      if (!Number.isFinite(size) || size <= 0) {
+        return { level: "error", message: "图片文件为空，无法上传" };
+      }
+      if (size >= AMAZON_IMAGE_MAX_BYTES) {
+        return {
+          level: "error",
+          message: `图片必须小于10MB（按亚马逊口径1000KB=1MB），当前${formatAmazonImageSize(size)}`,
+        };
+      }
+      return { level: "ok", message: "图片大小校验通过" };
+    }
+
+    function readImageDimensions(file) {
+      return new Promise((resolve) => {
+        if (!file || !isImageFile(file)) {
+          resolve({ level: "error", message: "只支持图片文件" });
+          return;
+        }
+        const objectUrl = URL.createObjectURL(file);
+        const image = new Image();
+        const cleanup = () => {
+          URL.revokeObjectURL(objectUrl);
+          image.onload = null;
+          image.onerror = null;
+        };
+        image.onload = () => {
+          const width = Number(image.naturalWidth || image.width || 0);
+          const height = Number(image.naturalHeight || image.height || 0);
+          cleanup();
+          if (!width || !height) {
+            resolve({ level: "error", message: "无法读取图片尺寸" });
+            return;
+          }
+          resolve({ level: "ok", width, height });
+        };
+        image.onerror = () => {
+          cleanup();
+          resolve({ level: "error", message: "图片无法读取或格式不受支持" });
+        };
+        image.src = objectUrl;
+      });
+    }
+
+    function dimensionError(width, height, message) {
+      return {
+        level: "error",
+        message: `${message}，当前尺寸为${width}x${height}`,
+      };
+    }
+
+    function imageDimensionRule(file, context = {}) {
+      const name = String(file?.name || "");
+      const kind = String(context.kind || "");
+      if (kind === "gallery") {
+        return (width, height) => {
+          if (width < 500 || width > 10000 || height < 1000 || height > 10000) {
+            return dimensionError(
+              width,
+              height,
+              "橱窗图片尺寸限制为最小500x1000、最大10000x10000",
+            );
+          }
+          return null;
+        };
+      }
+      if (kind === "aPlus") {
+        const platform = String(context.platform || "");
+        if (platform === "电脑端" || context.role === "cover" || /视频封面/i.test(name)) {
+          return (width, height) => width < 1464 || height < 600
+            ? dimensionError(width, height, "A+电脑端图片/视频封面最小尺寸为1464x600")
+            : null;
+        }
+        if (platform === "手机端") {
+          return (width, height) => width < 600 || height < 450
+            ? dimensionError(width, height, "A+手机端图片最小尺寸为600x450")
+            : null;
+        }
+      }
+      if (kind === "brand") {
+        return (width, height) => {
+          if (height > 5000) {
+            return dimensionError(width, height, "品牌故事媒体图片最大高度为5000px");
+          }
+          if (/品牌故事/i.test(name) && /电脑端/i.test(name) && (width < 1464 || height < 625)) {
+            return dimensionError(width, height, "品牌故事电脑端背景图最小尺寸为1464x625");
+          }
+          return null;
+        };
+      }
+      return null;
+    }
+
+    async function validateImageAsset(file, context = {}) {
+      const basic = validateImageFile(file);
+      if (basic.level === "error") return basic;
+      if (context.kind === "brand" && Number(file.size || 0) >= 9.3 * AMAZON_MB_BYTES) {
+        return {
+          level: "error",
+          message: `品牌故事图片必须小于9.3MB，当前${formatAmazonImageSize(file.size)}`,
+        };
+      }
+      const dimensions = await readImageDimensions(file);
+      if (dimensions.level === "error") return dimensions;
+      const rule = imageDimensionRule(file, context);
+      const dimensionValidation = rule?.(dimensions.width, dimensions.height);
+      if (dimensionValidation) return dimensionValidation;
+      return {
+        level: "ok",
+        message: `图片校验通过（${dimensions.width}x${dimensions.height}，${formatAmazonImageSize(file.size)}）`,
+        width: dimensions.width,
+        height: dimensions.height,
+      };
     }
 
     function brandHeroKeywordScore(file) {
@@ -2950,12 +3082,23 @@
       };
     }
 
-    function buildBrandInitialAssignment(files) {
+    async function buildBrandInitialAssignment(files) {
       const incoming = Array.from(files || []).filter(Boolean);
-      const images = incoming
-        .filter(isImageFile)
-        .sort((left, right) => fileNameCollator.compare(left.name, right.name));
-      const ignored = incoming.filter((file) => !isImageFile(file));
+      const ignored = [];
+      const images = [];
+      for (const file of incoming) {
+          if (!isImageFile(file)) {
+            ignored.push({ file, reason: "非图片文件" });
+            continue;
+          }
+          const validation = await validateImageAsset(file, { kind: "brand" });
+          if (validation.level === "error") {
+            ignored.push({ file, reason: validation.message });
+            continue;
+          }
+          images.push(file);
+      }
+      images.sort((left, right) => fileNameCollator.compare(left.name, right.name));
       const heroFiles = images.length
         ? selectBrandHeroPair(images)
         : { desktop: null, mobile: null };
@@ -2973,8 +3116,8 @@
       };
     }
 
-    function autoAssignBrandFiles(files) {
-      const assignment = buildBrandInitialAssignment(files);
+    async function autoAssignBrandFiles(files) {
+      const assignment = await buildBrandInitialAssignment(files);
       if (!assignment.total) return;
       if (!assignment.images.length) {
         state.brandAutoAssignResult = {
@@ -3032,7 +3175,7 @@
         }));
     }
 
-    function parseGalleryEntry(entry) {
+    async function parseGalleryEntry(entry) {
       const file = entry?.file;
       const relativePath = String(entry?.relativePath || file?.name || "")
         .replace(/\\/g, "/");
@@ -3041,6 +3184,13 @@
       }
       if (!isImageFile(file)) {
         return { ignored: true, reason: "非图片文件", file };
+      }
+      if (!String(file.name || "").includes("LLW") || !String(file.name || "").includes("_")) {
+        return { ignored: true, reason: "请检查文件名命名规范：文件名需包含 LLW 和下划线", file };
+      }
+      const imageValidation = await validateImageAsset(file, { kind: "gallery" });
+      if (imageValidation.level === "error") {
+        return { ignored: true, reason: imageValidation.message, file };
       }
 
       const stem = String(file.name || "")
@@ -3071,13 +3221,13 @@
       };
     }
 
-    function buildGalleryInitialAssignment(entries) {
+    async function buildGalleryInitialAssignment(entries) {
       const incoming = Array.from(entries || []).filter(Boolean);
       const ignored = [];
       const groupMap = new Map();
 
-      incoming.forEach((entry) => {
-        const parsed = parseGalleryEntry(entry);
+      for (const entry of incoming) {
+        const parsed = await parseGalleryEntry(entry);
         if (parsed.ignored) {
           if (!/^thumbs\.db$/i.test(parsed.file?.name || "")) {
             ignored.push({
@@ -3085,7 +3235,7 @@
               reason: parsed.reason,
             });
           }
-          return;
+          continue;
         }
         const key = parsed.baseName.toLocaleLowerCase("en-US");
         if (!groupMap.has(key)) {
@@ -3096,7 +3246,7 @@
           });
         }
         groupMap.get(key).candidates.push(parsed);
-      });
+      }
 
       const groups = [...groupMap.values()]
         .map((group) => {
@@ -3158,8 +3308,8 @@
       };
     }
 
-    function autoAssignGalleryEntries(entries) {
-      const assignment = buildGalleryInitialAssignment(entries);
+    async function autoAssignGalleryEntries(entries) {
+      const assignment = await buildGalleryInitialAssignment(entries);
       if (!assignment.total) return;
       state.gallery = assignment.groups;
       state.galleryAutoAssignResult = {
@@ -3229,6 +3379,10 @@
           message: slot.role === "video" ? "此文件位只能放视频" : "此文件位只能放图片",
         };
       }
+      if (slot.role !== "video") {
+        const imageValidation = validateImageFile(file);
+        if (imageValidation.level === "error") return imageValidation;
+      }
       if (!slot.platform) return { level: "ok", message: "文件类型校验通过" };
       const detected = filePlatform(file.name);
       if (detected === "冲突") {
@@ -3246,7 +3400,19 @@
       return { level: "ok", message: `${detected}原名校验通过` };
     }
 
-    function assignSlotFile(
+    async function validateSlotFileAsync(component, slot, file = slot.file) {
+      const basic = validateSlotFile(component, slot, file);
+      if (basic.level === "error" || !file || slot.role === "video") return basic;
+      const validation = await validateImageAsset(file, {
+        kind: component.kind === "gallery" ? "gallery" : component.type === "brandHero" || component.type === "brandMedia" ? "brand" : "aPlus",
+        platform: slot.platform,
+        role: slot.role,
+      });
+      if (validation.level === "error") return validation;
+      return basic;
+    }
+
+    async function assignSlotFile(
       component,
       slot,
       file,
@@ -3257,7 +3423,7 @@
         if (renderNow) render();
         return true;
       }
-      const result = validateSlotFile(component, slot, file);
+      const result = await validateSlotFileAsync(component, slot, file);
       if (result.level === "error") {
         if (!silent) alert(`${file.name}\n${result.message}`);
         return false;
@@ -3399,19 +3565,29 @@
       return `${target.platform}_${pad2(target.componentIndex)}${suffix}`;
     }
 
-    function autoAssignAPlusFiles(files) {
+    async function autoAssignAPlusFiles(files) {
       const incoming = Array.from(files || []).filter(Boolean);
       if (!incoming.length) return;
+      const invalidImages = [];
+      const validIncoming = incoming.filter((file) => {
+        if (!isImageFile(file)) return true;
+        const validation = validateImageFile(file);
+        if (validation.level === "error") {
+          invalidImages.push({ file, reason: validation.message });
+          return false;
+        }
+        return true;
+      });
       const parsedFiles = compactAPlusParsedTargets(
-        incoming.map((file) => ({
+        validIncoming.map((file) => ({
           file,
           target: parseAPlusDefaultFile(file),
         })),
       );
       ensureAPlusAssignmentStructure(parsedFiles);
       const assigned = [];
-      const unassigned = [];
-      parsedFiles.forEach(({ file, target }) => {
+      const unassigned = [...invalidImages];
+      for (const { file, target } of parsedFiles) {
         const located = slotForAPlusTarget(target);
         if (!target || !located) {
           unassigned.push({
@@ -3429,17 +3605,17 @@
           });
           return;
         }
-        const validation = validateSlotFile(located.component, located.slot, file);
+        const validation = await validateSlotFileAsync(located.component, located.slot, file);
         if (validation.level === "error") {
           unassigned.push({ file, reason: validation.message });
           return;
         }
-        assignSlotFile(located.component, located.slot, file, {
+        await assignSlotFile(located.component, located.slot, file, {
           renderNow: false,
           silent: true,
         });
         assigned.push({ file, target: describeAPlusTarget(target) });
-      });
+      }
       state.pool = [
         ...state.pool,
         ...unassigned.map((item) => item.file),
@@ -3486,8 +3662,8 @@
       quickInput.className = "hidden";
       quickInput.type = "file";
       quickInput.accept = accept;
-      quickInput.addEventListener("change", () => {
-        if (!assignSlotFile(component, slot, quickInput.files[0] || null)) {
+      quickInput.addEventListener("change", async () => {
+        if (!await assignSlotFile(component, slot, quickInput.files[0] || null)) {
           quickInput.value = "";
         }
       });
@@ -3514,7 +3690,7 @@
       wrapper.addEventListener("drop", (event) => {
         const file = event.dataTransfer?.files?.[0] || null;
         if (!file) return;
-        assignSlotFile(component, slot, file);
+        void assignSlotFile(component, slot, file);
       });
       wrapper.appendChild(quickInput);
       return wrapper;
@@ -3811,6 +3987,7 @@
           .map((item) => ({
             file: item.file,
             isImage: true,
+            validationContext: { kind: "gallery" },
             path: `${root}/${group.folderName}/${galleryTargetName(group, item)}`,
           }))
       );
@@ -3829,6 +4006,11 @@
             aiGeneratedPerson: Boolean(slot.aiGeneratedPerson),
             file: slot.file,
             isImage: isImageFlagSlot(slot),
+            validationContext: {
+              kind: "aPlus",
+              platform: slot.platform,
+              role: slot.role,
+            },
             path: `${root}/${targetForSlot(slot, version, index)}`,
           });
         });
@@ -3848,6 +4030,7 @@
             aiGeneratedPerson: Boolean(slot.aiGeneratedPerson),
             file: slot.file,
             isImage: isImageFlagSlot(slot),
+            validationContext: { kind: "brand", platform: slot.platform, role: slot.role },
             path: `${root}/${targetForSlot(slot, 1, index)}`,
           });
         });
@@ -3874,6 +4057,39 @@
       return state.gallery
         .filter((group) => group.missingMain || !group.items.some((item) => item.order === null))
         .map((group) => `颜色 ${group.color} 缺少无括号的主图 / Swatch 文件`);
+    }
+
+    async function currentImageValidationErrors() {
+      const entries = [
+        ...collectGalleryFiles().map((entry) => ({
+          label: "橱窗图",
+          file: entry.file,
+          context: entry.validationContext,
+        })),
+        ...collectAPlusFiles()
+          .filter((entry) => entry.isImage)
+          .map((entry) => ({
+            label: "A+",
+            file: entry.file,
+            context: entry.validationContext,
+          })),
+        ...collectBrandFiles().map((entry) => ({
+          label: "品牌故事",
+          file: entry.file,
+          context: entry.validationContext,
+        })),
+        ...(state.gpsrImage
+          ? [{ label: "GPSR", file: state.gpsrImage, context: { kind: "gpsr" } }]
+          : []),
+      ];
+      const errors = [];
+      for (const { label, file, context } of entries) {
+        const validation = await validateImageAsset(file, context);
+        if (validation.level === "error") {
+          errors.push(`${label} / ${file?.name || "未知文件"}：${validation.message}`);
+        }
+      }
+      return [...new Set(errors)];
     }
 
     function imageFlagRecord(entry) {
@@ -3967,7 +4183,9 @@
         ? `完整图 ${heroFiles.length}/2：${heroFiles.join("、")}`
         : "未识别到完整图";
       const ignoredText = result.ignored?.length
-        ? `；忽略非图片文件：${result.ignored.map((file) => file.name).join("、")}`
+        ? `；忽略 ${result.ignored.length} 个文件：${result.ignored
+          .map((item) => `${item.file?.name || "未知文件"}（${item.reason}）`)
+          .join("；")}`
         : "";
       els.brandPool.classList.toggle(
         "warn",
@@ -4785,6 +5003,14 @@
         );
         return;
       }
+      const imageValidationErrors = await currentImageValidationErrors();
+      if (imageValidationErrors.length) {
+        setFeishuTaskStatus(
+          `图片校验未通过：${imageValidationErrors.join("；")}`,
+          "warn",
+        );
+        return;
+      }
       if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !gpsrImage) {
         setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件", "warn");
         return;
@@ -5019,8 +5245,20 @@
       document.getElementById("downloadAplus").addEventListener("click", () => downloadZip("aplus"));
       document.getElementById("downloadBrand").addEventListener("click", () => downloadZip("brand"));
       els.gpsrImageButton.addEventListener("click", () => els.gpsrImageInput.click());
-      els.gpsrImageInput.addEventListener("change", () => {
-        state.gpsrImage = els.gpsrImageInput.files?.[0] || null;
+      els.gpsrImageInput.addEventListener("change", async () => {
+        const file = els.gpsrImageInput.files?.[0] || null;
+        const validation = file
+          ? await validateImageAsset(file, { kind: "gpsr" })
+          : { level: "error", message: "未选择图片文件" };
+        if (validation.level === "error") {
+          state.gpsrImage = null;
+          setFeishuTaskStatus(
+            `GPSR图片校验未通过：${file?.name || "未选择文件"}：${validation.message}`,
+            "warn",
+          );
+        } else {
+          state.gpsrImage = file;
+        }
         els.gpsrImageInput.value = "";
         render();
       });

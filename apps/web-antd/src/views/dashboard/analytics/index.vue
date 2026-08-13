@@ -720,9 +720,9 @@ const productDetailBaseParams = computed(() => {
     endDate: dateRange.endDate,
     projectTags: [...committedFilters.projectTags],
     responsibles: hasOwnerFilter
-      ? (resolvedResponsibles.length > 0
+      ? resolvedResponsibles.length > 0
         ? [...resolvedResponsibles]
-        : ['__NO_ACCESS__'])
+        : ['__NO_ACCESS__']
       : [],
     sites: [...committedFilters.sites],
     startDate: dateRange.startDate,
@@ -2335,7 +2335,12 @@ watch(
 
 onMounted(() => {
   void (async () => {
-    await reloadAll(false);
+    // Resolve backend-enforced department/country scope first. Loading the
+    // report in parallel here wastes one expensive query for operator/leader:
+    // the scope response immediately replaces its parameters and reloads it.
+    await loadData();
+    await nextTick();
+    await loadReportData();
     dashboardAutoReloadReady = true;
   })();
 });
