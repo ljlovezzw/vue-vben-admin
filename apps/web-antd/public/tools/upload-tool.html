@@ -2773,6 +2773,8 @@
 
     const APLUS_CAROUSEL_IMAGE_COUNT = 6;
     const APLUS_MAX_COMPONENTS = 7;
+    const BACKEND_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
+    const BACKEND_UPLOAD_RETRY_LIMIT = 3;
     const FEISHU_SMALL_UPLOAD_LIMIT = 20 * 1024 * 1024;
     const FEISHU_TASK_CACHE_TTL_MS = 30 * 60 * 1000;
     const FEISHU_TASK_CACHE_PREFIX = "kanban:feishu-image-task:v1:";
@@ -4596,6 +4598,15 @@
       return `${feishuTaskApiBaseUrl()}/from-tokens`;
     }
 
+    function feishuUploadSessionApiUrl(uploadId = "", action = "") {
+      const baseUrl = feishuTaskApiBaseUrl().replace(
+        "/image-upload-tasks",
+        "/image-upload-sessions",
+      );
+      if (!uploadId) return baseUrl;
+      return `${baseUrl}/${encodeURIComponent(uploadId)}${action ? `/${action}` : ""}`;
+    }
+
     function feishuTaskStatusApiUrl(taskId) {
       return `${feishuTaskApiBaseUrl()}/${encodeURIComponent(taskId)}`;
     }
@@ -4726,9 +4737,32 @@
         throw new Error(`接口返回不是 JSON：${text.slice(0, 160)}`);
       }
       if (!response.ok) {
-        throw new Error(payload?.detail || payload?.message || payload?.msg || `HTTP ${response.status}`);
+        const error = new Error(
+          payload?.detail || payload?.message || payload?.msg || `HTTP ${response.status}`,
+        );
+        error.status = response.status;
+        throw error;
       }
       return payload;
+    }
+
+    async function fetchJsonWithRetry(url, options, label) {
+      let lastError;
+      for (let attempt = 1; attempt <= BACKEND_UPLOAD_RETRY_LIMIT; attempt += 1) {
+        try {
+          return await readJsonResponse(await fetch(url, options));
+        } catch (error) {
+          lastError = error;
+          const status = Number(error?.status || 0);
+          const canRetry = !status || status >= 500;
+          if (!canRetry || attempt === BACKEND_UPLOAD_RETRY_LIMIT) throw error;
+          setFeishuTaskStatus(
+            `${label}失败，正在重试（${attempt}/${BACKEND_UPLOAD_RETRY_LIMIT - 1}）...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+        }
+      }
+      throw lastError || new Error(`${label}失败`);
     }
 
     async function requestFeishuEdgeTicket(metadataList, zipFiles, token) {
@@ -4903,27 +4937,80 @@
         };
       }
 
-      const formData = new FormData();
-      formData.append(
-        "metadata",
-        JSON.stringify({
-          metadata: metadataList[0],
-          metadataList,
-        }),
-      );
-      formData.append("asyncMode", "true");
-      zipFiles.forEach((item) => {
-        formData.append(item.key, item.blob, item.filename);
-      });
-
-      setFeishuTaskStatus("正在提交后端橱窗图直传任务...");
-      const queuedPayload = await readJsonResponse(await fetch(feishuTaskApiBaseUrl(), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+      const sessionFiles = zipFiles.map((item) => ({
+        contentType: item.contentType,
+        filename: item.filename,
+        key: item.key,
+        size: item.blob.size,
+        chunks: Math.ceil(item.blob.size / BACKEND_UPLOAD_CHUNK_SIZE),
       }));
+      const totalChunks = sessionFiles.reduce((total, item) => total + item.chunks, 0);
+
+      setFeishuTaskStatus(`正在创建后端分片上传会话（共 ${totalChunks} 片）...`);
+      const sessionPayload = await fetchJsonWithRetry(
+        feishuUploadSessionApiUrl(),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            metadata: {
+              metadata: metadataList[0],
+              metadataList,
+            },
+            files: sessionFiles,
+          }),
+        },
+        "创建上传会话",
+      );
+      const uploadId = sessionPayload?.data?.uploadId;
+      if (!uploadId) throw new Error("后端未返回上传会话 ID");
+
+      let uploadedChunks = 0;
+      for (const item of zipFiles) {
+        const chunkCount = Math.ceil(item.blob.size / BACKEND_UPLOAD_CHUNK_SIZE);
+        for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+          const start = chunkIndex * BACKEND_UPLOAD_CHUNK_SIZE;
+          const end = Math.min(item.blob.size, start + BACKEND_UPLOAD_CHUNK_SIZE);
+          const formData = new FormData();
+          formData.append("fileKey", item.key);
+          formData.append("chunkIndex", String(chunkIndex));
+          formData.append(
+            "chunk",
+            item.blob.slice(start, end),
+            `${item.filename}.part-${chunkIndex + 1}`,
+          );
+          setFeishuTaskStatus(
+            `正在分片上传 ${item.filename}（${uploadedChunks + 1}/${totalChunks}）...`,
+          );
+          await fetchJsonWithRetry(
+            feishuUploadSessionApiUrl(uploadId, "chunks"),
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              body: formData,
+            },
+            `${item.filename} 第 ${chunkIndex + 1} 片上传`,
+          );
+          uploadedChunks += 1;
+        }
+      }
+
+      setFeishuTaskStatus("文件分片上传完成，正在提交后台处理...");
+      const queuedPayload = await fetchJsonWithRetry(
+        feishuUploadSessionApiUrl(uploadId, "finish"),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        "完成分片上传",
+      );
       const taskId = queuedPayload?.data?.taskId;
       if (!taskId) {
         writeFeishuTaskCache(cacheKey, queuedPayload);

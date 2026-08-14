@@ -1613,6 +1613,7 @@ export interface ShippingReceipt {
 
 export interface ShippingSkuPlan {
   channelTargets: Record<string, number>;
+  productType?: '新品' | '老品' | string;
   sku?: string;
   spu?: string;
 }

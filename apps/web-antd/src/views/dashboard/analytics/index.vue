@@ -720,9 +720,9 @@ const productDetailBaseParams = computed(() => {
     endDate: dateRange.endDate,
     projectTags: [...committedFilters.projectTags],
     responsibles: hasOwnerFilter
-      ? resolvedResponsibles.length > 0
+      ? (resolvedResponsibles.length > 0
         ? [...resolvedResponsibles]
-        : ['__NO_ACCESS__']
+        : ['__NO_ACCESS__'])
       : [],
     sites: [...committedFilters.sites],
     startDate: dateRange.startDate,

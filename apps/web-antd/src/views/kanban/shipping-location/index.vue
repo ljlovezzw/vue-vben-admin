@@ -200,7 +200,7 @@ onMounted(loadBootstrap);
           <b>输入仓库代码</b>
           <span>支持空格、逗号、斜杠、换行</span>
         </div>
-        <textarea v-model="codeInput" spellcheck="false" />
+        <textarea v-model="codeInput" spellcheck="false"></textarea>
         <div class="actions">
           <button class="primary" disabled type="button">
             {{ loading ? '加载北美数据中' : '已初始化' }}
