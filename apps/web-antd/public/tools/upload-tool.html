@@ -165,6 +165,40 @@
       justify-content: flex-end;
     }
 
+    .asset-panel.is-collapsed > .panel-head .gallery-naming-guide {
+      display: none;
+    }
+
+    #galleryPanel:not(.is-collapsed) > .panel-head .asset-panel-actions {
+      width: auto;
+      flex: 0 0 auto;
+    }
+
+    .gallery-naming-guide {
+      min-width: 280px;
+      flex: 1 1 460px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
+      padding-left: 38px;
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .gallery-naming-guide strong {
+      color: #1f2937;
+      white-space: nowrap;
+    }
+
+    .gallery-naming-guide code {
+      overflow-wrap: anywhere;
+      color: #0f5f54;
+      font-family: Consolas, "Courier New", monospace;
+      white-space: pre-line;
+    }
+
     .asset-panel-heading {
       min-width: 0;
       flex: 1;
@@ -763,6 +797,60 @@
       align-items: start;
     }
 
+    .platform-pair-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    .platform-pair-column {
+      min-width: 0;
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid #cbd5e1;
+      border-top: 4px solid #64748b;
+      border-radius: 6px;
+      background: #f8fafc;
+    }
+
+    .platform-pair-column.is-mobile {
+      border-top-color: #0f766e;
+      background: #f0fdfa;
+    }
+
+    .platform-pair-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #dbe3ec;
+      color: #0f172a;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .platform-pair-title .mini {
+      font-weight: 500;
+    }
+
+    .platform-pair-column .map-row {
+      grid-template-columns: minmax(130px, .85fr) minmax(145px, 1fr);
+      gap: 10px;
+      padding: 0;
+    }
+
+    .platform-pair-column .map-row + .map-row {
+      padding-top: 12px;
+      border-top: 1px dashed #cbd5e1;
+    }
+
+    .platform-pair-column .map-row > .field:last-child {
+      grid-column: 1 / -1;
+    }
+
     .target {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 12px;
@@ -1187,6 +1275,21 @@
       font-size: 12px;
     }
 
+    .task-log-error {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: #b91c1c;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .task-log-error a {
+      color: #1d4ed8;
+      text-decoration: underline;
+    }
+
     .task-log-id {
       max-width: 180px;
       overflow: hidden;
@@ -1240,6 +1343,9 @@
     @media (max-width: 860px) {
       body { padding: 14px; }
       .grid, .grid-5, .map-row { grid-template-columns: 1fr; }
+      .platform-pair-grid { grid-template-columns: 1fr; }
+      .platform-pair-column .map-row { grid-template-columns: 1fr; }
+      .platform-pair-column .map-row > .field:last-child { grid-column: auto; }
       .shop-field { grid-column: 1; }
       .shop-options { grid-template-columns: 1fr; }
       .top { padding: 18px; }
@@ -1350,6 +1456,13 @@
                 <span class="sub">按显示顺序上传,5张橱窗图最佳</span>
               </span>
             </button>
+            <div class="gallery-naming-guide">
+              <strong>图片命名（两种写法均可）：</strong>
+              <code id="galleryNamingExample">LLW000423_BL.jpg / LLW000423_BL_1.jpg  # 主图 / Swatch
+LLW000423_BL(1).jpg / LLW000423_BL_2.jpg
+LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
+LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
+            </div>
             <div class="actions asset-panel-actions">
               <button
                 aria-label="GPSR图片，仅欧洲和英国可用"
@@ -1395,6 +1508,15 @@
               </span>
             </button>
             <div class="actions asset-panel-actions">
+              <button
+                class="btn btn-soft"
+                disabled
+                id="toggleAllAiGenerated"
+                title="同时勾选当前 A+ 和品牌故事图片的 AI生成、AI生成人物标记"
+                type="button"
+              >
+                一键勾选 AI 标记
+              </button>
               <button class="btn btn-danger" id="resetAplus" type="button">重置 A+</button>
               <button class="btn btn-primary" id="downloadAplus" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -1487,6 +1609,7 @@
               <div class="task-log-head">
                 <div class="task-log-title">
                   <strong>任务日志</strong>
+                  <span>输入SPU可查询日志</span>
                   <span class="task-log-status" id="taskLogStatus">等待同步任务状态</span>
                 </div>
                 <button class="btn btn-soft" id="refreshTaskLog" type="button">刷新日志</button>
@@ -1567,12 +1690,14 @@
       listingColorFilterPanel: document.getElementById("listingColorFilterPanel"),
       listingColorFilters: document.getElementById("listingColorFilters"),
       listingColorCurrent: document.getElementById("listingColorCurrent"),
+      galleryNamingExample: document.getElementById("galleryNamingExample"),
       galleryRules: document.getElementById("galleryRules"),
       aPlusRules: document.getElementById("aPlusRules"),
       brandRules: document.getElementById("brandRules"),
       gallerySectionCount: document.getElementById("gallerySectionCount"),
       aPlusSectionCount: document.getElementById("aPlusSectionCount"),
       aPlusModuleLimitText: document.getElementById("aPlusModuleLimitText"),
+      toggleAllAiGenerated: document.getElementById("toggleAllAiGenerated"),
       brandSectionCount: document.getElementById("brandSectionCount"),
       galleryDrop: document.getElementById("galleryDrop"),
       galleryBulkInput: document.getElementById("galleryBulkInput"),
@@ -3200,9 +3325,23 @@
         .replace(/\.[^.]+$/, "")
         .trim();
       const orderedMatch = stem.match(/^(.*?)[(（]\s*(\d+)\s*[)）]$/);
-      const baseName = String(orderedMatch?.[1] || stem).trim().replace(/[_-]+$/, "");
-      const order = orderedMatch ? Number(orderedMatch[2]) : null;
-      if (!baseName || (orderedMatch && (!Number.isInteger(order) || order <= 0))) {
+      const sequenceMatch = orderedMatch ? null : stem.match(/^(.+_[^_]+)_(\d+)$/);
+      const baseName = String(orderedMatch?.[1] || sequenceMatch?.[1] || stem)
+        .trim()
+        .replace(/[_-]+$/, "");
+      const sequence = sequenceMatch ? Number(sequenceMatch[2]) : null;
+      const order = orderedMatch
+        ? Number(orderedMatch[2])
+        : sequence === 1
+          ? null
+          : sequence !== null
+            ? sequence - 1
+            : null;
+      if (
+        !baseName ||
+        (orderedMatch && (!Number.isInteger(order) || order <= 0)) ||
+        (sequenceMatch && (!Number.isInteger(sequence) || sequence <= 0))
+      ) {
         return { ignored: true, reason: "文件名或括号序号无效", file };
       }
 
@@ -3745,6 +3884,36 @@
       return wrapper;
     }
 
+    function aiFlagSlots() {
+      return [...state.aPlus, ...state.brand]
+        .flatMap((component) => component.slots || [])
+        .filter((slot) => isImageFlagSlot(slot));
+    }
+
+    function toggleAllAiGenerated() {
+      const slots = aiFlagSlots();
+      if (!slots.length) return;
+      const shouldCheck = slots.some(
+        (slot) => !slot.aiGenerated || !slot.aiGeneratedPerson,
+      );
+      slots.forEach((slot) => {
+        slot.aiGenerated = shouldCheck;
+        slot.aiGeneratedPerson = shouldCheck;
+      });
+      render();
+    }
+
+    function renderAllAiGeneratedButton() {
+      const slots = aiFlagSlots();
+      const allChecked = slots.length > 0 && slots.every(
+        (slot) => slot.aiGenerated && slot.aiGeneratedPerson,
+      );
+      els.toggleAllAiGenerated.disabled = slots.length === 0;
+      els.toggleAllAiGenerated.textContent = allChecked
+        ? "取消全部 AI 标记"
+        : "一键勾选 AI 标记";
+    }
+
     function renderGallery() {
       els.galleryRules.innerHTML = "";
       if (!state.gallery.length) {
@@ -3821,7 +3990,7 @@
                 <span class="group-index">${groupLabel}</span>
                 <h3 class="rule-title">${component.title}</h3>
               </div>
-              <div class="mini">${component.type === "carousel" ? `手机端、电脑端各 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"} · 已选 ${selectedCount}/${component.slots.length}</div>
+              <div class="mini">${component.type === "carousel" ? `手机端、电脑端最多 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，可空，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"} · 已选 ${selectedCount}/${component.slots.length}</div>
             </div>
             <div class="group-tools">
               <button class="icon-btn collapse-button" type="button" title="${component.collapsed ? "展开图片组" : "收起图片组"}" aria-label="${component.collapsed ? "展开图片组" : "收起图片组"}">${component.collapsed ? "▸" : "▾"}</button>
@@ -3900,7 +4069,7 @@
           return;
         }
 
-        component.slots.forEach((slot) => {
+        const renderSlot = (slot, parent = card) => {
           const row = document.createElement("div");
           row.className = "map-row";
           const label = slot.kind === "video" ? (slot.role === "video" ? "视频" : "视频封面") : slot.platform;
@@ -3923,8 +4092,34 @@
             message.textContent = validation.message;
             previewField.appendChild(message);
           }
-          card.appendChild(row);
-        });
+          parent.appendChild(row);
+        };
+
+        const hasDesktop = component.slots.some((slot) => slot.platform === "电脑端");
+        const hasMobile = component.slots.some((slot) => slot.platform === "手机端");
+        if (hasDesktop && hasMobile) {
+          const pairGrid = document.createElement("div");
+          pairGrid.className = "platform-pair-grid";
+          ["电脑端", "手机端"].forEach((platform) => {
+            const platformSlots = component.slots.filter((slot) => slot.platform === platform);
+            const column = document.createElement("section");
+            column.className = `platform-pair-column ${platform === "手机端" ? "is-mobile" : "is-desktop"}`;
+            column.innerHTML = `
+              <div class="platform-pair-title">
+                <span>${platform}</span>
+                <span class="mini">已选 ${platformSlots.filter((slot) => slot.file).length}/${platformSlots.length}</span>
+              </div>
+            `;
+            platformSlots.forEach((slot) => renderSlot(slot, column));
+            pairGrid.appendChild(column);
+          });
+          card.appendChild(pairGrid);
+          component.slots
+            .filter((slot) => !slot.platform)
+            .forEach((slot) => renderSlot(slot));
+        } else {
+          component.slots.forEach((slot) => renderSlot(slot));
+        }
 
         els.aPlusRules.appendChild(card);
       });
@@ -3953,7 +4148,7 @@
           render();
         });
 
-        component.slots.forEach((slot) => {
+        const renderSlot = (slot, parent = card) => {
           const mediaIndex = component.type === "brandMedia" ? brandMediaIndex(component) : 1;
           const target = targetForSlot(slot, 1, mediaIndex);
           const label = slot.platform || `媒体资产 ${mediaIndex}`;
@@ -3974,8 +4169,31 @@
             message.textContent = validation.message;
             previewField.appendChild(message);
           }
-          card.appendChild(row);
-        });
+          parent.appendChild(row);
+        };
+
+        const hasDesktop = component.slots.some((slot) => slot.platform === "电脑端");
+        const hasMobile = component.slots.some((slot) => slot.platform === "手机端");
+        if (hasDesktop && hasMobile) {
+          const pairGrid = document.createElement("div");
+          pairGrid.className = "platform-pair-grid";
+          ["电脑端", "手机端"].forEach((platform) => {
+            const platformSlots = component.slots.filter((slot) => slot.platform === platform);
+            const column = document.createElement("section");
+            column.className = `platform-pair-column ${platform === "手机端" ? "is-mobile" : "is-desktop"}`;
+            column.innerHTML = `
+              <div class="platform-pair-title">
+                <span>${platform}</span>
+                <span class="mini">已选 ${platformSlots.filter((slot) => slot.file).length}/${platformSlots.length}</span>
+              </div>
+            `;
+            platformSlots.forEach((slot) => renderSlot(slot, column));
+            pairGrid.appendChild(column);
+          });
+          card.appendChild(pairGrid);
+        } else {
+          component.slots.forEach((slot) => renderSlot(slot));
+        }
         els.brandRules.appendChild(card);
       });
     }
@@ -4059,6 +4277,23 @@
       return state.gallery
         .filter((group) => group.missingMain || !group.items.some((item) => item.order === null))
         .map((group) => `颜色 ${group.color} 缺少无括号的主图 / Swatch 文件`);
+    }
+
+    function renderGalleryNamingExample() {
+      if (!els.galleryNamingExample) return;
+      const spu = String(els.spu?.value || "").trim().toUpperCase() || "LLW000423";
+      const selectedColors = selectedListingGroups()
+        .flatMap((group) => group.rows.map(colorOf))
+        .map((color) => String(color || "").trim().toUpperCase())
+        .filter(Boolean);
+      const color = selectedColors[0] || "BL";
+      const stem = `${spu}_${color}`;
+      els.galleryNamingExample.textContent = [
+        `${stem}.jpg / ${stem}_1.jpg  # 主图 / Swatch`,
+        `${stem}(1).jpg / ${stem}_2.jpg`,
+        `${stem}(2).jpg / ${stem}_3.jpg`,
+        `${stem}(3).jpg / ${stem}_4.jpg`,
+      ].join("\n");
     }
 
     async function currentImageValidationErrors() {
@@ -4244,9 +4479,11 @@
       renderPool();
       renderBrandPool();
       renderGpsrImageStatus();
+      renderGalleryNamingExample();
       renderGallery();
       renderAPlus();
       renderBrand();
+      renderAllAiGeneratedButton();
       renderAssetCounts();
       renderAPlusModuleLimit();
     }
@@ -4624,6 +4861,15 @@
       return `${item.statusLabel || "运行中"}${raw}`;
     }
 
+    function taskLogSafeUrl(value) {
+      try {
+        const url = new URL(String(value || "").trim());
+        return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+      } catch {
+        return "";
+      }
+    }
+
     function renderTaskLog() {
       const items = state.taskLog.items || [];
       els.taskLogList.innerHTML = "";
@@ -4652,6 +4898,13 @@
         const completedNodes = Array.isArray(item.completedNodes) && item.completedNodes.length
           ? item.completedNodes.join("，")
           : "未完成节点";
+        const errorReason = item.statusKind === "failed"
+          ? (item.errorReason || "失败原因未记录")
+          : "";
+        const errorLogUrl = taskLogSafeUrl(item.errorLogUrl);
+        const errorLogLink = errorLogUrl
+          ? ` <a href="${escapeHtml(errorLogUrl)}" target="_blank" rel="noopener noreferrer">查看错误日志</a>`
+          : "";
         row.innerHTML = `
           <div class="task-log-row">
             <div class="task-log-main">${escapeHtml(item.createdAt || "-")} ${escapeHtml(item.spu || "-")} ${escapeHtml(item.taskType || "图片任务")}</div>
@@ -4663,6 +4916,7 @@
             <span>父ASIN ${escapeHtml(item.parentAsin || "-")}</span>
             <span>${escapeHtml(completedNodes)}</span>
           </div>
+          ${errorReason ? `<div class="task-log-error"><span>失败原因：${escapeHtml(errorReason)}</span>${errorLogLink}</div>` : ""}
         `;
         if (item.recordUrl) {
           row.addEventListener("dblclick", () => window.open(item.recordUrl, "_blank", "noopener"));
@@ -5316,6 +5570,7 @@
       document.getElementById("addAplusCarousel").addEventListener("click", addAplusCarousel);
       document.getElementById("addAplusVideo").addEventListener("click", addAplusVideo);
       document.getElementById("addBrandMedia").addEventListener("click", addBrandMedia);
+      els.toggleAllAiGenerated.addEventListener("click", toggleAllAiGenerated);
       document.getElementById("resetGallery").addEventListener("click", () => {
         resetGallery();
       });

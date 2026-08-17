@@ -2211,6 +2211,17 @@ function csvCell(value: any) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function spreadsheetColumnLetter(columnNumber: number) {
+  let value = Math.max(1, Math.trunc(columnNumber));
+  let result = '';
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCodePoint(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
 async function downloadReportCsv() {
   if (reportDownloading.value) return;
   if (reportLoading.value || !report.value) {
@@ -2268,16 +2279,36 @@ async function downloadReportCsv() {
       );
     }
 
-    const headers: string[] = [];
-    const keys: string[] = [];
+    const exportColumns: Array<{
+      formulaSourceColumn?: string;
+      key: string;
+      label: string;
+    }> = [];
     for (const column of selectedReportColumnMetas.value) {
-      headers.push(column.label);
-      keys.push(column.key);
+      exportColumns.push({ key: column.key, label: column.label });
+      if (column.key === 'imageUrl') {
+        exportColumns.push({
+          formulaSourceColumn: spreadsheetColumnLetter(exportColumns.length),
+          key: 'imagePreview',
+          label: `${column.label}预览`,
+        });
+      }
     }
-    const lines = [headers.map((value) => csvCell(value)).join(',')];
-    for (const row of rows) {
+    const lines = [
+      exportColumns.map((column) => csvCell(column.label)).join(','),
+    ];
+    for (const [rowIndex, row] of rows.entries()) {
       const cells: string[] = [];
-      for (const key of keys) {
+      for (const column of exportColumns) {
+        if (column.formulaSourceColumn) {
+          const imageUrl = String(row.imageUrl || '').trim();
+          const formula = imageUrl
+            ? `=IMAGE(SUBSTITUTE(${column.formulaSourceColumn}${rowIndex + 2},"._SL75_.",""))`
+            : '';
+          cells.push(csvCell(formula));
+          continue;
+        }
+        const key = column.key;
         const value =
           key === 'salesTrend'
             ? reportTrendTitle(row.salesTrend)
@@ -2295,7 +2326,7 @@ async function downloadReportCsv() {
     link.download = `analytics-report-${reportQuery.startDate}-${reportQuery.endDate}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    message.success(`已导出 ${rows.length} 行、${keys.length} 列`);
+    message.success(`已导出 ${rows.length} 行、${exportColumns.length} 列`);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     message.error(`下载失败：${detail}`);

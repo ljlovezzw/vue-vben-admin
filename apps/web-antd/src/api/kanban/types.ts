@@ -171,10 +171,12 @@ export interface NetProfitGroupRow {
   accountCount: number;
   dimension: string;
   dimensionLabel: string;
+  investment: number;
   name: string;
   negativeCount: number;
   netProfit: number;
   parentAsinCount: number;
+  roi: number;
   rowCount: number;
   ytdNetProfit: number;
 }
@@ -194,6 +196,7 @@ export interface NetProfitProgressStep {
 
 export interface NetProfitSummary {
   accountCount: number;
+  investment: number;
   latestNetProfit: number;
   negativeCount: number;
   negativeRate: number;
@@ -201,6 +204,7 @@ export interface NetProfitSummary {
   positiveCount: number;
   profitLabel: string;
   rowCount: number;
+  roi: number;
   selectedNetProfit: number;
   updatedAt: string;
   ytdNetProfit: number;
@@ -218,12 +222,36 @@ export interface NetProfitOverview {
   dimensions: NetProfitDimensionOption[];
   filters: {
     brands: string[];
+    category1: string[];
+    category2: string[];
+    category3: string[];
     countries: string[];
     departments: string[];
+    developers: string[];
     operators: string[];
+    productTypes: string[];
+    suppliers: string[];
   };
   groups: NetProfitGroupRow[];
+  pivot: {
+    columnDimension: string;
+    columnLabel: string;
+    columns: string[];
+    rowDimension: string;
+    rowLabel: string;
+    rows: Array<{
+      cells: Array<{
+        investment: number;
+        netProfit: number;
+        parentAsinCount: number;
+        roi: number;
+      }>;
+      name: string;
+    }>;
+  };
   period: string;
+  periodFrom: string;
+  periodTo: string;
   periodLabel: string;
   periods: NetProfitPeriodOption[];
   progress: NetProfitProgressStep[];
@@ -231,15 +259,34 @@ export interface NetProfitOverview {
   risks: NetProfitGroupRow[];
   summary: NetProfitSummary;
   trend: NetProfitTrendPoint[];
+  breakEven: {
+    avgDaysToBreakEven: number;
+    pendingCount: number;
+    rows: Array<{
+      breakEvenDate: string;
+      daysToBreakEven: null | number;
+      developmentDate: string;
+      lifetimeNetProfit: number;
+      parentAsin: string;
+      shop: string;
+      spu: string;
+      status: string;
+    }>;
+    total: number;
+  };
 }
 
 export interface NetProfitDetailRow {
   amount: number;
   asin: string;
   brand: string;
+  category1: string;
+  category2: string;
+  category3: string;
   cashIncome: number;
   country: string;
   customCost: number;
+  developer: string;
   department: string;
   firstLegCost: number;
   firstLegFee: number;
@@ -258,12 +305,14 @@ export interface NetProfitDetailRow {
   parentAsin: string;
   period: string;
   productName: string;
+  productType: string;
   purchaseCost: number;
   purchaseQty: number;
   shop: string;
   sku: string;
   spu: string;
   standardFee: number;
+  supplier: string;
 }
 
 export interface NetProfitDetailColumn {
@@ -1614,6 +1663,7 @@ export interface ShippingReceipt {
 export interface ShippingSkuPlan {
   channelTargets: Record<string, number>;
   productType?: '新品' | '老品' | string;
+  storeTotals?: Record<string, number>;
   sku?: string;
   spu?: string;
 }

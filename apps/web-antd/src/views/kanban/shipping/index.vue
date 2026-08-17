@@ -1028,7 +1028,10 @@ onMounted(loadPage);
                         <strong>{{ plan.sku || '-' }}</strong>
                       </td>
                       <td>
-                        <span class="plan-type" :class="plan.productType === '新品' ? 'new' : 'old'">
+                        <span
+                          class="plan-type"
+                          :class="plan.productType === '新品' ? 'new' : 'old'"
+                        >
                           {{ plan.productType || '老品' }}
                         </span>
                       </td>

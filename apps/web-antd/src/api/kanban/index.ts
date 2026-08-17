@@ -148,12 +148,22 @@ export interface AnalyticsOverviewParams {
 
 export interface NetProfitOverviewParams {
   brands?: string[];
+  category1?: string[];
+  category2?: string[];
+  category3?: string[];
   countries?: string[];
   departments?: string[];
+  developers?: string[];
   dimension?: string;
   limit?: number;
   operators?: string[];
+  periodFrom?: string;
+  periodTo?: string;
   period?: string;
+  pivotColumn?: string;
+  pivotRow?: string;
+  productTypes?: string[];
+  suppliers?: string[];
 }
 
 export interface NetProfitDetailsParams extends NetProfitOverviewParams {
@@ -378,6 +388,18 @@ export async function fetchNetProfitOverview(
   params: NetProfitOverviewParams = {},
 ): Promise<NetProfitOverview> {
   return requestClient.get('/kanban/net-profit/overview', { params });
+}
+
+export async function fetchNetProfitBreakEven(
+  params: NetProfitOverviewParams = {},
+): Promise<NetProfitOverview['breakEven']> {
+  return requestClient.get('/kanban/net-profit/break-even', { params });
+}
+
+export async function fetchNetProfitPivot(
+  params: NetProfitOverviewParams = {},
+): Promise<NetProfitOverview['pivot']> {
+  return requestClient.get('/kanban/net-profit/pivot', { params });
 }
 
 export async function fetchNetProfitDetails(
