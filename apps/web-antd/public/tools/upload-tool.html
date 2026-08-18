@@ -3021,6 +3021,24 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     const AMAZON_KB_BYTES = 1000;
     const AMAZON_MB_BYTES = AMAZON_KB_BYTES * 1000;
     const AMAZON_IMAGE_MAX_BYTES = 10 * AMAZON_MB_BYTES;
+    const WEBP_REJECTION_MESSAGE = "不支持 WebP 图片，请转换为 JPG、JPEG 或 PNG 后再上传。";
+
+    function isWebpFile(file) {
+      return String(file?.type || "").trim().toLowerCase() === "image/webp" ||
+        /\.webp$/i.test(String(file?.name || "").trim());
+    }
+
+    function rejectWebpSelections(values, fileOf = (value) => value) {
+      const incoming = Array.from(values || []).filter(Boolean);
+      const rejected = incoming
+        .map((value) => fileOf(value))
+        .filter((file) => file && isWebpFile(file));
+      if (rejected.length) {
+        const names = rejected.map((file) => file.name || "未命名文件").join("\n");
+        alert(`${WEBP_REJECTION_MESSAGE}\n\n${names}`);
+      }
+      return incoming.filter((value) => !isWebpFile(fileOf(value)));
+    }
 
     function isImageFile(file) {
       return String(file?.type || "").startsWith("image/") ||
@@ -3035,6 +3053,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     function validateImageFile(file) {
       if (!file) {
         return { level: "error", message: "未选择图片文件" };
+      }
+      if (isWebpFile(file)) {
+        return { level: "error", message: WEBP_REJECTION_MESSAGE };
       }
       if (!isImageFile(file)) {
         return { level: "error", message: "只支持图片文件" };
@@ -3244,7 +3265,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignBrandFiles(files) {
-      const assignment = await buildBrandInitialAssignment(files);
+      const acceptedFiles = rejectWebpSelections(files);
+      const assignment = await buildBrandInitialAssignment(acceptedFiles);
       if (!assignment.total) return;
       if (!assignment.images.length) {
         state.brandAutoAssignResult = {
@@ -3450,7 +3472,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignGalleryEntries(entries) {
-      const assignment = await buildGalleryInitialAssignment(entries);
+      const acceptedEntries = rejectWebpSelections(entries, (entry) => entry?.file);
+      const assignment = await buildGalleryInitialAssignment(acceptedEntries);
       if (!assignment.total) return;
       state.gallery = assignment.groups;
       state.galleryAutoAssignResult = {
@@ -3514,6 +3537,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function validateSlotFile(component, slot, file = slot.file) {
       if (!file) return { level: "", message: "" };
+      if (isWebpFile(file)) {
+        return { level: "error", message: WEBP_REJECTION_MESSAGE };
+      }
       if (!fileKindMatches(slot, file)) {
         return {
           level: "error",
@@ -3707,7 +3733,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignAPlusFiles(files) {
-      const incoming = Array.from(files || []).filter(Boolean);
+      const incoming = rejectWebpSelections(files);
       if (!incoming.length) return;
       const invalidImages = [];
       const validIncoming = incoming.filter((file) => {
@@ -5594,6 +5620,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           : { level: "error", message: "未选择图片文件" };
         if (validation.level === "error") {
           state.gpsrImage = null;
+          if (file && isWebpFile(file)) {
+            alert(`${file.name}\n${WEBP_REJECTION_MESSAGE}`);
+          }
           setFeishuTaskStatus(
             `GPSR图片校验未通过：${file?.name || "未选择文件"}：${validation.message}`,
             "warn",

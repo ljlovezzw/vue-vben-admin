@@ -11,7 +11,12 @@ import { computed, onMounted, reactive, ref } from 'vue';
 
 import { Button, Drawer, Empty, Select, Spin, Table } from 'ant-design-vue';
 
-import { fetchNetProfitBreakEven, fetchNetProfitDetails, fetchNetProfitOverview, fetchNetProfitPivot } from '#/api/kanban';
+import {
+  fetchNetProfitBreakEven,
+  fetchNetProfitDetails,
+  fetchNetProfitOverview,
+  fetchNetProfitPivot,
+} from '#/api/kanban';
 
 interface ProfitQuery {
   brands: string[];
@@ -80,12 +85,29 @@ const overview = ref<NetProfitOverview | null>(null);
 const detailLoading = ref(false);
 const detailOpen = ref(false);
 const detailResult = ref<NetProfitDetails | null>(null);
-const pivot = ref<NetProfitOverview['pivot']>({ columnDimension: 'category2', columnLabel: '', columns: [], rowDimension: 'country', rowLabel: '', rows: [] });
-const breakEven = ref<NetProfitOverview['breakEven']>({ avgDaysToBreakEven: 0, pendingCount: 0, rows: [], total: 0 });
+const pivot = ref<NetProfitOverview['pivot']>({
+  columnDimension: 'category2',
+  columnLabel: '',
+  columns: [],
+  rowDimension: 'country',
+  rowLabel: '',
+  rows: [],
+});
+const breakEven = ref<NetProfitOverview['breakEven']>({
+  avgDaysToBreakEven: 0,
+  pendingCount: 0,
+  rows: [],
+  total: 0,
+});
 const activeTabKey = ref('profit-1');
 const panel = ref<'breakEven' | 'pivot' | 'ranking'>('ranking');
 const tabs = ref<ProfitTab[]>([
-  { key: 'profit-1', label: '利润总览 1', overview: null, query: createQuery() },
+  {
+    key: 'profit-1',
+    label: '利润总览 1',
+    overview: null,
+    query: createQuery(),
+  },
 ]);
 const query = reactive<ProfitQuery>(createQuery());
 
@@ -104,8 +126,20 @@ const fallbackDimensions = [
 const groupColumns: TableColumnsType<NetProfitGroupRow> = [
   { title: '排名', key: 'rank', width: 64, align: 'center' },
   { title: '维度', dataIndex: 'name', key: 'name', width: 220 },
-  { title: '纯利', dataIndex: 'netProfit', key: 'netProfit', align: 'right', width: 170 },
-  { title: '投入', dataIndex: 'investment', key: 'investment', align: 'right', width: 170 },
+  {
+    title: '纯利',
+    dataIndex: 'netProfit',
+    key: 'netProfit',
+    align: 'right',
+    width: 170,
+  },
+  {
+    title: '投入',
+    dataIndex: 'investment',
+    key: 'investment',
+    align: 'right',
+    width: 170,
+  },
   { title: 'ROI', dataIndex: 'roi', key: 'roi', align: 'right', width: 110 },
   { title: '贡献度', key: 'contribution', align: 'right', width: 120 },
   { title: '规模', key: 'scale', width: 180 },
@@ -115,19 +149,57 @@ const breakEvenColumns: TableColumnsType<any> = [
   { title: 'SPU', dataIndex: 'spu', key: 'spu', width: 120 },
   { title: '店铺', dataIndex: 'shop', key: 'shop', width: 130 },
   { title: '父ASIN', dataIndex: 'parentAsin', key: 'parentAsin', width: 130 },
-  { title: '开发日期', dataIndex: 'developmentDate', key: 'developmentDate', width: 120 },
-  { title: '转正日期', dataIndex: 'breakEvenDate', key: 'breakEvenDate', width: 120 },
-  { title: '转正天数', dataIndex: 'daysToBreakEven', key: 'daysToBreakEven', width: 110 },
-  { title: '全周期纯利', dataIndex: 'lifetimeNetProfit', key: 'lifetimeNetProfit', align: 'right', width: 140 },
+  {
+    title: '开发日期',
+    dataIndex: 'developmentDate',
+    key: 'developmentDate',
+    width: 120,
+  },
+  {
+    title: '转正日期',
+    dataIndex: 'breakEvenDate',
+    key: 'breakEvenDate',
+    width: 120,
+  },
+  {
+    title: '转正天数',
+    dataIndex: 'daysToBreakEven',
+    key: 'daysToBreakEven',
+    width: 110,
+  },
+  {
+    title: '全周期纯利',
+    dataIndex: 'lifetimeNetProfit',
+    key: 'lifetimeNetProfit',
+    align: 'right',
+    width: 140,
+  },
   { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
 ];
 
-const activeTab = computed(() => tabs.value.find((item) => item.key === activeTabKey.value));
-const filters = computed(() => overview.value?.filters ?? {
-  brands: [], category1: [], category2: [], category3: [], countries: [],
-  departments: [], developers: [], operators: [], productTypes: [], suppliers: [],
-});
-const dimensions = computed(() => overview.value?.dimensions?.length ? overview.value.dimensions : fallbackDimensions);
+const activeTab = computed(() =>
+  tabs.value.find((item) => item.key === activeTabKey.value),
+);
+const filters = computed(
+  () =>
+    overview.value?.filters ?? {
+      brands: [],
+      category1: [],
+      category2: [],
+      category3: [],
+      countries: [],
+      departments: [],
+      developers: [],
+      operators: [],
+      productTypes: [],
+      suppliers: [],
+    },
+);
+const dimensions = computed(() =>
+  overview.value?.dimensions?.length
+    ? overview.value.dimensions
+    : fallbackDimensions,
+);
 const periodOptions = computed(() => overview.value?.periods ?? []);
 const summary = computed(() => overview.value?.summary);
 
@@ -145,7 +217,9 @@ function optionList(values: string[]) {
 }
 
 function formatInteger(value: null | number | undefined) {
-  return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 });
+  return Number(value || 0).toLocaleString('zh-CN', {
+    maximumFractionDigits: 0,
+  });
 }
 
 function formatMoney(value: null | number | undefined) {
@@ -190,7 +264,12 @@ function switchTab(key: string) {
 function addTab() {
   saveActiveTab();
   const key = `profit-${Date.now()}`;
-  const tab = { key, label: `利润总览 ${tabs.value.length + 1}`, overview: null, query: cloneQuery(query) };
+  const tab = {
+    key,
+    label: `利润总览 ${tabs.value.length + 1}`,
+    overview: null,
+    query: cloneQuery(query),
+  };
   tabs.value.push(tab);
   activeTabKey.value = key;
   applyTab(tab);
@@ -259,7 +338,8 @@ function resetFilters() {
 function selectPanel(value: 'breakEven' | 'pivot' | 'ranking') {
   panel.value = value;
   if (value === 'pivot') void loadPivot();
-  if (value === 'breakEven' && breakEven.value.rows.length === 0) void loadBreakEven();
+  if (value === 'breakEven' && breakEven.value.rows.length === 0)
+    void loadBreakEven();
 }
 
 function groupContribution(value: number) {
@@ -267,7 +347,9 @@ function groupContribution(value: number) {
   return total ? value / total : 0;
 }
 
-async function openGroupDetails(record: NetProfitGroupRow | Record<string, any>) {
+async function openGroupDetails(
+  record: NetProfitGroupRow | Record<string, any>,
+) {
   const group = record as NetProfitGroupRow;
   detailOpen.value = true;
   detailLoading.value = true;
@@ -303,7 +385,9 @@ onMounted(loadOverview);
         <h1>纯利计算</h1>
         <p>按时间跨度和业务属性对比利润贡献、投入与全周期盈亏平衡。</p>
       </div>
-      <Button type="primary" :loading="loading" @click="loadOverview">刷新</Button>
+      <Button type="primary" :loading="loading" @click="loadOverview">
+刷新
+</Button>
     </div>
 
     <div class="view-tabs">
@@ -316,27 +400,126 @@ onMounted(loadOverview);
         @click="switchTab(tab.key)"
       >
         {{ tab.label }}
-        <span v-if="tabs.length > 1" class="tab-close" @click.stop="closeTab(tab.key)">×</span>
+        <span
+          v-if="tabs.length > 1"
+          class="tab-close"
+          @click.stop="closeTab(tab.key)"
+          >×</span>
       </button>
-      <button class="add-tab" type="button" title="新增对比视图" @click="addTab">＋</button>
+      <button
+        class="add-tab"
+        type="button"
+        title="新增对比视图"
+        @click="addTab"
+      >
+        ＋
+      </button>
     </div>
 
     <div class="filter-bar">
-      <Select v-model:value="query.periodFrom" class="filter-control" placeholder="开始月份" :options="periodOptions" />
+      <Select
+        v-model:value="query.periodFrom"
+        class="filter-control"
+        placeholder="开始月份"
+        :options="periodOptions"
+      />
       <span class="range-separator">至</span>
-      <Select v-model:value="query.periodTo" class="filter-control" placeholder="结束月份" :options="periodOptions" />
-      <Select v-model:value="query.dimension" class="filter-control" :options="dimensions.map((item) => ({ label: item.label, value: item.key }))" />
-      <Select v-model:value="query.countries" class="filter-control wide" mode="multiple" placeholder="国家" :max-tag-count="1" :options="optionList(filters.countries)" />
-      <Select v-model:value="query.brands" class="filter-control wide" mode="multiple" placeholder="品牌" :max-tag-count="1" :options="optionList(filters.brands)" />
-      <Select v-model:value="query.departments" class="filter-control wide" mode="multiple" placeholder="部门" :max-tag-count="1" :options="optionList(filters.departments)" />
-      <Select v-model:value="query.operators" class="filter-control wide" mode="multiple" placeholder="运营" :max-tag-count="1" :options="optionList(filters.operators)" />
-      <Select v-model:value="query.suppliers" class="filter-control wide" mode="multiple" placeholder="供应商" :max-tag-count="1" :options="optionList(filters.suppliers)" />
-      <Select v-model:value="query.developers" class="filter-control wide" mode="multiple" placeholder="开发负责人" :max-tag-count="1" :options="optionList(filters.developers)" />
-      <Select v-model:value="query.category1" class="filter-control wide" mode="multiple" placeholder="一级分类" :max-tag-count="1" :options="optionList(filters.category1)" />
-      <Select v-model:value="query.category2" class="filter-control wide" mode="multiple" placeholder="二级分类" :max-tag-count="1" :options="optionList(filters.category2)" />
-      <Select v-model:value="query.category3" class="filter-control wide" mode="multiple" placeholder="三级分类" :max-tag-count="1" :options="optionList(filters.category3)" />
-      <Select v-model:value="query.productTypes" class="filter-control" mode="multiple" placeholder="新老品" :max-tag-count="1" :options="optionList(filters.productTypes)" />
-      <Button type="primary" :loading="loading" @click="loadOverview">查询</Button>
+      <Select
+        v-model:value="query.periodTo"
+        class="filter-control"
+        placeholder="结束月份"
+        :options="periodOptions"
+      />
+      <Select
+        v-model:value="query.dimension"
+        class="filter-control"
+        :options="
+          dimensions.map((item) => ({ label: item.label, value: item.key }))
+        "
+      />
+      <Select
+        v-model:value="query.countries"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="国家"
+        :max-tag-count="1"
+        :options="optionList(filters.countries)"
+      />
+      <Select
+        v-model:value="query.brands"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="品牌"
+        :max-tag-count="1"
+        :options="optionList(filters.brands)"
+      />
+      <Select
+        v-model:value="query.departments"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="部门"
+        :max-tag-count="1"
+        :options="optionList(filters.departments)"
+      />
+      <Select
+        v-model:value="query.operators"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="运营"
+        :max-tag-count="1"
+        :options="optionList(filters.operators)"
+      />
+      <Select
+        v-model:value="query.suppliers"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="供应商"
+        :max-tag-count="1"
+        :options="optionList(filters.suppliers)"
+      />
+      <Select
+        v-model:value="query.developers"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="开发负责人"
+        :max-tag-count="1"
+        :options="optionList(filters.developers)"
+      />
+      <Select
+        v-model:value="query.category1"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="一级分类"
+        :max-tag-count="1"
+        :options="optionList(filters.category1)"
+      />
+      <Select
+        v-model:value="query.category2"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="二级分类"
+        :max-tag-count="1"
+        :options="optionList(filters.category2)"
+      />
+      <Select
+        v-model:value="query.category3"
+        class="filter-control wide"
+        mode="multiple"
+        placeholder="三级分类"
+        :max-tag-count="1"
+        :options="optionList(filters.category3)"
+      />
+      <Select
+        v-model:value="query.productTypes"
+        class="filter-control"
+        mode="multiple"
+        placeholder="新老品"
+        :max-tag-count="1"
+        :options="optionList(filters.productTypes)"
+      />
+      <Button type="primary" :loading="loading" @click="loadOverview">
+查询
+</Button>
       <Button @click="resetFilters">重置</Button>
     </div>
 
@@ -357,30 +540,85 @@ onMounted(loadOverview);
           </div>
           <div class="kpi-card tone-scope">
             <span>覆盖范围</span><strong>{{ formatInteger(summary?.parentAsinCount) }}</strong>
-            <em>{{ formatInteger(summary?.rowCount) }} 条利润明细 · {{ formatInteger(summary?.accountCount) }} 个账号</em>
+            <em>{{ formatInteger(summary?.rowCount) }} 条利润明细 ·
+              {{ formatInteger(summary?.accountCount) }} 个账号</em>
           </div>
         </div>
 
         <div class="sub-tabs">
-          <button :class="{ active: panel === 'ranking' }" type="button" @click="selectPanel('ranking')">利润贡献排行</button>
-          <button :class="{ active: panel === 'pivot' }" type="button" @click="selectPanel('pivot')">国家 × 品类透视</button>
-          <button :class="{ active: panel === 'breakEven' }" type="button" @click="selectPanel('breakEven')">全周期盈亏平衡</button>
+          <button
+            :class="{ active: panel === 'ranking' }"
+            type="button"
+            @click="selectPanel('ranking')"
+          >
+            利润贡献排行
+          </button>
+          <button
+            :class="{ active: panel === 'pivot' }"
+            type="button"
+            @click="selectPanel('pivot')"
+          >
+            国家 × 品类透视
+          </button>
+          <button
+            :class="{ active: panel === 'breakEven' }"
+            type="button"
+            @click="selectPanel('breakEven')"
+          >
+            全周期盈亏平衡
+          </button>
         </div>
 
         <section v-if="panel === 'ranking'" class="panel">
           <div class="panel-title">
-            <div><h2>利润贡献排行</h2><p>当前按 {{ dimensions.find((item) => item.key === query.dimension)?.label || '维度' }} 聚合，点击名称可继续使用现有明细下钻。</p></div>
+            <div>
+              <h2>利润贡献排行</h2>
+              <p>
+                当前按
+                {{
+                  dimensions.find((item) => item.key === query.dimension)
+                    ?.label || '维度'
+                }}
+                聚合，点击名称可继续使用现有明细下钻。
+              </p>
+            </div>
             <span>{{ overview.periodLabel }}</span>
           </div>
-          <Table :columns="groupColumns" :data-source="overview.groups" :pagination="false" row-key="name" size="middle">
+          <Table
+            :columns="groupColumns"
+            :data-source="overview.groups"
+            :pagination="false"
+            row-key="name"
+            size="middle"
+          >
             <template #bodyCell="{ column, record, text, index }">
-              <span v-if="column.key === 'rank'" class="rank-badge">{{ index + 1 }}</span>
-              <button v-else-if="column.key === 'name'" class="group-name" type="button" @click="openGroupDetails(record)">{{ text }}</button>
-              <span v-else-if="column.key === 'netProfit'" :class="moneyClass(record.netProfit)">{{ formatMoney(record.netProfit) }}</span>
-              <span v-else-if="column.key === 'investment'">{{ formatMoney(record.investment) }}</span>
-              <span v-else-if="column.key === 'roi'" :class="moneyClass(record.roi)">{{ formatRoi(record.roi) }}</span>
-              <span v-else-if="column.key === 'contribution'">{{ formatPercent(groupContribution(record.netProfit)) }}</span>
-              <span v-else-if="column.key === 'scale'">{{ formatInteger(record.parentAsinCount) }} 父ASIN · {{ formatInteger(record.accountCount) }} 账号</span>
+              <span v-if="column.key === 'rank'" class="rank-badge">{{
+                index + 1
+              }}</span>
+              <button
+                v-else-if="column.key === 'name'"
+                class="group-name"
+                type="button"
+                @click="openGroupDetails(record)"
+              >
+                {{ text }}
+              </button>
+              <span
+                v-else-if="column.key === 'netProfit'"
+                :class="moneyClass(record.netProfit)"
+                >{{ formatMoney(record.netProfit) }}</span>
+              <span v-else-if="column.key === 'investment'">{{
+                formatMoney(record.investment)
+              }}</span>
+              <span
+                v-else-if="column.key === 'roi'"
+                :class="moneyClass(record.roi)"
+                >{{ formatRoi(record.roi) }}</span>
+              <span v-else-if="column.key === 'contribution'">{{
+                formatPercent(groupContribution(record.netProfit))
+              }}</span>
+              <span v-else-if="column.key === 'scale'">{{ formatInteger(record.parentAsinCount) }} 父ASIN ·
+                {{ formatInteger(record.accountCount) }} 账号</span>
               <span v-else>{{ text || '-' }}</span>
             </template>
           </Table>
@@ -388,29 +626,99 @@ onMounted(loadOverview);
 
         <section v-else-if="panel === 'pivot'" class="panel">
           <div class="panel-title">
-            <div><h2>两重筛选数据透视</h2><p>行维度和列维度同时展开，单元格同时显示纯利、投入和 ROI。</p></div>
+            <div>
+              <h2>两重筛选数据透视</h2>
+              <p>行维度和列维度同时展开，单元格同时显示纯利、投入和 ROI。</p>
+            </div>
             <div class="pivot-selects">
-              <Select v-model:value="query.pivotRow" :options="dimensions.map((item) => ({ label: item.label, value: item.key }))" @change="loadOverview" />
+              <Select
+                v-model:value="query.pivotRow"
+                :options="
+                  dimensions.map((item) => ({
+                    label: item.label,
+                    value: item.key,
+                  }))
+                "
+                @change="loadOverview"
+              />
               <span>×</span>
-              <Select v-model:value="query.pivotColumn" :options="dimensions.map((item) => ({ label: item.label, value: item.key }))" @change="loadOverview" />
+              <Select
+                v-model:value="query.pivotColumn"
+                :options="
+                  dimensions.map((item) => ({
+                    label: item.label,
+                    value: item.key,
+                  }))
+                "
+                @change="loadOverview"
+              />
             </div>
           </div>
           <div v-if="pivot?.rows.length" class="pivot-table-wrap">
-            <table class="pivot-table"><thead><tr><th>{{ pivot.rowLabel }}</th><th v-for="column in pivot.columns" :key="column">{{ column }}</th></tr></thead><tbody><tr v-for="row in pivot.rows" :key="row.name"><th>{{ row.name }}</th><td v-for="(cell, index) in row.cells" :key="`${row.name}-${index}`"><strong>{{ formatMoney(cell.netProfit) }}</strong><small>投入 {{ formatMoney(cell.investment) }} · ROI {{ formatRoi(cell.roi) }}</small></td></tr></tbody></table>
+            <table class="pivot-table">
+              <thead>
+                <tr>
+                  <th>{{ pivot.rowLabel }}</th>
+                  <th v-for="column in pivot.columns" :key="column">
+                    {{ column }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in pivot.rows" :key="row.name">
+                  <th>{{ row.name }}</th>
+                  <td
+                    v-for="(cell, index) in row.cells"
+                    :key="`${row.name}-${index}`"
+                  >
+                    <strong>{{ formatMoney(cell.netProfit) }}</strong><small>投入 {{ formatMoney(cell.investment) }} · ROI
+                      {{ formatRoi(cell.roi) }}</small>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           <Empty v-else description="当前筛选没有可透视的数据" />
         </section>
 
         <section v-else class="panel">
-          <div class="panel-title"><div><h2>全周期盈亏平衡</h2><p>从 product_life 最早创建时间开始，追踪到利润月份首次转正。</p></div><span>共 {{ formatInteger(breakEven?.total) }} 个父ASIN</span></div>
-          <div class="break-even-summary"><span>平均转正周期 <strong>{{ Number(breakEven?.avgDaysToBreakEven || 0).toFixed(0) }} 天</strong></span><span>尚未转正 <strong>{{ formatInteger(breakEven?.pendingCount) }}</strong></span></div>
-          <Spin :spinning="breakEvenLoading"><Table :columns="breakEvenColumns" :data-source="breakEvenRows()" :pagination="{ pageSize: 50, showSizeChanger: true }" row-key="parentAsin" size="middle" /></Spin>
+          <div class="panel-title">
+            <div>
+              <h2>全周期盈亏平衡</h2>
+              <p>从 product_life 最早创建时间开始，追踪到利润月份首次转正。</p>
+            </div>
+            <span>共 {{ formatInteger(breakEven?.total) }} 个父ASIN</span>
+          </div>
+          <div class="break-even-summary">
+            <span>平均转正周期
+              <strong>{{
+                  Number(breakEven?.avgDaysToBreakEven || 0).toFixed(0)
+                }}
+                天</strong></span><span>尚未转正
+              <strong>{{
+                formatInteger(breakEven?.pendingCount)
+              }}</strong></span>
+          </div>
+          <Spin :spinning="breakEvenLoading">
+<Table
+              :columns="breakEvenColumns"
+              :data-source="breakEvenRows()"
+              :pagination="{ pageSize: 50, showSizeChanger: true }"
+              row-key="parentAsin"
+              size="middle"
+          />
+</Spin>
         </section>
       </template>
       <Empty v-else description="暂无纯利数据" />
     </Spin>
 
-    <Drawer v-model:open="detailOpen" width="88vw" :title="`纯利明细：${detailResult?.focus?.value || '当前排行'}`" destroy-on-close>
+    <Drawer
+      v-model:open="detailOpen"
+      width="88vw"
+      :title="`纯利明细：${detailResult?.focus?.value || '当前排行'}`"
+      destroy-on-close
+    >
       <Table
         :columns="detailColumns"
         :data-source="detailResult?.rows ?? []"
@@ -425,50 +733,316 @@ onMounted(loadOverview);
 </template>
 
 <style scoped>
-.net-profit-page { min-height: 100%; padding: 18px; color: #172033; background: #eef3f8; }
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
-.page-head h1 { margin: 0; font-size: 24px; font-weight: 750; }
-.page-head p { margin: 6px 0 0; color: #607089; }
-.view-tabs, .sub-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
-.view-tab, .add-tab, .sub-tabs button { border: 1px solid #cfdae7; background: #fff; color: #50627b; cursor: pointer; }
-.view-tab { padding: 8px 12px; border-radius: 7px 7px 0 0; }
-.view-tab.active, .sub-tabs button.active { color: #1558c0; border-color: #8bb7ee; background: #eaf3ff; }
-.tab-close { margin-left: 8px; color: #8a98aa; }
-.add-tab { width: 32px; height: 32px; border-radius: 6px; font-size: 18px; }
-.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; margin-bottom: 14px; background: #fff; border: 1px solid #d9e2ec; border-radius: 8px; }
-.filter-control { width: 142px; }
-.filter-control.wide { width: 170px; }
-.range-separator { color: #7c8ca2; }
-.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
-.kpi-card { min-height: 130px; padding: 18px; border: 1px solid #dbe4ef; border-radius: 8px; box-shadow: 0 8px 22px rgb(31 55 88 / 7%); }
-.kpi-card span, .kpi-card em { display: block; color: #63738a; font-size: 13px; font-style: normal; }
-.kpi-card strong { display: block; margin: 14px 0 8px; color: #172033; font-size: 28px; }
-.tone-profit { background: #effcf7; border-top: 4px solid #0f9f83; }
-.tone-investment { background: #fff8ed; border-top: 4px solid #f59e0b; }
-.tone-roi { background: #eff5ff; border-top: 4px solid #2563eb; }
-.tone-scope { background: #f6f2ff; border-top: 4px solid #7c3aed; }
-.sub-tabs { padding: 4px; background: #e5ecf4; border-radius: 7px; }
-.sub-tabs button { padding: 9px 14px; border-radius: 5px; }
-.panel { padding: 16px; margin-bottom: 14px; background: #fff; border: 1px solid #d9e2ec; border-radius: 8px; }
-.panel-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.panel-title h2 { margin: 0; font-size: 18px; }
-.panel-title p { margin: 4px 0 0; color: #708099; font-size: 13px; }
-.panel-title > span { color: #708099; white-space: nowrap; }
-.rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; color: #fff; background: #2869d7; border-radius: 50%; }
-.group-name { padding: 0; color: #1558c0; font-weight: 650; background: transparent; border: 0; cursor: pointer; }
-.positive { color: #00875a; }
-.negative { color: #d4380d; }
-.pivot-selects { display: flex; align-items: center; gap: 6px; }
-.pivot-selects .ant-select { width: 130px; }
-.pivot-table-wrap { overflow: auto; }
-.pivot-table { width: 100%; min-width: 760px; border-collapse: collapse; }
-.pivot-table th, .pivot-table td { padding: 10px 12px; text-align: right; border: 1px solid #e1e7ef; }
-.pivot-table th:first-child, .pivot-table td:first-child { text-align: left; }
-.pivot-table thead th { color: #49617f; background: #f5f8fb; }
-.pivot-table td strong, .pivot-table td small { display: block; }
-.pivot-table td small { margin-top: 5px; color: #7b8ba0; font-size: 11px; }
-.break-even-summary { display: flex; gap: 26px; padding: 12px 14px; margin-bottom: 12px; color: #65758a; background: #f5f8fb; border-radius: 6px; }
-.break-even-summary strong { margin-left: 6px; color: #172033; font-size: 18px; }
-@media (max-width: 1100px) { .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .filter-control.wide { width: 150px; } }
-@media (max-width: 640px) { .net-profit-page { padding: 10px; } .page-head { flex-direction: column; } .kpi-grid { grid-template-columns: 1fr; } .filter-control, .filter-control.wide { width: 100%; } .filter-bar { align-items: stretch; } .range-separator { display: none; } }
+.net-profit-page {
+  min-height: 100%;
+  padding: 18px;
+  color: #172033;
+  background: #eef3f8;
+}
+
+.page-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.page-head h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 750;
+}
+
+.page-head p {
+  margin: 6px 0 0;
+  color: #607089;
+}
+
+.view-tabs,
+.sub-tabs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.view-tab,
+.add-tab,
+.sub-tabs button {
+  color: #50627b;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #cfdae7;
+}
+
+.view-tab {
+  padding: 8px 12px;
+  border-radius: 7px 7px 0 0;
+}
+
+.view-tab.active,
+.sub-tabs button.active {
+  color: #1558c0;
+  background: #eaf3ff;
+  border-color: #8bb7ee;
+}
+
+.tab-close {
+  margin-left: 8px;
+  color: #8a98aa;
+}
+
+.add-tab {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+  border-radius: 6px;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+}
+
+.filter-control {
+  width: 142px;
+}
+
+.filter-control.wide {
+  width: 170px;
+}
+
+.range-separator {
+  color: #7c8ca2;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.kpi-card {
+  min-height: 130px;
+  padding: 18px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgb(31 55 88 / 7%);
+}
+
+.kpi-card span,
+.kpi-card em {
+  display: block;
+  font-size: 13px;
+  font-style: normal;
+  color: #63738a;
+}
+
+.kpi-card strong {
+  display: block;
+  margin: 14px 0 8px;
+  font-size: 28px;
+  color: #172033;
+}
+
+.tone-profit {
+  background: #effcf7;
+  border-top: 4px solid #0f9f83;
+}
+
+.tone-investment {
+  background: #fff8ed;
+  border-top: 4px solid #f59e0b;
+}
+
+.tone-roi {
+  background: #eff5ff;
+  border-top: 4px solid #2563eb;
+}
+
+.tone-scope {
+  background: #f6f2ff;
+  border-top: 4px solid #7c3aed;
+}
+
+.sub-tabs {
+  padding: 4px;
+  background: #e5ecf4;
+  border-radius: 7px;
+}
+
+.sub-tabs button {
+  padding: 9px 14px;
+  border-radius: 5px;
+}
+
+.panel {
+  padding: 16px;
+  margin-bottom: 14px;
+  background: #fff;
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+}
+
+.panel-title {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.panel-title h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.panel-title p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #708099;
+}
+
+.panel-title > span {
+  color: #708099;
+  white-space: nowrap;
+}
+
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #fff;
+  background: #2869d7;
+  border-radius: 50%;
+}
+
+.group-name {
+  padding: 0;
+  font-weight: 650;
+  color: #1558c0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.positive {
+  color: #00875a;
+}
+
+.negative {
+  color: #d4380d;
+}
+
+.pivot-selects {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pivot-selects .ant-select {
+  width: 130px;
+}
+
+.pivot-table-wrap {
+  overflow: auto;
+}
+
+.pivot-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.pivot-table th,
+.pivot-table td {
+  padding: 10px 12px;
+  text-align: right;
+  border: 1px solid #e1e7ef;
+}
+
+.pivot-table th:first-child,
+.pivot-table td:first-child {
+  text-align: left;
+}
+
+.pivot-table thead th {
+  color: #49617f;
+  background: #f5f8fb;
+}
+
+.pivot-table td strong,
+.pivot-table td small {
+  display: block;
+}
+
+.pivot-table td small {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #7b8ba0;
+}
+
+.break-even-summary {
+  display: flex;
+  gap: 26px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  color: #65758a;
+  background: #f5f8fb;
+  border-radius: 6px;
+}
+
+.break-even-summary strong {
+  margin-left: 6px;
+  font-size: 18px;
+  color: #172033;
+}
+
+@media (max-width: 1100px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-control.wide {
+    width: 150px;
+  }
+}
+
+@media (max-width: 640px) {
+  .net-profit-page {
+    padding: 10px;
+  }
+
+  .page-head {
+    flex-direction: column;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-control,
+  .filter-control.wide {
+    width: 100%;
+  }
+
+  .filter-bar {
+    align-items: stretch;
+  }
+
+  .range-separator {
+    display: none;
+  }
+}
 </style>
