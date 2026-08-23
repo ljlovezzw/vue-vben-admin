@@ -249,8 +249,9 @@ const option = computed(() => {
     color: selected.map((metric) => metricColor(metric.key)),
     grid: {
       bottom: 38,
-      containLabel: true,
       left: 12,
+      outerBoundsContain: 'axisLabel',
+      outerBoundsMode: 'same',
       right: 12,
       top: chartTop,
     },

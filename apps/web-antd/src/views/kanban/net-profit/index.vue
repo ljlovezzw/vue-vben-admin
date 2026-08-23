@@ -104,7 +104,7 @@ const panel = ref<'breakEven' | 'pivot' | 'ranking'>('ranking');
 const tabs = ref<ProfitTab[]>([
   {
     key: 'profit-1',
-    label: '利润总览 1',
+    label: '财务总览 1',
     overview: null,
     query: createQuery(),
   },
@@ -266,7 +266,7 @@ function addTab() {
   const key = `profit-${Date.now()}`;
   const tab = {
     key,
-    label: `利润总览 ${tabs.value.length + 1}`,
+    label: `财务总览 ${tabs.value.length + 1}`,
     overview: null,
     query: cloneQuery(query),
   };
@@ -382,12 +382,12 @@ onMounted(loadOverview);
   <div class="net-profit-page">
     <div class="page-head">
       <div>
-        <h1>纯利计算</h1>
+        <h1>财务看板</h1>
         <p>按时间跨度和业务属性对比利润贡献、投入与全周期盈亏平衡。</p>
       </div>
       <Button type="primary" :loading="loading" @click="loadOverview">
-刷新
-</Button>
+        刷新
+      </Button>
     </div>
 
     <div class="view-tabs">
@@ -518,8 +518,8 @@ onMounted(loadOverview);
         :options="optionList(filters.productTypes)"
       />
       <Button type="primary" :loading="loading" @click="loadOverview">
-查询
-</Button>
+        查询
+      </Button>
       <Button @click="resetFilters">重置</Button>
     </div>
 
@@ -700,14 +700,14 @@ onMounted(loadOverview);
               }}</strong></span>
           </div>
           <Spin :spinning="breakEvenLoading">
-<Table
+            <Table
               :columns="breakEvenColumns"
               :data-source="breakEvenRows()"
               :pagination="{ pageSize: 50, showSizeChanger: true }"
               row-key="parentAsin"
               size="middle"
-          />
-</Spin>
+            />
+          </Spin>
         </section>
       </template>
       <Empty v-else description="暂无纯利数据" />

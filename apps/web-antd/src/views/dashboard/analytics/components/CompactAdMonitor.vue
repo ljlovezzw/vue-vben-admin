@@ -26,6 +26,7 @@ import {
   Button,
   DatePicker,
   Empty,
+  message,
   Progress,
   Segmented,
   Select,
@@ -156,9 +157,18 @@ const periodText = computed(() => {
 const departmentText = computed(() =>
   props.departments.length > 0 ? props.departments.join('、') : '全部部门',
 );
+const projectTagText = computed(() =>
+  props.projectTags.length > 0 ? props.projectTags.join('、') : '全部项目',
+);
 const countryText = computed(() =>
   props.countries.length > 0 ? props.countries.join('、') : '全部国家',
 );
+const responsibleText = computed(() => {
+  if (props.responsibles.includes('__NO_ACCESS__')) return '无匹配运营';
+  return props.responsibles.length > 0
+    ? props.responsibles.join('、')
+    : '全部运营';
+});
 const shopOptions = computed(() =>
   (overview.value?.filters.shops ?? []).map((shop) => ({
     label: shop,
@@ -261,9 +271,17 @@ async function loadData() {
   return promise;
 }
 
+function handleLoadError(error: unknown) {
+  const detail = error instanceof Error ? error.message : String(error);
+  message.error(`广告监控加载失败：${detail}`);
+}
+
 function scheduleLoadData() {
   if (loadTimer) clearTimeout(loadTimer);
-  loadTimer = setTimeout(loadData, 180);
+  loadTimer = setTimeout(() => {
+    loadTimer = undefined;
+    void loadData().catch(handleLoadError);
+  }, 180);
 }
 
 function handlePeriodModeChange() {
@@ -285,7 +303,7 @@ function handleDateChange() {
 
 function resetShops() {
   query.shops = [];
-  void loadData();
+  void loadData().catch(handleLoadError);
 }
 
 function formatMoney(value?: number) {
@@ -348,6 +366,15 @@ watch(
   },
 );
 
+watch(
+  () => [props.startDate, props.endDate] as const,
+  ([startDate, endDate]) => {
+    if (periodMode.value !== 'follow' || !startDate || !endDate) return;
+    dateRange.value = [startDate, endDate];
+    scheduleLoadData();
+  },
+);
+
 onMounted(() => {
   if (props.refreshKey > 0) {
     scheduleLoadData();
@@ -370,7 +397,9 @@ onBeforeUnmount(() => {
           </div>
           <div class="scope-text">
             <span :title="departmentText">{{ departmentText }}</span>
+            <span :title="projectTagText">{{ projectTagText }}</span>
             <span :title="countryText">{{ countryText }}</span>
+            <span :title="responsibleText">{{ responsibleText }}</span>
           </div>
           <div class="period-control">
             <Segmented
@@ -662,12 +691,14 @@ onBeforeUnmount(() => {
 
 .scope-text {
   display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
 }
 
 .scope-text span {
-  max-width: 150px;
+  max-width: min(150px, 100%);
   padding: 2px 7px;
   overflow: hidden;
   text-overflow: ellipsis;

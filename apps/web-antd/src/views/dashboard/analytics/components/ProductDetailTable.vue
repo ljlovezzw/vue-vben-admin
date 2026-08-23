@@ -1255,8 +1255,8 @@ async function refreshProductScrollSync() {
   );
 }
 
-function productDetailRowKey(row: Record<string, any>, index?: number) {
-  return [row.key, row.c001, row.c002, row.site, row.country, index ?? 0]
+function productDetailRowKey(row: Record<string, any>) {
+  return [row.key, row.c001, row.c002, row.site, row.country]
     .map((value) => String(value ?? '').trim())
     .filter(Boolean)
     .join('|');
@@ -2048,11 +2048,15 @@ onBeforeUnmount(() => {
           <AutoComplete
             v-model:value="productDetailQuery.categorySearch"
             :options="productCategoryOptions"
-            allow-clear
-            placeholder="一级/二级分类"
             size="small"
-            @press-enter="applyProductDetailFilters"
-          />
+          >
+            <Input
+              allow-clear
+              placeholder="一级/二级分类"
+              size="small"
+              @press-enter="applyProductDetailFilters"
+            />
+          </AutoComplete>
         </label>
 
         <label class="product-filter-field">

@@ -136,7 +136,7 @@ export interface AnalyticsReportParams {
 export interface AnalyticsOverviewParams {
   endDate?: string;
   departments?: string[];
-  granularity?: 'day' | 'month';
+  granularity?: 'day' | 'month' | 'year';
   operationGroupIds?: number[];
   productExpressionRealtime?: boolean;
   projectTags?: string[];

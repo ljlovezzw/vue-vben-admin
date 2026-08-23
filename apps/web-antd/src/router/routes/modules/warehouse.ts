@@ -19,7 +19,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           authority: ['kanban:shipping'],
           icon: 'lucide:truck',
-          title: '发货分配',
+          title: '圣诞款发货看板与分配',
         },
       },
       {
@@ -29,7 +29,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           authority: ['kanban:shipping'],
           icon: 'lucide:map-pinned',
-          title: '仓库代码查询',
+          title: '美国东西中部仓库代码查询',
         },
       },
     ],

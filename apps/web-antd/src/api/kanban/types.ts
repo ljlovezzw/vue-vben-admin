@@ -376,6 +376,7 @@ export interface KanbanProductDetailOverview {
   page: number;
   pageSize: number;
   query: {
+    actualEndDate: string;
     categorySearch: string;
     countries: string[];
     dateRangeType: string;
@@ -1032,18 +1033,24 @@ export interface AnalyticsOverview {
     weekBefore: AnalyticsOperationMetric;
   };
   period: {
+    actualEndDate: string;
     days: number;
     endDate: string;
-    granularity: 'day' | 'month';
+    granularity: 'day' | 'month' | 'year';
+    previousEndDate: string;
     previousLabel: string;
+    previousStartDate: string;
+    secondaryEndDate: string;
     secondaryLabel: string;
+    secondaryStartDate: string;
     startDate: string;
     targetLabel: string;
   };
   query: {
+    actualEndDate: string;
     departments: string[];
     endDate: string;
-    granularity: 'day' | 'month';
+    granularity: 'day' | 'month' | 'year';
     operationGroupIds: number[];
     productExpressionRealtime: boolean;
     projectTags: string[];
@@ -1998,6 +2005,7 @@ export interface ShippingLocationModeEstimate {
 export interface ShippingLocationFinderItem {
   city: string;
   countryCode: string;
+  placementRegionLabel: string;
   recommendation: string;
   recommendedModes: ShippingLocationModeEstimate[];
   region: 'CENTRAL' | 'EAST' | 'NON_US' | 'SOUTH' | 'UNKNOWN' | 'WEST';
@@ -2015,7 +2023,7 @@ export interface ShippingLocationFinderResult {
   logisticsSampleCount: number;
   regionCards: Array<{
     count: number;
-    region: 'CENTRAL' | 'EAST' | 'SOUTH' | 'WEST';
+    region: 'CENTRAL' | 'EAST' | 'NON_US' | 'SOUTH' | 'UNKNOWN' | 'WEST';
     regionLabel: string;
   }>;
 }
@@ -2026,7 +2034,7 @@ export interface ShippingLocationFinderBootstrap {
   modeEstimates: ShippingLocationModeEstimate[];
   regionCards: Array<{
     count: number;
-    region: 'CENTRAL' | 'EAST' | 'SOUTH' | 'WEST';
+    region: 'CENTRAL' | 'EAST' | 'NON_US' | 'SOUTH' | 'UNKNOWN' | 'WEST';
     regionLabel: string;
   }>;
   warehouses: ShippingLocationFinderItem[];

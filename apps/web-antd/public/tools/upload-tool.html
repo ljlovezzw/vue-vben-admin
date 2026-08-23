@@ -287,6 +287,19 @@
     .listing-query-field .btn {
       width: 100%;
       min-height: 42px;
+      white-space: nowrap;
+    }
+
+    .listing-query-grid {
+      grid-template-columns:
+        minmax(150px, .75fr)
+        minmax(280px, 1.8fr)
+        minmax(170px, .8fr)
+        minmax(150px, .8fr);
+    }
+
+    .listing-query-grid > .field {
+      min-width: 0;
     }
 
     .control {
@@ -305,12 +318,13 @@
     }
 
     .shop-field {
-      grid-column: span 2;
+      min-width: 0;
     }
 
     .shop-picker {
       position: relative;
-      z-index: 10;
+      z-index: 1;
+      min-width: 0;
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
@@ -318,12 +332,17 @@
     }
 
     .shop-picker.is-expanded {
+      z-index: 20;
       border-color: #8fb0ff;
       box-shadow: 0 0 0 4px rgba(29,78,216,.10);
     }
 
     .shop-picker:not(.is-expanded) .shop-picker-menu {
       display: none;
+    }
+
+    .shop-picker:not(.is-expanded) {
+      overflow: hidden;
     }
 
     .shop-picker-menu {
@@ -357,7 +376,9 @@
     }
 
     .shop-selection > span:first-child {
+      flex: 1 1 auto;
       min-width: 0;
+      max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1347,6 +1368,7 @@
       .platform-pair-column .map-row { grid-template-columns: 1fr; }
       .platform-pair-column .map-row > .field:last-child { grid-column: auto; }
       .shop-field { grid-column: 1; }
+      .listing-query-grid { grid-template-columns: 1fr; }
       .shop-options { grid-template-columns: 1fr; }
       .top { padding: 18px; }
       .panel-body { padding: 14px; }
@@ -1380,7 +1402,7 @@
             </div>
           </div>
           <div class="panel-body">
-            <div class="grid-5">
+            <div class="grid-5 listing-query-grid">
               <div class="field">
                 <label for="spuInput">选择SPU</label>
                 <input class="control" id="spuInput" value="LLW000573" placeholder="例如 LLW000573" />
@@ -2123,11 +2145,15 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function renderShopSelection() {
       const shops = selectedShopValues();
-      const summary = shops.length
+      const fullSummary = shops.length
         ? `已选 ${shops.length} 个：${shops.join("，")}`
         : "未选择店铺";
+      const visibleShops = shops.slice(0, 3).join("，");
+      const summary = shops.length > 3
+        ? `已选 ${shops.length} 个：${visibleShops} 等`
+        : fullSummary;
       els.shopSelectionText.textContent = summary;
-      els.shopSelection.title = summary;
+      els.shopSelection.title = fullSummary;
       els.shopSelection.classList.toggle("selected", shops.length > 0);
     }
 

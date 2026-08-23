@@ -30,7 +30,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           authority: ['super'],
           icon: 'lucide:landmark',
-          title: '纯利计算',
+          title: '财务看板',
         },
       },
     ],

@@ -145,7 +145,7 @@ const permissionOptions = [
   { label: '新品监控', value: 'kanban:monitor' },
   { label: 'SPU管理', value: 'kanban:spus' },
   { label: '广告监控', value: 'kanban:ads' },
-  { label: '发货分配', value: 'kanban:shipping' },
+  { label: '圣诞款发货看板与分配', value: 'kanban:shipping' },
   { label: '目标跟踪', value: 'kanban:targets' },
   { label: 'ASIN360', value: 'kanban:asin360' },
   { label: '配置中心', value: 'kanban:config' },
@@ -946,7 +946,7 @@ onMounted(loadData);
                         "
                         class="role-help"
                       >
-                        仓库部门固定仅可访问“仓库 → 发货分配”
+                        仓库部门固定仅可访问“仓库 → 圣诞款发货看板与分配”
                       </div>
                     </template>
                     <template v-else-if="column.dataIndex === 'countryScope'">

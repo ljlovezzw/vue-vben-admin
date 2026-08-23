@@ -27,7 +27,7 @@ const routes: RouteRecordRaw[] = [
           import('#/views/kanban/tools/keyword-reverse/index.vue'),
         meta: {
           icon: 'lucide:search',
-          title: '关键词反查',
+          title: 'SIF关键词反查',
         },
       },
       {

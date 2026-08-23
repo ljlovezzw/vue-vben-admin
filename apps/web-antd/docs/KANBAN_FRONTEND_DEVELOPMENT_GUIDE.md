@@ -1,6 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-08-10
+更新时间：2026-08-19
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
@@ -164,12 +164,14 @@ apps/web-antd/src/
     kanban/shared/              页面共用辅助
 ```
 
-## 3.1 核心代码地图（更新至 2026-08-10）
+## 3.1 核心代码地图（更新至 2026-08-19）
 
 当前前端最新改动主要集中在这些文件：
 
-- `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额/毛利润卡片、推广与周转卡片、部门销量完成率、负责人完成率、商品维度明细报表和内嵌新品详情表。底部两个表格的负责人范围必须从顶部筛选后的最终负责人作用域继承；部门筛选本身不出现在子表 UI 中。
+- `src\views\dashboard\analytics\index.vue`：公司经营驾驶舱主页面，包含顶部时间/国家/部门/运营组/负责人筛选、双仪表盘、实时销量/销售额/毛利润卡片、推广与周转卡片、部门销量完成率、负责人完成率、内嵌广告监控、商品维度明细报表和内嵌新品详情表。三个下游区域都必须继承顶部已经提交的日期、国家、部门、项目标签和最终负责人作用域。年维度是轻量视图，只挂载顶部经营区、部门卡片和负责人卡片，不挂载或请求三个下游区域。
+- `src\views\dashboard\analytics\components\CompactAdMonitor.vue`：总览内嵌广告监控。默认跟随总览范围，允许在父级范围内切换近 7 天、近 30 天、本月或自定义日期，并继续按店铺收窄；请求失败统一提示，不得留下未处理 Promise。
 - `src\views\dashboard\analytics\components\ProductDetailTable.vue`：分析页内嵌新品详情表。复用新品监控详情接口，继承顶部时间、站点、国家、项目标签和负责人作用域，同时拥有自己的国家、负责人、列配置、固定列、分页、汇总行、FBA SKU 库存弹窗和点击排序；本地负责人筛选只能在父级作用域内继续缩小。
+- `src\views\kanban\ads\components\AdMetricTrendPanel.vue`：独立广告页和总览内嵌广告区共用的 17 指标趋势面板，单日父级范围展示截至该日近 7 天，其它范围按所选区间展示。
 - `src\views\kanban\monitor\index.vue`：新品监控主页面，新品详情表已改成类似商品维度明细报表的确认式筛选和列配置，并增加时间范围、负责人筛选。
 - `src\views\kanban\net-profit\index.vue`：纯利计算页面，读取 `net_profit_summary` 汇总和 `net_profit` 明细，提供月度/YTD 概览、纯利形成路径、费用拆解、维度排行和点击下钻。
 - `src\layouts\basic.vue`：系统全局布局，包含用户菜单、水印、右上角通知入口，以及飞书卡片通知同步到前端后的站内弹窗确认。
@@ -312,16 +314,19 @@ src\views\dashboard\analytics\components\ProductDetailTable.vue
 - 日维度展示所选日期范围、前一同长度周期、上周同期；月维度展示所选月份、上月、去年同期。
 - 展示部门、运营组和运营负责人完成情况。
 - 权限口径：所有登录用户都可进入；`super/admin/manager` 查看公司范围，`operator/leader` 查看所属部门全部数据，部门内可继续按运营组或负责人筛选。
-- 底部已接入商品维度明细报表。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。顶部部门、运营组和负责人先在总览接口中被后端归并成最终负责人名单，报表再以该名单作为父级范围。
+- 底部已接入商品维度明细报表。页面调用 `fetchAnalyticsReport`，支持报表时间范围、国家、项目标签、新品/老品、运营组、SPU、负责人、列配置、固定左侧列、横向/纵向滚动、分页排序、汇总行、迷你销量趋势和 CSV 下载。顶部部门、运营组和负责人先在总览接口中被后端归并成最终负责人名单，报表再以该名单作为父级范围。
 - 商品维度明细报表下方已接入“新品详情表”。该表由 `components\ProductDetailTable.vue` 维护，复用 `/kanban/monitor/product-detail`、`/kanban/monitor/product-detail/meta` 和 `/kanban/monitor/product-detail/rows`，继承顶部时间、站点与负责人作用域，但拥有自己的国家、负责人、列配置和分页状态。
+- 商品维度明细报表前已接入 `CompactAdMonitor`。它在“跟随总览”模式下接收顶部已经提交的日期、国家、部门、项目标签和负责人范围；组件内部的店铺筛选只允许继续收窄，不能扩大父级范围。
 
 当前口径：
 
 - 纯历史日期的销量、销售额、库存、周转等运营指标来自数据库 `productexpressionnew` 或产品表现日/月快照；包含今天或昨天的日维度区间会混合 `productexpressionnew_live_cache` 和历史产品表现数据。销售额完成率的实际销售额使用产品表现销售额，不再被利润表销售额覆盖。
 - 页面首次进入和重置时，日维度默认选择北京时间当前日期减 1 到当前日期减 1 的单日范围。
 - 顶部“维度”可切换日/月。日维度使用 `DatePicker.RangePicker` 日期范围选择，提交 `startDate/endDate`；月维度使用月份选择，提交 `siteDate=YYYY-MM-DD`，后端按该日期所在月份计算。
-- 顶部主筛选的时间、站点、部门、运营组、项目标签和负责人会作为广告监控、底部商品维度明细报表和内嵌新品详情表的全局范围。报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。部门没有子表 UI，但会通过 `overview.query.responsibles` 传递到子表请求。`projectTags` 必须直接透传，不能只在前端隐藏行，否则会造成汇总、分页总数和导出不一致。
+- 顶部主筛选的时间、站点、部门、运营组、项目标签和负责人会作为广告监控、底部商品维度明细报表和内嵌新品详情表的全局范围。报表自身运营组和负责人筛选与顶部主筛选取交集，避免扩大数据范围。广告监控直接接收父级部门及最终负责人；商品明细和新品详情按各自接口传递最终范围。`projectTags` 必须直接透传，不能只在前端隐藏行，否则会造成汇总、分页总数和导出不一致。
+- 顶部选择“按年”后，页面只调用 `/kanban/analytics/overview?granularity=year`。`CompactAdMonitor`、`ProductDetailTable` 和商品维度明细报表必须使用 `v-if` 卸载，`loadReportData()` 也必须跳过；不能只把区域设为不可见，否则仍会产生三条重请求。切回日/月维度后恢复原有请求链路。
 - 底部报表快捷项包括今日、昨日、最近 7 天、最近 30 天、本月、上月、今年和自定义；自定义时使用 `DatePicker.RangePicker`。若同时传 `startDate/endDate` 和快捷 `dateRangeType`，后端优先使用显式日期范围。国家筛选来自后端 `filters.countries`，当前包含“泛欧”和非泛欧业务国家；欧洲国家在后端归并到“泛欧”。顶部国家筛选会映射为后端报表使用的中文国家标签，例如 `US -> 美国`、`PAN_EU -> 泛欧`。
+- 商品维度报表后端行 `key` 已包含站点、父 ASIN、SPU、国家和店铺，前端 `rowKey` 不再使用分页序号兜底；同一商品跨店铺的行必须稳定且互不复用。单日主查询的迷你趋势固定展示截至所选日近 7 天，并按店铺隔离。
 - 报表列由后端 `columns/defaultColumns` 驱动。前端列配置弹窗支持按业务分组勾选、搜索字段、已选列拖拽排序、上下移动、移除和固定左侧列；默认固定主图、父 ASIN、负责人和 SPU，最多固定 7 列。二级分类已纳入后端默认展示列，订单量不在默认展示列中但仍可通过列配置打开。CSV 下载按当前筛选和列配置分页拉取全部结果，不只导出当前页。报表底部汇总行读取后端 `summary`，销量、订单量、销售额、广告花费等是当前筛选条件下的全量汇总，不是当前页合计。商品维度明细报表的“店铺”是后端聚合维度之一，导出后按店铺二次汇总应与同日期同店铺的原始产品表现销量对齐。
 - 报表目标销量由后端统一计算：老品使用 `站点 + SPU + 月份` 精确目标，不依赖负责人；泛欧聚合行展示 `site=泛欧`，并匹配 `operator_targets.site=泛欧`；新品按 `负责人 + 二级分类%` 的类目占位目标兜底，缺失时再回退精确 SPU 目标，前端只展示返回的 `targetUnits`。
 - 顶部不再展示“交易状态”筛选；分析页运营指标主数据源已经切到产品表现，前端不再向经营分析请求发送 `transactionStatuses`。后端默认仅把利润表“已发放”口径用于毛利润、广告销售额和相关比例分母，毛利润保持 CNY；销售额实际值及全部广告花费保留产品表现口径。
@@ -417,16 +422,19 @@ src\views\kanban\ads\index.vue
 用途：
 
 - 按近7天、近30天或本月查看广告表现，并支持部门、国家和店铺筛选。
+- 通过 `AdMetricTrendPanel` 展示 17 个可选指标；指标卡可添加/移除，图例和坐标轴由 ECharts 6 统一布局。
 - 四张 KPI 展示广告总花费及环比、广告销量/总销量及广告订单占比、广告 CVR 及近30天/同比、ACoAS 及目标/超标。
 - “负责人广告表现及超标归因”展示负责人、广告花费、广告销量、总销量、广告 CVR、近30天 CVR、变化、ACoAS、超标贡献和 CVR 风险状态。
 - “广告占比超标影响”按有效超标金额展示负责人贡献排名和 Top 归因结论。
 
 注意：
 
-- 页面不再展示旧版趋势图、类目榜、广告类型和 Campaign 大表，不要重新依赖旧响应字段 `trend/categoryRows/typeRows/campaignRows`。
+- 页面不再依赖旧响应字段 `trend/categoryRows/typeRows/campaignRows`；现行趋势单独调用 `/kanban/ads/trend`，不是旧 overview 内嵌趋势数组。
 - 比例字段直接展示后端按汇总分子/分母重算的结果，前端不得平均负责人行。
 - `targetConfigured=false` 时显示“未配置目标”，不能把目标显示成 `0%` 后判定为超标。
-- 筛选变化后直接刷新；接口有 120 秒短缓存和同参数请求合并，前端不需要额外高频轮询。
+- 单日父级范围的趋势自动扩为截至该日近 7 天；多日、自定义范围保持用户所选日期。总览内嵌组件和独立广告页复用同一趋势组件。
+- 广告监控请求使用 AbortController、同参数 Promise 合并和统一错误提示；任何 `setTimeout` 或按钮触发都必须消费 Promise，避免控制台出现未处理拒绝。
+- 筛选变化后直接刷新；overview 默认缓存 30 分钟，趋势默认缓存 5 分钟，并带同参数请求合并，前端不需要额外高频轮询。
 
 ### 6.1.1 纯利计算 `/net-profit`
 
@@ -538,6 +546,7 @@ public\tools\upload-tool.html
 - 关键词筛选是当前页本地过滤，不改变后端分页总数；需要跨页精确过滤时，应在后端接口增加对应过滤参数，避免前端拉取全量结果。
 - `/tools/search-term-report` 为搜索词报告词库工具，是 Vue 原生页面。页面调用 `fetchSearchTermReportOptions()` 获取店铺和快捷日期，调用 `fetchSearchTermReportParentAsins()` 查询父 ASIN 候选，再调用 `fetchSearchTermReportCampaigns()` 按当前店铺、SPU 和已选父 ASIN 加载 SP/SB 广告活动。广告活动支持搜索和多选，空选表示全部活动；切换父 ASIN 时必须清空旧活动选择并重新加载，不能把其它商品的 `campaignId` 带入任务。连续切换父 ASIN 使用 200ms 防抖，发起新查询前通过 `AbortController` 取消旧请求，组件卸载时同时清理定时器和请求。
 - 搜索词报告生成调用 `createSearchTermReportTask()`，请求同时携带 `parentAsins` 和 `campaignIds`；后端立即返回 `taskId`，页面每 30 秒调用 `fetchSearchTermReportTask()` 轮询 `queued/running/succeeded/failed`。页面用 localStorage 缓存店铺、SPU、日期范围、父 ASIN/活动候选、已选值和当前 `taskId`，刷新后恢复并继续查询状态。成功结果中的 `campaignIds` 用于恢复最终生效的活动筛选，空数组显示“全部”。
+- 搜索词报告下载使用 32KB 分块和 4 路并发。后端对多父 ASIN 报告返回有长度上限的文件名，前端必须原样使用任务结果的 `fileName`，不能再从全部父 ASIN 本地拼接文件名。下载接口错误响应为 Blob 时，先异步读取并解析 JSON 错误详情，避免提示 `[object Blob]`。
 - A+ 和品牌故事图片槽位有“AI生成”和“AI生成人物”两个复选框。生成 A+ / 品牌故事 ZIP 时会额外写入 `image_ai_flags.json`，记录每张图片的文件名、业务类型、槽位、AI 标记和 AI 人物标记；橱窗图不展示 AI 标记，也不写入 `image_ai_flags.json`。
 - 选择图片后必须展示预览图；已有文件时按钮文案显示“更换文件”，避免用户误以为没有选择成功。预览 URL 通过 `URL.createObjectURL` 生成，重置时需要释放。
 - 履约方式在界面隐藏；品牌卡媒体资产默认选择“重命名为 SPU-序号”。
@@ -598,7 +607,7 @@ src\views\kanban\config\index.vue
 
 - Cloudflare Web Analytics 的 2026-07 性能分析见 `docs/CLOUDFLARE_WEB_ANALYTICS_2026-07.md`。
 - 正式环境不再使用 `vite preview` 提供静态资源。Nginx 监听 `5668`，Cloudflare Tunnel 的 `hub.junlee.top` 应指向 `http://127.0.0.1:5668`。
-- 发布必须执行 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚；普通账户无权直接 reload Nginx 时，会自动调用 `Kanban Nginx Frontend` SYSTEM 计划任务完成切换和健康检查。
+- 发布必须执行 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚。脚本先尝试直接 reload；权限不足或新槽位未生效时，自动启动 `Kanban Nginx Frontend` SYSTEM 计划任务，并逐项核对入口哈希和 `tools/upload-tool.html` 内容。新槽位超时未生效会恢复旧配置并再次调用 SYSTEM 任务，命令以失败退出。
 - `js/jse/css` 文件名包含内容哈希，可长期缓存；`index.html`、`_app.config.js` 和 SPA 路由响应禁止缓存，避免 HTML 引用已经下线的旧资源。
 - 不要重新把 `emptyOutDir` 改为 `false`。旧版本兼容由另一个蓝绿槽位承担，不再把所有历史哈希文件累积在同一个目录。
 

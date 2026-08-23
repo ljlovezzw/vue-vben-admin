@@ -317,6 +317,13 @@ function applyPreset(startDate: string, endDate: string) {
   syncAdAnalyzerDateRange();
 }
 
+function presetSelected(startDate: string, endDate: string) {
+  return (
+    dateRange.value[0]?.format('YYYY-MM-DD') === startDate &&
+    dateRange.value[1]?.format('YYYY-MM-DD') === endDate
+  );
+}
+
 function handleMainDateChange() {
   syncAdAnalyzerDateRange();
 }
@@ -346,6 +353,21 @@ function errorText(error: unknown) {
     return payload.detail || payload.message || payload.error || String(error);
   }
   return error instanceof Error ? error.message : String(error);
+}
+
+async function downloadErrorText(error: unknown) {
+  if (!error || typeof error !== 'object') return errorText(error);
+  const payload = error as Record<string, any>;
+  const responseData = payload.response?.data ?? payload.data;
+  if (!(responseData instanceof Blob)) return errorText(error);
+  try {
+    const text = await responseData.text();
+    if (!text) return errorText(error);
+    const parsed = JSON.parse(text) as Record<string, any>;
+    return parsed.detail || parsed.message || parsed.error || text;
+  } catch {
+    return errorText(error);
+  }
 }
 
 function parentRowKey(row: SearchTermReportParentAsinRow) {
@@ -719,7 +741,7 @@ async function downloadFile(fileName: string) {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (error) {
-    message.error(`下载失败：${errorText(error)}`);
+    message.error(`下载失败：${await downloadErrorText(error)}`);
   } finally {
     downloading.value = false;
   }
@@ -810,6 +832,11 @@ onBeforeUnmount(() => {
               v-for="preset in options.datePresets"
               :key="preset.label"
               size="small"
+              :type="
+                presetSelected(preset.startDate, preset.endDate)
+                  ? 'primary'
+                  : 'default'
+              "
               @click="applyPreset(preset.startDate, preset.endDate)"
             >
               {{ preset.label }}

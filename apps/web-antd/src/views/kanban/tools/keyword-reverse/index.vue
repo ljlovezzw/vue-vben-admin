@@ -1117,7 +1117,7 @@ async function runQuery(resetPage = true) {
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    message.error(`关键词反查失败：${detail}`);
+    message.error(`SIF关键词反查失败：${detail}`);
   } finally {
     loading.value = false;
   }
@@ -1275,7 +1275,7 @@ function exportCsv() {
   <div class="keyword-reverse-page">
     <section class="page-head">
       <div>
-        <h1>亚马逊关键词反查</h1>
+        <h1>SIF关键词反查</h1>
         <p>输入ASIN，按流量占比、搜索量和排名维度反查关键词。</p>
       </div>
       <Space>
@@ -1410,7 +1410,7 @@ function exportCsv() {
             <Button @click="copyCurrentKeywords">复制</Button>
             <Button @click="exportCsv">导出</Button>
             <span class="result-count">
-              关键词反查结果数: {{ result?.page.total ?? 0 }}
+              SIF关键词反查结果数: {{ result?.page.total ?? 0 }}
             </span>
           </Space>
           <Space wrap>

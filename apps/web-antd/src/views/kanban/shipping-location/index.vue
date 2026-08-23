@@ -9,7 +9,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import { fetchShippingLocationFinderBootstrap } from '#/api/kanban';
 
-const DEFAULT_CODES = ['LGB8', 'ABE8', 'IND9', 'DFW7', 'ONT8'];
+const DEFAULT_CODES = ['LGB8', 'ABE8', 'IND9', 'FTW1', 'ONT8'];
 
 const codeInput = ref(DEFAULT_CODES.join('\n'));
 const loading = ref(false);
@@ -43,11 +43,12 @@ const resultRows = computed<ShippingLocationFinderItem[]>(() => {
     return {
       city: '',
       countryCode: 'US',
-      recommendation: '未命中仓库映射，先补充城市/州后再判断',
+      placementRegionLabel: '',
+      recommendation: '物流经理CSV未收录该仓库，暂不自动归类',
       recommendedModes: estimates.slice(0, 5),
       region: 'UNKNOWN',
-      regionLabel: '未知',
-      source: 'unknown',
+      regionLabel: 'CSV未收录',
+      source: 'not_in_logistics_manager_csv',
       stateCode: '',
       subRegionLabel: '',
       warehouseId: code,
@@ -61,26 +62,32 @@ const regionCards = computed(() => {
     {
       region: 'WEST',
       regionLabel: '美国西部',
-      note: '加州 / 亚利桑那 / 内华达',
+      note: '物流经理CSV：西部',
       count: rows.filter((item) => item.region === 'WEST').length,
     },
     {
       region: 'CENTRAL',
       regionLabel: '美国中部',
-      note: '中西部 / 五大湖 / 平原',
+      note: '物流经理CSV：中北部',
       count: rows.filter((item) => item.region === 'CENTRAL').length,
     },
     {
       region: 'SOUTH',
       regionLabel: '美国南部',
-      note: 'Texas / 中南部 / 东南部',
+      note: '物流经理CSV：中南部 / 东南部',
       count: rows.filter((item) => item.region === 'SOUTH').length,
     },
     {
       region: 'EAST',
       regionLabel: '美国东部',
-      note: '东北部 / 宾州 / 新泽西',
+      note: '物流经理CSV：东北部 / 东部',
       count: rows.filter((item) => item.region === 'EAST').length,
+    },
+    {
+      region: 'UNKNOWN',
+      regionLabel: '待确认',
+      note: '物流经理CSV：N/A / 未收录',
+      count: rows.filter((item) => item.region === 'UNKNOWN').length,
     },
   ];
 });
@@ -100,6 +107,7 @@ function regionClass(region: string) {
     {
       CENTRAL: 'region-central',
       EAST: 'region-east',
+      NON_US: 'region-non-us',
       SOUTH: 'region-south',
       UNKNOWN: 'region-unknown',
       WEST: 'region-west',
@@ -131,8 +139,8 @@ function exportCsv() {
   const header = [
     '仓库代码',
     '区域',
-    '州',
-    '城市',
+    '州（仅参考）',
+    '城市（仅参考）',
     '推荐运输方式',
     '预计入仓周期',
     '风险',
@@ -186,7 +194,7 @@ onMounted(loadBootstrap);
     <section class="hero">
       <div>
         <p class="eyebrow">Amazon FBA Location Finder</p>
-        <h1>仓库代码，一查就知道<br /><span>该往哪里发</span></h1>
+        <h1>美国东西中部<br /><span>仓库代码查询</span></h1>
         <p class="subline">
           北美物流历史样本 {{ bootstrap?.logisticsSampleCount ?? '-' }} 条 ·
           {{ bootstrap?.loadedAt?.slice(0, 16).replace('T', ' ') || '加载中' }}
@@ -241,7 +249,7 @@ onMounted(loadBootstrap);
             <tr>
               <th>仓库代码</th>
               <th>区域</th>
-              <th>州 / 城市</th>
+              <th>州 / 城市（仅参考）</th>
               <th>推荐运输方式</th>
               <th>预计入仓周期</th>
               <th>风险</th>
@@ -262,9 +270,7 @@ onMounted(loadBootstrap);
               <td>
                 <b>{{ row.stateCode || '-' }}</b>
                 <small>{{
-                  [row.city || '-', row.subRegionLabel]
-                    .filter(Boolean)
-                    .join(' / ')
+                  [row.city || '-', '不参与区域判定'].join(' / ')
                 }}</small>
               </td>
               <td>{{ bestEstimate(row)?.mode || '-' }}</td>
@@ -524,6 +530,11 @@ td small {
 .region-unknown {
   color: #667085;
   background: #f2f4f7;
+}
+
+.region-non-us {
+  color: #475467;
+  background: #eaecf0;
 }
 
 .risk-low {

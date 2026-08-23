@@ -73,7 +73,7 @@ interface ResponsibleCard {
   turnoverMonths: number;
 }
 
-type AnalyticsGranularity = 'day' | 'month';
+type AnalyticsGranularity = 'day' | 'month' | 'year';
 type ReportDateRangeType =
   | 'currentMonth'
   | 'custom'
@@ -220,15 +220,43 @@ const sourceMessage = computed(() =>
 const granularityOptions = [
   { label: '按天', value: 'day' },
   { label: '按月', value: 'month' },
+  { label: '按年', value: 'year' },
 ];
 const isMonthMode = computed(() => query.granularity === 'month');
+const isYearMode = computed(() => query.granularity === 'year');
+const isPeriodMode = computed(() => query.granularity !== 'day');
 const periodDays = computed(() => period.value?.days ?? 1);
-const monthValue = computed({
+const monthRangeValue = computed({
   get() {
-    return dayjs(query.siteDate).format('YYYY-MM');
+    return [
+      dayjs(query.startDate).format('YYYY-MM'),
+      dayjs(query.endDate).format('YYYY-MM'),
+    ] as [string, string];
+  },
+  set(value: [string, string] | null) {
+    if (!value?.[0] || !value?.[1]) return;
+    const latestDate = dayjs().subtract(1, 'day');
+    const start = dayjs(`${value[0]}-01`).startOf('month');
+    const selectedEnd = dayjs(`${value[1]}-01`).endOf('month');
+    const end = selectedEnd.isAfter(latestDate, 'day')
+      ? latestDate
+      : selectedEnd;
+    query.startDate = start.format('YYYY-MM-DD');
+    query.endDate = end.format('YYYY-MM-DD');
+    query.siteDate = query.endDate;
+  },
+});
+const yearValue = computed({
+  get() {
+    return dayjs(query.endDate).format('YYYY');
   },
   set(value: string) {
-    query.siteDate = `${value}-01`;
+    if (!value) return;
+    const start = dayjs(`${value}-01-01`);
+    const end = start.endOf('year');
+    query.startDate = start.format('YYYY-MM-DD');
+    query.endDate = end.format('YYYY-MM-DD');
+    query.siteDate = query.endDate;
   },
 });
 const dateRangeValue = computed({
@@ -248,6 +276,7 @@ const secondaryLabel = computed(
 );
 const metricPrefix = computed(() => {
   if (isMonthMode.value) return '月度';
+  if (isYearMode.value) return '年度';
   if (
     source.value?.mode === 'live_api' &&
     source.value.status !== 'unavailable'
@@ -261,33 +290,16 @@ const currentPeriodLabel = computed(() =>
   periodRangeLabel(period.value?.startDate, period.value?.endDate),
 );
 const previousPeriodLabel = computed(() => {
-  const start = period.value?.startDate;
-  const end = period.value?.endDate;
+  const start = period.value?.previousStartDate;
+  const end = period.value?.previousEndDate;
   if (!start || !end) return '-';
-  if (isMonthMode.value) {
-    const value = dayjs(start).subtract(1, 'month');
-    return value.isValid() ? value.format('YYYY-MM') : '-';
-  }
-  const days = Math.max(1, period.value?.days ?? 1);
-  const previousEnd = dayjs(start).subtract(1, 'day');
-  const previousStart = previousEnd.subtract(days - 1, 'day');
-  return periodRangeLabel(
-    previousStart.format('YYYY-MM-DD'),
-    previousEnd.format('YYYY-MM-DD'),
-  );
+  return periodRangeLabel(start, end);
 });
 const secondaryPeriodLabel = computed(() => {
-  const start = period.value?.startDate;
-  const end = period.value?.endDate;
+  const start = period.value?.secondaryStartDate;
+  const end = period.value?.secondaryEndDate;
   if (!start || !end) return '-';
-  if (isMonthMode.value) {
-    const value = dayjs(start).subtract(1, 'year');
-    return value.isValid() ? value.format('YYYY-MM') : '-';
-  }
-  return periodRangeLabel(
-    dayjs(start).subtract(7, 'day').format('YYYY-MM-DD'),
-    dayjs(end).subtract(7, 'day').format('YYYY-MM-DD'),
-  );
+  return periodRangeLabel(start, end);
 });
 const departmentOptions = computed(() =>
   (overview.value?.filters.departments ?? []).map((value) => ({
@@ -728,6 +740,14 @@ const productDetailBaseParams = computed(() => {
     startDate: dateRange.startDate,
   };
 });
+const adMonitorBaseParams = computed(() => ({
+  countries: [...productDetailBaseParams.value.countries],
+  departments: [...committedDashboardFilters.value.departments],
+  endDate: productDetailBaseParams.value.endDate,
+  projectTags: [...productDetailBaseParams.value.projectTags],
+  responsibles: [...productDetailBaseParams.value.responsibles],
+  startDate: productDetailBaseParams.value.startDate,
+}));
 
 function gaugeOption(rate: null | number, color: string) {
   const percentage = rate === null ? 0 : Math.min(Math.max(rate * 100, 0), 100);
@@ -801,13 +821,13 @@ async function loadData() {
       {
         departments: query.departments,
         granularity: query.granularity,
-        endDate: isMonthMode.value ? undefined : query.endDate,
+        endDate: query.endDate,
         operationGroupIds: query.operationGroupIds,
         projectTags: query.projectTags,
         responsibles: query.responsibles,
         siteDate: query.siteDate,
         sites: query.sites,
-        startDate: isMonthMode.value ? undefined : query.startDate,
+        startDate: query.startDate,
       },
       controller.signal,
     );
@@ -836,6 +856,7 @@ async function loadData() {
 }
 
 async function loadReportData() {
+  if (isYearMode.value) return;
   reportLoadController?.abort();
   const controller = new AbortController();
   const sequence = ++reportLoadSequence;
@@ -883,6 +904,11 @@ async function reloadAll(resetReportPage = true) {
   if (resetReportPage) {
     reportQuery.page = 1;
   }
+  if (isYearMode.value) {
+    reportLoadController?.abort();
+    await loadData();
+    return;
+  }
   await Promise.all([loadData(), loadReportData()]);
 }
 
@@ -894,13 +920,19 @@ function scheduleDashboardReload(options: { reloadReport?: boolean } = {}) {
   dashboardAutoReloadTimer = setTimeout(() => {
     dashboardAutoReloadTimer = null;
     void (async () => {
-      if (options.reloadReport) {
+      if (options.reloadReport && !isYearMode.value) {
         reportQuery.page = 1;
         await Promise.all([loadData(), loadReportData()]);
         return;
       }
+      if (isYearMode.value) {
+        reportLoadController?.abort();
+      }
       await loadData();
-    })();
+    })().catch((error) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      message.error(`总览加载失败：${detail}`);
+    });
   }, 1000);
 }
 
@@ -921,17 +953,6 @@ function dashboardCountryLabelsFromSites(sites: string[]) {
 }
 
 function dashboardDateRangeForTables() {
-  if (isMonthMode.value) {
-    const month = dayjs(query.siteDate);
-    const today = dayjs();
-    const end = month.endOf('month').isAfter(today, 'day')
-      ? today
-      : month.endOf('month');
-    return {
-      endDate: end.format('YYYY-MM-DD'),
-      startDate: month.startOf('month').format('YYYY-MM-DD'),
-    };
-  }
   return {
     endDate: query.endDate,
     startDate: query.startDate,
@@ -1566,7 +1587,21 @@ function resetFilters() {
 }
 
 function disabledFutureDate(value: ReturnType<typeof dayjs>) {
-  return value.isAfter(dayjs(), isMonthMode.value ? 'month' : 'day');
+  const unit = isYearMode.value
+    ? 'year'
+    : (isMonthMode.value ? 'month' : 'day');
+  return value.isAfter(dayjs().subtract(1, 'day'), unit);
+}
+
+function handleGranularityChange(value: AnalyticsGranularity) {
+  if (value === 'month') {
+    const selectedMonth = dayjs(query.endDate).format('YYYY-MM');
+    monthRangeValue.value = [selectedMonth, selectedMonth];
+    return;
+  }
+  if (value === 'year') {
+    yearValue.value = dayjs(query.endDate).format('YYYY');
+  }
 }
 
 function applyReportDateRangeType(value: ReportDateRangeType) {
@@ -1668,17 +1703,17 @@ function formatSignedMoney(value?: null | number, fractionDigits = 0) {
 }
 
 function formatSalesMoney(value?: null | number) {
-  return formatMoney(value, isMonthMode.value ? 2 : 0);
+  return formatMoney(value, isPeriodMode.value ? 2 : 0);
 }
 
 function formatSignedSalesMoney(value?: null | number) {
-  return formatSignedMoney(value, isMonthMode.value ? 2 : 0);
+  return formatSignedMoney(value, isPeriodMode.value ? 2 : 0);
 }
 
 function formatCny(value?: null | number) {
   return `¥${Number(value || 0).toLocaleString('zh-CN', {
-    maximumFractionDigits: isMonthMode.value ? 2 : 0,
-    minimumFractionDigits: isMonthMode.value ? 2 : 0,
+    maximumFractionDigits: isPeriodMode.value ? 2 : 0,
+    minimumFractionDigits: isPeriodMode.value ? 2 : 0,
   })}`;
 }
 
@@ -1687,8 +1722,8 @@ function formatSignedCny(value?: null | number) {
     return '-';
   }
   const absolute = `¥${Math.abs(Number(value || 0)).toLocaleString('zh-CN', {
-    maximumFractionDigits: isMonthMode.value ? 2 : 0,
-    minimumFractionDigits: isMonthMode.value ? 2 : 0,
+    maximumFractionDigits: isPeriodMode.value ? 2 : 0,
+    minimumFractionDigits: isPeriodMode.value ? 2 : 0,
   })}`;
   return `${value >= 0 ? '+' : '-'}${absolute}`;
 }
@@ -2371,7 +2406,9 @@ onMounted(() => {
     // the scope response immediately replaces its parameters and reloads it.
     await loadData();
     await nextTick();
-    await loadReportData();
+    if (!isYearMode.value) {
+      await loadReportData();
+    }
     dashboardAutoReloadReady = true;
   })();
 });
@@ -2403,16 +2440,27 @@ onBeforeUnmount(() => {
             :options="granularityOptions"
             class="time-granularity-select"
             size="small"
+            @change="(value) => handleGranularityChange(String(value) as AnalyticsGranularity)"
           />
-          <DatePicker
+          <DatePicker.RangePicker
             v-if="isMonthMode"
-            v-model:value="monthValue"
+            v-model:value="monthRangeValue"
             :allow-clear="false"
             :disabled-date="disabledFutureDate"
             class="time-picker-merged"
             picker="month"
             size="small"
             value-format="YYYY-MM"
+          />
+          <DatePicker
+            v-else-if="isYearMode"
+            v-model:value="yearValue"
+            :allow-clear="false"
+            :disabled-date="disabledFutureDate"
+            class="time-picker-merged"
+            picker="year"
+            size="small"
+            value-format="YYYY"
           />
           <DatePicker.RangePicker
             v-else
@@ -3475,28 +3523,26 @@ onBeforeUnmount(() => {
       </section>
 
       <CompactAdMonitor
-        :countries="dashboardCountryLabelsFromSites(query.sites)"
-        :departments="query.departments"
-        :end-date="productDetailBaseParams.endDate"
+        v-if="!isYearMode"
+        :countries="adMonitorBaseParams.countries"
+        :departments="adMonitorBaseParams.departments"
+        :end-date="adMonitorBaseParams.endDate"
         :follow-summary="adMonitorFollowSummary"
-        :project-tags="query.projectTags"
+        :project-tags="adMonitorBaseParams.projectTags"
         :refresh-key="dashboardCommittedVersion"
-        :responsibles="
-          query.operationGroupIds.length > 0 || query.responsibles.length > 0
-            ? dashboardResponsibleScopeForTables()
-            : []
-        "
-        :start-date="productDetailBaseParams.startDate"
+        :responsibles="adMonitorBaseParams.responsibles"
+        :start-date="adMonitorBaseParams.startDate"
       />
 
       <ProductDetailTable
+        v-if="!isYearMode"
         :base-params="productDetailBaseParams"
         :department-options="overview?.filters.departments ?? []"
         :operation-group-options="overview?.filters.operationGroups ?? []"
         :responsible-options="dashboardResponsibleOptionsForChildren"
       />
 
-      <section class="white-panel report-panel">
+      <section v-if="!isYearMode" class="white-panel report-panel">
         <div class="report-heading">
           <div>
             <h2>商品维度明细报表</h2>
@@ -4139,7 +4185,7 @@ onBeforeUnmount(() => {
       </Modal>
 
       <footer class="screen-note">
-        当前已接入：日/月维度、利润表经营数据、目标完成率、推广占比、库存快照、运营组配置、负责人完成率和商品维度明细报表。
+        当前已接入：日/月/年维度、利润表经营数据、目标完成率、推广占比、库存快照、运营组配置、负责人完成率和商品维度明细报表。
       </footer>
     </div>
   </Spin>

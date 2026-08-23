@@ -599,7 +599,7 @@ onMounted(loadPage);
   <div class="erp-page">
     <header class="erp-header">
       <div>
-        <h1>圣诞款来货分配 ERP</h1>
+        <h1>圣诞款发货看板与分配</h1>
         <p>供应链回货、渠道计划与仓库发货分配总控</p>
       </div>
       <div class="header-meta">
@@ -610,7 +610,7 @@ onMounted(loadPage);
     </header>
 
     <main class="erp-main">
-      <nav class="tabbar" aria-label="发货分配功能">
+      <nav class="tabbar" aria-label="圣诞款发货看板与分配功能">
         <button
           v-for="tab in tabs"
           :key="tab.key"
