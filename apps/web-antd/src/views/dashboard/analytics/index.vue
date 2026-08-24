@@ -1587,9 +1587,7 @@ function resetFilters() {
 }
 
 function disabledFutureDate(value: ReturnType<typeof dayjs>) {
-  const unit = isYearMode.value
-    ? 'year'
-    : (isMonthMode.value ? 'month' : 'day');
+  const unit = isYearMode.value ? 'year' : (isMonthMode.value ? 'month' : 'day');
   return value.isAfter(dayjs().subtract(1, 'day'), unit);
 }
 
@@ -2440,7 +2438,10 @@ onBeforeUnmount(() => {
             :options="granularityOptions"
             class="time-granularity-select"
             size="small"
-            @change="(value) => handleGranularityChange(String(value) as AnalyticsGranularity)"
+            @change="
+              (value) =>
+                handleGranularityChange(String(value) as AnalyticsGranularity)
+            "
           />
           <DatePicker.RangePicker
             v-if="isMonthMode"

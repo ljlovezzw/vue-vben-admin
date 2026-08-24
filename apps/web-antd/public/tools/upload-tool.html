@@ -1673,6 +1673,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       activeListingRequestId: 0,
       listingAbortController: null,
       authToken: "",
+      feishuTaskInFlight: false,
       taskLog: {
         items: [],
         loading: false,
@@ -1798,6 +1799,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.feishuTaskStatus.classList.remove("hidden");
       els.feishuTaskStatus.textContent = text;
       els.feishuTaskStatus.classList.toggle("warn", type === "warn");
+    }
+
+    function setFeishuTaskInFlight(inFlight) {
+      state.feishuTaskInFlight = Boolean(inFlight);
+      els.uploadFeishuTask.disabled = state.feishuTaskInFlight;
     }
 
     function extractRows(payload) {
@@ -2249,20 +2255,6 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         label.append(checkbox, text);
         els.shopOptions.appendChild(label);
       });
-    }
-
-    function addTypedShop() {
-      const shop = (els.shopFilter.value || "").trim();
-      if (!shop) return;
-      if (!state.shopOptions.includes(shop)) {
-        state.shopOptions.push(shop);
-        state.shopOptions.sort((left, right) => left.localeCompare(right, "zh-CN"));
-      }
-      state.selectedShops.add(shop);
-      els.shopFilter.value = "";
-      renderShopOptions();
-      renderShopSelection();
-      resetListingResults("店铺选择已变化，请重新查询 Listing");
     }
 
     function shopOptionsApiUrl() {
@@ -5260,6 +5252,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            "X-Idempotency-Key": cacheKey,
           },
           body: JSON.stringify({
             metadata: {
@@ -5271,6 +5264,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         },
         "创建上传会话",
       );
+      if (sessionPayload?.data?.reusedSession) {
+        setFeishuTaskStatus("检测到相同内容正在上传，继续复用原上传会话...");
+      }
       const uploadId = sessionPayload?.data?.uploadId;
       if (!uploadId) throw new Error("后端未返回上传会话 ID");
 
@@ -5348,6 +5344,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function uploadFeishuTask() {
+      if (state.feishuTaskInFlight) {
+        setFeishuTaskStatus("已有上传任务正在提交，请勿重复点击", "warn");
+        return;
+      }
+      setFeishuTaskInFlight(true);
       const galleryFiles = collectGalleryFiles();
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
@@ -5365,6 +5366,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
       if (!token) {
         setFeishuTaskStatus("请先登录后再上传到飞书任务", "warn");
+        setFeishuTaskInFlight(false);
         return;
       }
       if (
@@ -5374,10 +5376,12 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         )
       ) {
         setFeishuTaskStatus("请先查询 Listing，并在结果表格中选择至少一组对应数据", "warn");
+        setFeishuTaskInFlight(false);
         return;
       }
       if (spu !== state.queriedSpu) {
         setFeishuTaskStatus("SPU 已变化，请重新查询并选择 Listing", "warn");
+        setFeishuTaskInFlight(false);
         return;
       }
       const galleryValidationErrors = currentGalleryValidationErrors();
@@ -5386,6 +5390,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           `橱窗图校验未通过：${galleryValidationErrors.join("；")}`,
           "warn",
         );
+        setFeishuTaskInFlight(false);
         return;
       }
       const aPlusValidationErrors = currentAPlusValidationErrors();
@@ -5394,6 +5399,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           `A+ 图片校验未通过：${aPlusValidationErrors.join("；")}`,
           "warn",
         );
+        setFeishuTaskInFlight(false);
         return;
       }
       const imageValidationErrors = await currentImageValidationErrors();
@@ -5402,14 +5408,15 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           `图片校验未通过：${imageValidationErrors.join("；")}`,
           "warn",
         );
+        setFeishuTaskInFlight(false);
         return;
       }
       if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !gpsrImage) {
         setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件", "warn");
+        setFeishuTaskInFlight(false);
         return;
       }
 
-      els.uploadFeishuTask.disabled = true;
       setFeishuTaskStatus("正在整理上传文件...");
       try {
         const galleryZip = await buildUploadZip(
@@ -5463,7 +5470,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       } catch (error) {
         setFeishuTaskStatus(`上传失败：${error.message}`, "warn");
       } finally {
-        els.uploadFeishuTask.disabled = false;
+        setFeishuTaskInFlight(false);
       }
     }
 
@@ -5696,7 +5703,6 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.shopFilter.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
-        addTypedShop();
       });
       els.shopSelection.addEventListener("click", () => {
         setShopPickerExpanded(!state.shopPickerExpanded);
