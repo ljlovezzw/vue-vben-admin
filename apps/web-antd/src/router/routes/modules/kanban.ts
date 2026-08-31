@@ -46,8 +46,7 @@ const routes: RouteRecordRaw[] = [
       {
         name: 'KanbanAdCampaignDetail',
         path: 'ads/campaign-detail/:profileId/:campaignId',
-        component: () =>
-          import('#/views/kanban/ad-campaign-detail/index.vue'),
+        component: () => import('#/views/kanban/ad-campaign-detail/index.vue'),
         meta: {
           authority: ['kanban:ads'],
           hideInMenu: true,

@@ -1263,8 +1263,7 @@ export interface AdCampaignDetailMetrics {
   spend: number;
 }
 
-export interface AdCampaignDetailTrendPoint
-  extends AdCampaignDetailMetrics {
+export interface AdCampaignDetailTrendPoint extends AdCampaignDetailMetrics {
   date: string;
 }
 

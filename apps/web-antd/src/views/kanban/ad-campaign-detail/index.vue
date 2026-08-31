@@ -14,12 +14,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 import { useRoute, useRouter } from 'vue-router';
 
-import {
-  ArrowLeft,
-  ExternalLink,
-  RotateCw,
-  Settings,
-} from '@vben/icons';
+import { ArrowLeft, ExternalLink, RotateCw, Settings } from '@vben/icons';
 
 import {
   Alert,
@@ -55,7 +50,13 @@ import {
 
 defineOptions({ name: 'KanbanAdCampaignDetail' });
 
-use([CanvasRenderer, LineChart, GridComponent, LegendComponent, TooltipComponent]);
+use([
+  CanvasRenderer,
+  LineChart,
+  GridComponent,
+  LegendComponent,
+  TooltipComponent,
+]);
 
 interface ChartTooltipItem {
   axisValue: string;
@@ -117,7 +118,8 @@ function coreEntityLabel(section: AdCampaignDetailSection) {
 
 function coreFieldOptionsForSection(section: AdCampaignDetailSection) {
   const fields: Array<{ dataIndex: string; label: string }> = [];
-  if (section !== 'ad_groups') fields.push({ dataIndex: 'adGroupName', label: '广告组' });
+  if (section !== 'ad_groups')
+    fields.push({ dataIndex: 'adGroupName', label: '广告组' });
   fields.push({
     dataIndex: 'name',
     label: coreEntityLabel(section),
@@ -222,8 +224,10 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
     visibleExtraFields.value.map((field) => ({
       dataIndex: field.key,
       key: field.key,
-      sorter: (left: AdCampaignDetailMetricRow, right: AdCampaignDetailMetricRow) =>
-        textCompare(rawFieldValue(left, field), rawFieldValue(right, field)),
+      sorter: (
+        left: AdCampaignDetailMetricRow,
+        right: AdCampaignDetailMetricRow,
+      ) => textCompare(rawFieldValue(left, field), rawFieldValue(right, field)),
       title: field.label,
       width: 160,
     }));
@@ -254,12 +258,20 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
       identityColumns.push({ dataIndex: 'asin', title: 'ASIN', width: 130 });
     }
   }
-  if (['negative_targets', 'search_terms', 'targets'].includes(activeSection.value)) {
+  if (
+    ['negative_targets', 'search_terms', 'targets'].includes(
+      activeSection.value,
+    )
+  ) {
     if (isCoreVisible('type')) {
       identityColumns.push({ dataIndex: 'type', title: '类型', width: 110 });
     }
     if (isCoreVisible('matchType')) {
-      identityColumns.push({ dataIndex: 'matchType', title: '匹配方式', width: 110 });
+      identityColumns.push({
+        dataIndex: 'matchType',
+        title: '匹配方式',
+        width: 110,
+      });
     }
   }
   if (activeSection.value === 'targets' && isCoreVisible('bid')) {
@@ -267,12 +279,15 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
   }
   if (activeSection.value === 'negative_targets') {
     if (isCoreVisible('createdAt')) {
-      identityColumns.push({ dataIndex: 'createdAt', title: '创建时间', width: 150 });
+      identityColumns.push({
+        dataIndex: 'createdAt',
+        title: '创建时间',
+        width: 150,
+      });
     }
     return [...identityColumns, ...extraColumns()];
   }
-  const metricColumns: TableColumnsType<AdCampaignDetailMetricRow> = [
-  ];
+  const metricColumns: TableColumnsType<AdCampaignDetailMetricRow> = [];
   if (isCoreVisible('impressions')) {
     metricColumns.push({
       dataIndex: 'impressions',
@@ -324,7 +339,14 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
 const tableColumns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() =>
   columns.value.length > 0
     ? columns.value
-    : [{ dataIndex: '__empty', key: '__empty', title: '暂无展示字段', width: 180 }],
+    : [
+        {
+          dataIndex: '__empty',
+          key: '__empty',
+          title: '暂无展示字段',
+          width: 180,
+        },
+      ],
 );
 
 function money(value?: null | number) {
@@ -377,7 +399,10 @@ function defaultFieldKeys() {
 }
 
 function sameFieldKeys(left: string[], right: string[]) {
-  return left.length === right.length && left.every((key, index) => key === right[index]);
+  return (
+    left.length === right.length &&
+    left.every((key, index) => key === right[index])
+  );
 }
 
 function normalizeFieldKeys(
@@ -394,12 +419,18 @@ function normalizeFieldKeys(
   const hasCoreField = validKeys.some((key) => key.startsWith('core:'));
   return hasCoreField
     ? validKeys
-    : [...defaultFieldKeys(), ...validKeys.filter((key) => key.startsWith('raw:'))];
+    : [
+        ...defaultFieldKeys(),
+        ...validKeys.filter((key) => key.startsWith('raw:')),
+      ];
 }
 
 function syncFieldPreference(fields: AdCampaignDetailField[]) {
   if (fieldPreferenceSection.value === activeSection.value) {
-    selectedFieldKeys.value = normalizeFieldKeys(selectedFieldKeys.value, fields);
+    selectedFieldKeys.value = normalizeFieldKeys(
+      selectedFieldKeys.value,
+      fields,
+    );
     return;
   }
   let stored: string[] = [];
@@ -408,7 +439,8 @@ function syncFieldPreference(fields: AdCampaignDetailField[]) {
     const value = localStorage.getItem(fieldStorageKey());
     hasStoredPreference = value !== null;
     const parsed = value ? JSON.parse(value) : [];
-    if (Array.isArray(parsed)) stored = parsed.filter((item) => typeof item === 'string');
+    if (Array.isArray(parsed))
+      stored = parsed.filter((item) => typeof item === 'string');
   } catch {
     stored = [];
   }
@@ -440,7 +472,10 @@ function restoreDefaultFields() {
   selectedFieldKeys.value = defaultFieldKeys();
 }
 
-function rawFieldValue(record: AdCampaignDetailMetricRow, field: AdCampaignDetailField) {
+function rawFieldValue(
+  record: AdCampaignDetailMetricRow,
+  field: AdCampaignDetailField,
+) {
   const value = record.rawFields?.[field.sourceKey];
   if (value === undefined || value === null || value === '') return '-';
   if (typeof value === 'object') return JSON.stringify(value);
@@ -468,7 +503,13 @@ const chartOption = computed(() => {
   return {
     animationDuration: 320,
     color: series.map((item) => item.color),
-    grid: { bottom: 32, left: 18, outerBoundsContain: 'axisLabel', right: 18, top: 42 },
+    grid: {
+      bottom: 32,
+      left: 18,
+      outerBoundsContain: 'axisLabel',
+      right: 18,
+      top: 42,
+    },
     legend: { itemHeight: 8, itemWidth: 18, top: 4 },
     series: series.map((item, index) => ({
       data: rows.map((row) => Number(row[item.key as keyof typeof row] || 0)),
@@ -483,16 +524,18 @@ const chartOption = computed(() => {
     tooltip: {
       borderColor: '#d8e1ec',
       confine: true,
-      formatter: (items: ChartTooltipItem[]) => [
-        items[0]?.axisValue || '',
-        ...items.map((item) =>
-          `${item.marker}${item.seriesName}&nbsp;<b>${
-            ['广告销售额', '花费'].includes(item.seriesName)
-              ? money(item.data)
-              : integer(item.data)
-          }</b>`,
-        ),
-      ].join('<br/>'),
+      formatter: (items: ChartTooltipItem[]) =>
+        [
+          items[0]?.axisValue || '',
+          ...items.map(
+            (item) =>
+              `${item.marker}${item.seriesName}&nbsp;<b>${
+                ['广告销售额', '花费'].includes(item.seriesName)
+                  ? money(item.data)
+                  : integer(item.data)
+              }</b>`,
+          ),
+        ].join('<br/>'),
       trigger: 'axis',
     },
     xAxis: {
@@ -511,7 +554,10 @@ const chartOption = computed(() => {
         type: 'value',
       },
       {
-        axisLabel: { color: '#75859a', formatter: (value: number) => `$${integer(value)}` },
+        axisLabel: {
+          color: '#75859a',
+          formatter: (value: number) => `$${integer(value)}`,
+        },
         axisLine: { show: false },
         axisTick: { show: false },
         splitLine: { show: false },
@@ -523,7 +569,10 @@ const chartOption = computed(() => {
 
 const lingxingUrl = computed(() => {
   const map = encodeURIComponent(
-    JSON.stringify({ campaignId: campaignId.value, profileId: profileId.value }),
+    JSON.stringify({
+      campaignId: campaignId.value,
+      profileId: profileId.value,
+    }),
   );
   return `https://ads.lingxing.com/amazon/campaign-detail?advertisingIdMap=${map}&ggType=${String(meta.value?.sponsoredType || 'sp').toLowerCase()}&name=advertisingList&k=${campaignId.value}`;
 });
@@ -531,9 +580,14 @@ const lingxingUrl = computed(() => {
 async function loadMeta() {
   metaLoading.value = true;
   try {
-    meta.value = await fetchAdCampaignDetailMeta(profileId.value, campaignId.value);
+    meta.value = await fetchAdCampaignDetailMeta(
+      profileId.value,
+      campaignId.value,
+    );
   } catch (error) {
-    message.error(`广告活动信息加载失败：${error instanceof Error ? error.message : error}`);
+    message.error(
+      `广告活动信息加载失败：${error instanceof Error ? error.message : error}`,
+    );
   } finally {
     metaLoading.value = false;
   }
@@ -551,7 +605,9 @@ async function loadSection(refresh = false) {
       campaignId.value,
       {
         adGroupId:
-          requestedSection === 'search_terms' ? undefined : adGroupId.value || undefined,
+          requestedSection === 'search_terms'
+            ? undefined
+            : adGroupId.value || undefined,
         endDate: dateRange.value[1].format('YYYY-MM-DD'),
         keyword: search.value.trim() || undefined,
         page: page.value,
@@ -572,7 +628,9 @@ async function loadSection(refresh = false) {
   } catch (error) {
     if (!nextController.signal.aborted) {
       detail.value = null;
-      message.error(`领星实时数据加载失败：${error instanceof Error ? error.message : error}`);
+      message.error(
+        `领星实时数据加载失败：${error instanceof Error ? error.message : error}`,
+      );
     }
   } finally {
     if (controller === nextController) {
@@ -597,11 +655,14 @@ async function loadCampaignTrend(refresh = false) {
       },
       nextController.signal,
     );
-    if (trendController !== nextController || nextController.signal.aborted) return;
+    if (trendController !== nextController || nextController.signal.aborted)
+      return;
     campaignTrend.value = result.trend;
   } catch (error) {
     if (!nextController.signal.aborted) {
-      message.error(`广告活动趋势加载失败：${error instanceof Error ? error.message : error}`);
+      message.error(
+        `广告活动趋势加载失败：${error instanceof Error ? error.message : error}`,
+      );
     }
   } finally {
     if (trendController === nextController) trendController = null;
@@ -673,7 +734,11 @@ onBeforeUnmount(() => {
       <header class="page-head">
         <div class="head-main">
           <Tooltip title="返回广告优化">
-            <Button aria-label="返回广告优化" shape="circle" @click="router.back()">
+            <Button
+              aria-label="返回广告优化"
+              shape="circle"
+              @click="router.back()"
+            >
               <ArrowLeft :size="17" />
             </Button>
           </Tooltip>
@@ -681,7 +746,11 @@ onBeforeUnmount(() => {
             <div class="title-row">
               <h1>{{ meta?.campaignName || campaignId }}</h1>
               <Tag color="blue">{{ meta?.sponsoredType || '-' }}</Tag>
-              <Tag :color="statusColor(meta?.status)">{{ meta?.status || '-' }}</Tag>
+              <Tag :color="statusColor(meta?.status)">
+{{
+                meta?.status || '-'
+              }}
+</Tag>
             </div>
             <p>
               {{ meta?.storeName || '-' }} · 活动 ID {{ campaignId }} ·
@@ -691,12 +760,28 @@ onBeforeUnmount(() => {
         </div>
         <div class="head-actions">
           <span v-if="detail?.fetchedAt" class="freshness">
-            {{ detail.source === 'database_ad_group_daily_metrics' ? '本地广告日表' : '领星实时接口' }} ·
-            {{ detail.stale ? '后台刷新中，展示最近数据' : detail.cacheHit ? '短缓存' : '刚刚刷新' }} ·
+            {{
+              detail.source === 'database_ad_group_daily_metrics'
+                ? '本地广告日表'
+                : '领星实时接口'
+            }}
+            ·
+            {{
+              detail.stale
+                ? '后台刷新中，展示最近数据'
+                : detail.cacheHit
+                  ? '短缓存'
+                  : '刚刚刷新'
+            }}
+            ·
             {{ detail.fetchedAt.replace('T', ' ') }}
           </span>
           <Tooltip title="强制从领星重新获取当前页签">
-            <Button :disabled="sectionLoading" shape="circle" @click="loadSection(true)">
+            <Button
+              :disabled="sectionLoading"
+              shape="circle"
+              @click="loadSection(true)"
+            >
               <RotateCw :class="{ spinning: sectionLoading }" :size="17" />
             </Button>
           </Tooltip>
@@ -727,7 +812,8 @@ onBeforeUnmount(() => {
       <header class="section-head">
         <div>
           <h2>活动趋势</h2>
-          <span>{{ dateRange[0].format('YYYY-MM-DD') }} 至 {{ dateRange[1].format('YYYY-MM-DD') }}</span>
+          <span>{{ dateRange[0].format('YYYY-MM-DD') }} 至
+            {{ dateRange[1].format('YYYY-MM-DD') }}</span>
         </div>
       </header>
       <div v-if="campaignTrend.length > 0" class="trend-chart">
@@ -776,11 +862,19 @@ onBeforeUnmount(() => {
               <div class="field-picker">
                 <div class="field-picker-head">
                   <strong>展示字段</strong>
-                  <span>{{ selectedFieldKeys.length }}/{{ fieldOptions.length }}</span>
+                  <span>{{ selectedFieldKeys.length }}/{{
+                      fieldOptions.length
+                    }}</span>
                 </div>
                 <div class="field-picker-actions">
-                  <Button size="small" type="link" @click="selectAllFields">全选</Button>
-                  <Button size="small" type="link" @click="restoreDefaultFields">
+                  <Button size="small" type="link" @click="selectAllFields">
+全选
+</Button>
+                  <Button
+                    size="small"
+                    type="link"
+                    @click="restoreDefaultFields"
+                  >
                     恢复默认
                   </Button>
                 </div>
@@ -811,7 +905,10 @@ onBeforeUnmount(() => {
             showTotal: (total: number) => `共 ${total} 条`,
             total: detail?.pagination.total || 0,
           }"
-          :row-key="(row: AdCampaignDetailMetricRow) => `${activeSection}-${row.adGroupId}-${row.id}`"
+          :row-key="
+            (row: AdCampaignDetailMetricRow) =>
+              `${activeSection}-${row.adGroupId}-${row.id}`
+          "
           :scroll="{ x: 1500, y: 520 }"
           size="small"
           @change="changePage"
@@ -830,21 +927,47 @@ onBeforeUnmount(() => {
               </div>
             </template>
             <template v-else-if="column?.dataIndex === 'status'">
-              <Tag :color="statusColor(record.status)">{{ record.status || '-' }}</Tag>
+              <Tag :color="statusColor(record.status)">
+{{
+                record.status || '-'
+              }}
+</Tag>
             </template>
             <template v-else-if="column?.dataIndex === 'bid'">
               {{ money(record.bid) }}
             </template>
             <template
-              v-else-if="['acos', 'clicks', 'cpc', 'ctr', 'cvr', 'impressions', 'orders', 'roas', 'sales', 'spend'].includes(String(column?.dataIndex))"
+              v-else-if="
+                [
+                  'acos',
+                  'clicks',
+                  'cpc',
+                  'ctr',
+                  'cvr',
+                  'impressions',
+                  'orders',
+                  'roas',
+                  'sales',
+                  'spend',
+                ].includes(String(column?.dataIndex))
+              "
             >
               <strong class="numeric-value">
-                {{ metricCell(detailRecord(record), String(column?.dataIndex)) }}
+                {{
+                  metricCell(detailRecord(record), String(column?.dataIndex))
+                }}
               </strong>
             </template>
-            <template v-else-if="String(column?.dataIndex || '').startsWith('raw:')">
+            <template
+              v-else-if="String(column?.dataIndex || '').startsWith('raw:')"
+            >
               <span class="raw-field-value">
-                {{ rawFieldValueByKey(detailRecord(record), String(column?.dataIndex)) }}
+                {{
+                  rawFieldValueByKey(
+                    detailRecord(record),
+                    String(column?.dataIndex),
+                  )
+                }}
               </span>
             </template>
           </template>

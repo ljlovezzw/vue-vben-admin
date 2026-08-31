@@ -1546,10 +1546,9 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
 
 .profit-equation {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) 30px repeat(
-      3,
-      minmax(150px, 1fr) 30px
-    ) minmax(170px, 1.2fr);
+  grid-template-columns:
+    minmax(170px, 1.2fr) 30px repeat(3, minmax(150px, 1fr) 30px)
+    minmax(170px, 1.2fr);
   align-items: stretch;
 }
 

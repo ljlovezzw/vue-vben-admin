@@ -6,7 +6,7 @@ import type {
   AdCvrOptimizationSuggestion,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 import {
@@ -135,16 +135,35 @@ const statusLabels: Record<string, string> = {
   dismissed: '已忽略',
   pending: '待判断',
 };
+const countryLabels: Record<string, string> = {
+  ae: '阿联酋',
+  au: '澳大利亚',
+  be: '比利时',
+  ca: '加拿大',
+  de: '德国',
+  es: '西班牙',
+  fr: '法国',
+  ie: '爱尔兰',
+  it: '意大利',
+  jp: '日本',
+  mx: '墨西哥',
+  nl: '荷兰',
+  pl: '波兰',
+  se: '瑞典',
+  uk: '英国',
+  us: '美国',
+};
 const sponsoredTypeLabels: Record<string, string> = {
-  sp: 'SP',
-  sb: 'SB',
-  sbv: 'SBV',
-  sd: 'SD',
+  sb: 'SB（品牌推广）',
+  sbv: 'SBV（品牌视频）',
+  sd: 'SD（展示型推广）',
+  sp: 'SP（商品推广）',
 };
 const targetingTypeLabels: Record<string, string> = {
   auto: '自动投放',
   audience: '受众投放',
   keyword: '关键词投放',
+  manual: '手动投放',
   product: '商品投放',
   'audience-product': '受众与商品投放',
 };
@@ -152,6 +171,26 @@ const stateLabels: Record<string, string> = {
   enabled: '启用',
   paused: '已暂停',
   archived: '已归档',
+};
+const costTypeLabels: Record<string, string> = {
+  cpc: 'CPC（按点击付费）',
+  fixed_price: '固定价格',
+  vcpm: 'VCPM（按千次可见展示付费）',
+};
+const serviceStatusLabels: Record<string, string> = {
+  account_out_of_budget: '账户预算不足',
+  ad_group_paused: '广告组已暂停',
+  ad_group_status_enabled: '广告组已启用',
+  advertiser_payment_failure: '广告主付款失败',
+  campaign_archived: '广告活动已归档',
+  campaign_incomplete: '广告活动信息不完整',
+  campaign_out_of_budget: '广告活动预算不足',
+  campaign_paused: '广告活动已暂停',
+  campaign_pending: '广告活动待生效',
+  campaign_status_enabled: '广告活动已启用',
+  ended: '已结束',
+  portfolio_out_of_budget: '广告组合预算不足',
+  rejected: '广告被拒绝',
 };
 const lookupOptions = [
   { label: '按 MSKU 查询', value: 'msku' },
@@ -242,9 +281,7 @@ const hasActiveFilters = computed(
   () =>
     Boolean(query.search || query.responsible) ||
     Boolean(
-      query.adGroupKeyword ||
-        query.campaignKeyword ||
-        query.lookupValue,
+      query.adGroupKeyword || query.campaignKeyword || query.lookupValue,
     ) ||
     query.stores.length > 0 ||
     query.countries.length > 0 ||
@@ -270,11 +307,70 @@ const snapshotRange = computed(() => {
   if (!snapshot?.range_start || !snapshot?.range_end) return '等待快照数据';
   return `${snapshot.range_start} 至 ${snapshot.range_end}`;
 });
-function labeledOptions(
-  values: string[],
-  labels: Record<string, string> = {},
-) {
-  return values.map((value) => ({ label: labels[value.toLowerCase()] || value, value }));
+function normalizeCountry(value: unknown) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function storeCountry(store: unknown) {
+  const match = String(store || '').trim().match(/-([a-z]{2})$/i);
+  return match ? normalizeCountry(match[1]) : '';
+}
+
+function countryName(value: unknown) {
+  const normalized = normalizeCountry(value);
+  return countryLabels[normalized] || String(value || '').toUpperCase();
+}
+
+const storeOptions = computed(() => {
+  const selectedCountries = new Set(
+    query.countries.map((country) => normalizeCountry(country)),
+  );
+  const stores = data.value?.filters.stores ?? [];
+  const visibleStores = selectedCountries.size > 0
+    ? stores.filter((store) => selectedCountries.has(storeCountry(store)))
+    : stores;
+
+  return visibleStores.map((value) => ({
+    label: value,
+    searchLabel: `${value} ${countryName(storeCountry(value))}`,
+    site: countryName(storeCountry(value)),
+    tone: storeCountry(value) || 'other',
+    value,
+  }));
+});
+
+const countryOptions = computed(() =>
+  (data.value?.filters.countries ?? []).map((value) => ({
+    code: String(value).toUpperCase(),
+    label: countryName(value),
+    searchLabel: `${String(value)} ${countryName(value)}`,
+    value,
+  })),
+);
+
+watch(
+  () => [...query.countries],
+  () => {
+    const allowedStores = new Set(storeOptions.value.map((option) => option.value));
+    query.stores = query.stores.filter((store) => allowedStores.has(store));
+  },
+);
+
+function uniqueOptionValues(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+}
+
+function labeledOptions(values: string[], labels: Record<string, string> = {}) {
+  return uniqueOptionValues(values).map((value) => ({
+    label: labels[value.toLowerCase()] || value,
+    value,
+  }));
 }
 const summaryItems = computed(() => [
   {
@@ -313,8 +409,11 @@ const summaryItems = computed(() => [
   },
 ]);
 
-function options(values: string[]) {
-  return values.map((value) => ({ label: value, value }));
+function options(values: string[], labels: Record<string, string> = {}) {
+  return uniqueOptionValues(values).map((value) => ({
+    label: labels[value.toLowerCase()] || value,
+    value,
+  }));
 }
 
 function percent(value: null | number | string) {
@@ -335,7 +434,9 @@ function adjustmentText(record: AdCvrOptimizationSuggestion) {
   if (!Number.isFinite(change) || change === 0) return '-';
   const direction = change > 0 ? '提高' : '降低';
   const target = Number(metrics.recommended_value);
-  const targetText = Number.isFinite(target) ? `，建议值 ${target.toFixed(2)}` : '';
+  const targetText = Number.isFinite(target)
+    ? `，建议值 ${target.toFixed(2)}`
+    : '';
   return `${direction} ${Math.abs(change).toFixed(0)}%${targetText}`;
 }
 
@@ -356,7 +457,8 @@ function inventorySourceText(record: AdCvrOptimizationSuggestion) {
     fba_snapshot_spu_color: 'FBA 快照（SPU + 颜色匹配）',
     lingxing_ad_detail: '广告详情接口参考值',
   };
-  const source = sourceLabels[String(metrics.advertised_inventory_source || '')] || '-';
+  const source =
+    sourceLabels[String(metrics.advertised_inventory_source || '')] || '-';
   const age = Number(metrics.advertised_inventory_snapshot_age_hours);
   return Number.isFinite(age) ? `${source}，${age.toFixed(1)} 小时前` : source;
 }
@@ -493,13 +595,7 @@ function executeSelected() {
     (row) => !rpaExecutableActions.has(row.action_type),
   );
   if (unsupported.length > 0) {
-    const labels = [
-      ...new Set(
-        unsupported.map(
-          (row) => displayAction(row),
-        ),
-      ),
-    ];
+    const labels = [...new Set(unsupported.map((row) => displayAction(row)))];
     message.warning(`${labels.join('、')}缺少确定的自动执行参数，只能人工处理`);
     return;
   }
@@ -613,45 +709,79 @@ onMounted(() => load());
         <span>国家</span>
         <Select
           v-model:value="query.countries"
-          :options="options(data?.filters.countries ?? [])"
+          :options="countryOptions"
           allow-clear
           aria-label="国家"
+          max-tag-count="responsive"
           mode="multiple"
+          option-filter-prop="searchLabel"
+          popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
           placeholder="全部国家"
           show-search
-        />
+        >
+          <template #option="{ label, code }">
+            <div class="scope-option">
+              <span class="scope-option-name">{{ label }}</span>
+              <span class="scope-code">{{ code }}</span>
+            </div>
+          </template>
+        </Select>
       </label>
       <label class="filter-item">
         <span>店铺</span>
         <Select
           v-model:value="query.stores"
-          :options="options(data?.filters.stores ?? [])"
+          :options="storeOptions"
           allow-clear
           aria-label="店铺"
+          max-tag-count="responsive"
           mode="multiple"
+          option-filter-prop="searchLabel"
+          popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
           placeholder="全部店铺"
           show-search
-        />
+        >
+          <template #option="{ label, site, tone }">
+            <div class="scope-option">
+              <span class="scope-option-name">{{ label }}</span>
+              <span class="scope-site-badge" :class="`is-${tone}`">
+                {{ site || '其他' }}
+              </span>
+            </div>
+          </template>
+        </Select>
       </label>
       <label class="filter-item">
         <span>广告类型</span>
         <Select
           v-model:value="query.sponsoredTypes"
-          :options="labeledOptions(data?.filters.sponsoredTypes ?? [], sponsoredTypeLabels)"
+          :options="
+            labeledOptions(
+              data?.filters.sponsoredTypes ?? [],
+              sponsoredTypeLabels,
+            )
+          "
           allow-clear
           aria-label="广告类型"
           mode="multiple"
-          placeholder="SP、SB、SBV、SD"
+          popup-class-name="ad-optimization-dropdown"
+          placeholder="全部广告类型"
         />
       </label>
       <label class="filter-item">
         <span>投放类型</span>
         <Select
           v-model:value="query.targetingTypes"
-          :options="labeledOptions(data?.filters.targetingTypes ?? [], targetingTypeLabels)"
+          :options="
+            labeledOptions(
+              data?.filters.targetingTypes ?? [],
+              targetingTypeLabels,
+            )
+          "
           allow-clear
           aria-label="投放类型"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部投放类型"
         />
       </label>
@@ -669,21 +799,25 @@ onMounted(() => load());
         <span>成本类型</span>
         <Select
           v-model:value="query.costTypes"
-          :options="options(data?.filters.costTypes ?? [])"
+          :options="options(data?.filters.costTypes ?? [], costTypeLabels)"
           allow-clear
           aria-label="成本类型"
           mode="multiple"
-          placeholder="CPC、VCPM"
+          popup-class-name="ad-optimization-dropdown"
+          placeholder="全部成本类型"
         />
       </label>
       <label class="filter-item">
         <span>状态</span>
         <Select
           v-model:value="query.entityStates"
-          :options="labeledOptions(data?.filters.entityStates ?? [], stateLabels)"
+          :options="
+            labeledOptions(data?.filters.entityStates ?? [], stateLabels)
+          "
           allow-clear
           aria-label="广告活动状态"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部状态"
         />
       </label>
@@ -691,17 +825,25 @@ onMounted(() => load());
         <span>服务状态</span>
         <Select
           v-model:value="query.serviceStatuses"
-          :options="options(data?.filters.serviceStatuses ?? [])"
+          :options="
+            options(data?.filters.serviceStatuses ?? [], serviceStatusLabels)
+          "
           allow-clear
           aria-label="服务状态"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部服务状态"
           show-search
         />
       </label>
       <label class="filter-item lookup-field">
         <span>查询维度</span>
-        <Select v-model:value="query.lookupField" :options="lookupOptions" aria-label="查询维度" />
+        <Select
+          v-model:value="query.lookupField"
+          :options="lookupOptions"
+          aria-label="查询维度"
+          popup-class-name="ad-optimization-dropdown"
+        />
       </label>
       <label class="filter-item lookup-value">
         <span>查询值</span>
@@ -720,6 +862,7 @@ onMounted(() => load());
           :options="options(data?.filters.responsibles ?? [])"
           allow-clear
           aria-label="负责人"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部负责人"
           show-search
         />
@@ -742,6 +885,7 @@ onMounted(() => load());
           allow-clear
           aria-label="判断层级"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部层级"
         />
       </label>
@@ -753,6 +897,7 @@ onMounted(() => load());
           allow-clear
           aria-label="建议动作"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部动作"
         />
       </label>
@@ -764,6 +909,7 @@ onMounted(() => load());
           allow-clear
           aria-label="处理状态"
           mode="multiple"
+          popup-class-name="ad-optimization-dropdown"
           placeholder="全部状态"
         />
       </label>
@@ -882,7 +1028,9 @@ onMounted(() => load());
               >
                 <span>
                   <em>活动</em>
-                  <strong>{{ record.campaign_name || record.campaign_id || '-' }}</strong>
+                  <strong>{{
+                    record.campaign_name || record.campaign_id || '-'
+                  }}</strong>
                 </span>
               </Tooltip>
               <Tooltip
@@ -891,10 +1039,13 @@ onMounted(() => load());
               >
                 <span>
                   <em>广告组</em>
-                  <strong>{{ record.ad_group_name || record.ad_group_id || '-' }}</strong>
+                  <strong>{{
+                    record.ad_group_name || record.ad_group_id || '-'
+                  }}</strong>
                 </span>
               </Tooltip>
-              <small>{{ record.campaign_id || '-' }} · {{ record.ad_group_id || '-' }}</small>
+              <small>{{ record.campaign_id || '-' }} ·
+                {{ record.ad_group_id || '-' }}</small>
               <ExternalLink :size="13" />
             </button>
             <Tag
@@ -991,12 +1142,7 @@ onMounted(() => load());
           </div>
         </div>
         <div class="detail-grid">
-          <span>层级</span><b>{{ levelLabel(detail) }}</b>
-          <span>建议</span><b>{{ displayAction(detail) }}</b>
-          <span>问题类型</span><b>{{ detail.diagnosis_label || '-' }}</b>
-          <span>判断置信度</span><b>{{ detail.confidence_label || '-' }}</b>
-          <span>建议调整</span><b>{{ adjustmentText(detail) }}</b>
-          <span>调整依据</span><b>{{ detail.metrics?.recommendation_basis || '-' }}</b>
+          <span>层级</span><b>{{ levelLabel(detail) }}</b> <span>建议</span><b>{{ displayAction(detail) }}</b> <span>问题类型</span><b>{{ detail.diagnosis_label || '-' }}</b> <span>判断置信度</span><b>{{ detail.confidence_label || '-' }}</b> <span>建议调整</span><b>{{ adjustmentText(detail) }}</b> <span>调整依据</span><b>{{ detail.metrics?.recommendation_basis || '-' }}</b>
           <span>店铺 / 负责人</span><b>{{ detail.store_name }} / {{ detail.responsible || '-' }}</b>
           <span>广告活动</span><b>{{ detail.campaign_name || '-' }}</b>
           <span>广告活动 ID</span><b>{{ detail.campaign_id || '-' }}</b>
@@ -1004,12 +1150,7 @@ onMounted(() => load());
           <span>广告组 ID</span><b>{{ detail.ad_group_id || '-' }}</b>
           <span>SPU / 父ASIN</span><b>{{ detail.spu || '-' }} / {{ detail.parent_asin || '-' }}</b>
           <span>订单 / 点击</span><b>{{ detail.orders }} / {{ detail.clicks }}</b> <span>合格点击</span><b>{{ detail.qualified_clicks ?? '-' }}</b> <span>花费 / 销售额</span><b>{{ money(detail.spend) }} / {{ money(detail.sales) }}</b>
-          <span>库存（可售 / 可用 / 总）</span><b>{{ inventoryText(detail) }}</b>
-          <span>库存快照</span><b>{{ inventorySourceText(detail) }}</b>
-          <span>投放内容</span><b>{{ detail.targeting_text || '-' }}</b>
-          <span>搜索词</span><b>{{ detail.search_term || '-' }}</b>
-          <span>相关度</span><b>{{ detail.relevance_label || '-' }}</b>
-          <span>执行方式</span><b>{{
+          <span>库存（可售 / 可用 / 总）</span><b>{{ inventoryText(detail) }}</b> <span>库存快照</span><b>{{ inventorySourceText(detail) }}</b> <span>投放内容</span><b>{{ detail.targeting_text || '-' }}</b> <span>搜索词</span><b>{{ detail.search_term || '-' }}</b> <span>相关度</span><b>{{ detail.relevance_label || '-' }}</b> <span>执行方式</span><b>{{
             rpaExecutableActions.has(detail.action_type)
               ? '确认后可提交 RPA'
               : '人工处理'
@@ -1143,39 +1284,49 @@ onMounted(() => load());
   background: #2563eb;
 }
 
-.summary-item.tone-danger strong,
-.summary-item.tone-danger::after {
+.summary-item.tone-danger strong {
   color: #d92d20;
+}
+
+.summary-item.tone-danger::after {
   background: #d92d20;
 }
 
-.summary-item.tone-warning strong,
-.summary-item.tone-warning::after {
+.summary-item.tone-warning strong {
   color: #b54708;
+}
+
+.summary-item.tone-warning::after {
   background: #f79009;
 }
 
-.summary-item.tone-success strong,
-.summary-item.tone-success::after {
+.summary-item.tone-success strong {
   color: #067647;
+}
+
+.summary-item.tone-success::after {
   background: #12b76a;
 }
 
-.summary-item.tone-money strong,
-.summary-item.tone-money::after {
+.summary-item.tone-money strong {
   color: #175cd3;
+}
+
+.summary-item.tone-money::after {
   background: #528bff;
 }
 
 .filter-band {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(6, minmax(148px, 1fr));
   gap: 10px;
-  padding: 13px 14px;
+  padding: 14px;
   margin-top: 12px;
   background: var(--opt-panel);
   border: 1px solid var(--opt-border);
   border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
 }
 
 .filter-item {
@@ -1185,14 +1336,179 @@ onMounted(() => load());
 }
 
 .filter-item > span {
+  display: flex;
+  align-items: center;
+  min-height: 16px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--opt-muted);
+  line-height: 1.3;
+  color: #344054;
+}
+
+.filter-item > span::before {
+  width: 3px;
+  height: 12px;
+  margin-right: 6px;
+  content: '';
+  background: #84adff;
+  border-radius: 2px;
 }
 
 .filter-item :deep(.ant-select),
 .filter-item :deep(.ant-input-affix-wrapper) {
   width: 100%;
+}
+
+.filter-item :deep(.ant-select-selector),
+.filter-item :deep(.ant-input-affix-wrapper) {
+  min-height: 32px;
+  border-color: #cbd5e1;
+  border-radius: 4px;
+  box-shadow: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.filter-item :deep(.ant-select-selector) {
+  padding: 0 8px !important;
+  background: #fff;
+}
+
+.filter-item :deep(.ant-select-single .ant-select-selector) {
+  align-items: center;
+}
+
+.filter-item :deep(.ant-select-selection-placeholder),
+.filter-item :deep(.ant-input::placeholder) {
+  color: #98a2b3;
+}
+
+.filter-item :deep(.ant-select-selection-item),
+.filter-item :deep(.ant-select-selection-search-input),
+.filter-item :deep(.ant-input) {
+  font-size: 13px;
+}
+
+.filter-item :deep(.ant-select-selection-item) {
+  color: #1d2939;
+}
+
+.filter-item :deep(.ant-select-multiple .ant-select-selection-item) {
+  height: 22px;
+  padding: 1px 6px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  line-height: 19px;
+  color: #175cd3;
+  background: #eff8ff;
+  border: 1px solid #b2ddff;
+  border-radius: 3px;
+}
+
+.filter-item :deep(.ant-select-selection-item-remove) {
+  color: #528bff;
+}
+
+.filter-item :deep(.ant-select-selection-item-remove:hover) {
+  color: #175cd3;
+}
+
+.scope-option {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+}
+
+.scope-option::before {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  content: '';
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+}
+
+:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-option::before) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  content: '✓';
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.scope-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-code,
+.scope-site-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #667085;
+  background: #f2f4f7;
+  border: 1px solid #eaecf0;
+  border-radius: 3px;
+}
+
+.scope-site-badge.is-us,
+.scope-site-badge.is-ca {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #b2ddff;
+}
+
+.scope-site-badge.is-uk,
+.scope-site-badge.is-de,
+.scope-site-badge.is-fr,
+.scope-site-badge.is-it,
+.scope-site-badge.is-es {
+  color: #6941c6;
+  background: #f9f5ff;
+  border-color: #d9d6fe;
+}
+
+.scope-site-badge.is-au,
+.scope-site-badge.is-ae {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+.filter-item :deep(.ant-select-arrow),
+.filter-item :deep(.ant-select-clear) {
+  color: #667085;
+}
+
+.filter-item :deep(.ant-input-affix-wrapper:hover),
+.filter-item :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
+  border-color: #84adff;
+}
+
+.filter-item :deep(.ant-input-affix-wrapper-focused),
+.filter-item :deep(.ant-input-affix-wrapper:focus),
+.filter-item :deep(.ant-select-focused .ant-select-selector) {
+  border-color: #528bff;
+  box-shadow: 0 0 0 2px rgb(82 139 255 / 14%);
+}
+
+.filter-item :deep(.ant-input-affix-wrapper-focused .ant-input),
+.filter-item :deep(.ant-input-affix-wrapper:focus .ant-input) {
+  background: #fff;
 }
 
 .filter-date-range {
@@ -1205,10 +1521,10 @@ onMounted(() => load());
   min-height: 32px;
   padding: 0 11px;
   overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 12px;
   font-weight: 700;
   color: #175cd3;
-  text-overflow: ellipsis;
   white-space: nowrap;
   background: #eff8ff;
   border: 1px solid #b2ddff;
@@ -1223,11 +1539,104 @@ onMounted(() => load());
   grid-column: 1 / -1;
   gap: 8px;
   justify-content: flex-end;
-  padding-top: 2px;
+  padding-top: 11px;
+  margin-top: 1px;
+  border-top: 1px solid #eef2f6;
 }
 
 .filter-actions :deep(.ant-checkbox-wrapper) {
   margin-right: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475467;
+}
+
+.filter-actions :deep(.ant-checkbox-checked .ant-checkbox-inner),
+.filter-actions :deep(.ant-checkbox-indeterminate .ant-checkbox-inner::after) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.filter-actions :deep(.ant-btn) {
+  min-width: 78px;
+  height: 32px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 4px;
+}
+
+.filter-actions :deep(.ant-btn:not(.ant-btn-primary)) {
+  color: #344054;
+  background: #fff;
+  border-color: #cbd5e1;
+}
+
+.filter-actions :deep(.ant-btn:not(.ant-btn-primary):hover) {
+  color: #175cd3;
+  border-color: #84adff;
+}
+
+.filter-actions :deep(.ant-btn-primary) {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 1px 2px rgb(37 99 235 / 20%);
+}
+
+.filter-actions :deep(.ant-btn-primary:hover) {
+  background: #175cd3;
+  border-color: #175cd3;
+}
+
+:global(.ad-optimization-dropdown) {
+  padding: 4px;
+  border: 1px solid #d0d5dd;
+  border-radius: 5px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / 14%);
+}
+
+:global(.ad-optimization-dropdown .ant-select-item) {
+  min-height: 32px;
+  padding: 5px 9px;
+  margin: 1px 0;
+  color: #344054;
+  border-radius: 3px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+:global(.ad-optimization-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled)) {
+  color: #175cd3;
+  background: #f5f9ff;
+}
+
+:global(.ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled)) {
+  font-weight: 700;
+  color: #175cd3;
+  background: #eff8ff;
+}
+
+:global(.ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled).ant-select-item-option-active) {
+  background: #e6f4ff;
+}
+
+:global(.ad-optimization-dropdown .ant-select-item-option-state) {
+  color: #2563eb;
+}
+
+:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-code),
+:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-site-badge) {
+  color: #175cd3;
+  background: #dff1ff;
+  border-color: #84adff;
+}
+
+:global(.ad-optimization-scope-dropdown .ant-select-item-option-state) {
+  display: none;
+}
+
+:global(.ad-optimization-dropdown .ant-empty) {
+  margin: 8px 0;
 }
 
 .action-bar {
@@ -1636,5 +2045,66 @@ onMounted(() => load());
 :global(.dark) .reason {
   background: #3b2614;
   border-color: #854a0e;
+}
+
+:global(.dark) .filter-item > span {
+  color: #cbd5e1;
+}
+
+:global(.dark) .filter-item :deep(.ant-select-selector),
+:global(.dark) .filter-item :deep(.ant-input-affix-wrapper),
+:global(.dark) .filter-actions :deep(.ant-btn:not(.ant-btn-primary)) {
+  color: #e2e8f0;
+  background: #182230;
+  border-color: #475467;
+}
+
+:global(.dark) .filter-item :deep(.ant-select-selection-item) {
+  color: #b2ccff;
+}
+
+:global(.dark) .filter-item :deep(.ant-select-multiple .ant-select-selection-item) {
+  color: #b2ccff;
+  background: #19345d;
+  border-color: #315b9d;
+}
+
+:global(.dark) .scope-code,
+:global(.dark) .scope-site-badge {
+  color: #cbd5e1;
+  background: #273548;
+  border-color: #475467;
+}
+
+:global(.dark) .scope-option::before {
+  border-color: #64748b;
+}
+
+:global(.dark) .filter-actions {
+  border-top-color: #344054;
+}
+
+:global(.dark) .filter-actions :deep(.ant-checkbox-wrapper),
+:global(.dark) .filter-actions :deep(.ant-btn:not(.ant-btn-primary)) {
+  color: #cbd5e1;
+}
+
+:global(.dark .ad-optimization-dropdown) {
+  background: #182230;
+  border-color: #475467;
+}
+
+:global(.dark .ad-optimization-dropdown .ant-select-item) {
+  color: #cbd5e1;
+}
+
+:global(.dark .ad-optimization-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled)) {
+  color: #b2ccff;
+  background: #203451;
+}
+
+:global(.dark .ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled)) {
+  color: #b2ccff;
+  background: #19345d;
 }
 </style>
