@@ -20,6 +20,7 @@ export default defineConfig({
     '**/*.svg',
     '**/*.sh',
     'public',
+    '**/public/tools/vendor/**',
     '.npmrc',
     '*-lock.yaml',
     'skills-lock.json',

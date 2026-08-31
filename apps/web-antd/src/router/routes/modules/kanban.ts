@@ -32,6 +32,30 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'KanbanAdCvrOptimization',
+        path: 'ad-cvr-optimization',
+        alias: 'ads/cvr-optimization',
+        component: () => import('#/views/kanban/ad-cvr-optimization/index.vue'),
+        meta: {
+          authority: ['kanban:ads'],
+          icon: 'lucide:list-checks',
+          keepAlive: true,
+          title: '广告CVR优化',
+        },
+      },
+      {
+        name: 'KanbanAdCampaignDetail',
+        path: 'ads/campaign-detail/:profileId/:campaignId',
+        component: () =>
+          import('#/views/kanban/ad-campaign-detail/index.vue'),
+        meta: {
+          authority: ['kanban:ads'],
+          hideInMenu: true,
+          keepAlive: true,
+          title: '广告活动详情',
+        },
+      },
+      {
         name: 'KanbanTargets',
         path: 'targets',
         component: () => import('#/views/kanban/targets/index.vue'),

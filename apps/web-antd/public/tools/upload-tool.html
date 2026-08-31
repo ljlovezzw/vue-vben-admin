@@ -633,6 +633,62 @@
       font-size: 12px;
     }
 
+    .keyword-workspace {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid #c8d7ff;
+      border-left: 5px solid var(--primary);
+      border-radius: 8px;
+      background: #f7faff;
+    }
+
+    .keyword-workspace-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .keyword-workspace-title {
+      color: #173d7a;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .keyword-editor {
+      min-height: 92px;
+      resize: vertical;
+      line-height: 1.65;
+    }
+
+    .keyword-editor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .keyword-workspace-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+
+    .keyword-count.invalid {
+      color: var(--danger);
+      font-weight: 700;
+    }
+
+    .keyword-workspace-foot .invalid {
+      color: var(--danger);
+      font-weight: 650;
+    }
+
     .rule-card.aplus-card {
       position: relative;
       overflow: hidden;
@@ -1369,6 +1425,7 @@
       .platform-pair-column .map-row > .field:last-child { grid-column: auto; }
       .shop-field { grid-column: 1; }
       .listing-query-grid { grid-template-columns: 1fr; }
+      .keyword-editor-grid { grid-template-columns: 1fr; }
       .shop-options { grid-template-columns: 1fr; }
       .top { padding: 18px; }
       .panel-body { padding: 14px; }
@@ -1463,6 +1520,37 @@
             <div class="table-wrap hidden" id="listingTableWrap">
               <table class="data-table" id="listingTable"></table>
             </div>
+            <div class="keyword-workspace hidden" id="imageKeywordPanel">
+              <div class="keyword-workspace-head">
+                <div>
+                  <div class="keyword-workspace-title">图片埋词（可修改）</div>
+                  <div class="mini" id="imageKeywordMeta">选择 Listing 后自动生成关键词建议</div>
+                </div>
+                <button class="btn btn-soft" id="refreshImageKeywords" type="button">重新获取</button>
+              </div>
+              <div class="keyword-editor-grid">
+                <div class="field">
+                  <label for="coreImageKeywordInput">核心关键词</label>
+                  <textarea
+                    class="control keyword-editor"
+                    id="coreImageKeywordInput"
+                    placeholder="每行一个核心关键词"
+                  ></textarea>
+                </div>
+                <div class="field">
+                  <label for="sceneImageKeywordInput">场景词</label>
+                  <textarea
+                    class="control keyword-editor"
+                    id="sceneImageKeywordInput"
+                    placeholder="每行一个场景词，可修改或留空"
+                  ></textarea>
+                </div>
+              </div>
+              <div class="keyword-workspace-foot">
+                <span id="imageKeywordStatus">关键词建议可修改或留空；填写后将写入 JPEG 详情及二进制末尾</span>
+                <span class="keyword-count" id="imageKeywordCount">0 / 5-10</span>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -1507,11 +1595,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <div class="dropzone" id="galleryDrop">
               <div>
                 <strong>点击选择文件夹或拖入</strong>
-                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色；图片必须小于 10MB（亚马逊口径：1000KB = 1MB）</span>
+                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色；仅支持 JPG/JPEG，图片必须小于 10MB</span>
               </div>
             </div>
-            <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept="image/*" />
-            <input class="hidden" id="gpsrImageInput" type="file" accept="image/*" />
+            <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept=".jpg,.jpeg,image/jpeg" />
+            <input class="hidden" id="gpsrImageInput" type="file" accept=".jpg,.jpeg,image/jpeg" />
             <div class="notice hidden" id="galleryPool"></div>
             <div class="mapping-list" id="galleryRules"></div>
           </div>
@@ -1550,10 +1638,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <div class="dropzone" id="aPlusDrop">
               <div>
                 <strong>把全部 A+ 图片和视频拖到这里</strong>
-                <span>系统按默认文件名自动分配到对应图片组；图片必须小于 10MB（视频不套用此限制）</span>
+                <span>系统按默认文件名自动分配到对应图片组；图片仅支持 JPG/JPEG 且必须小于 10MB（视频不受图片格式限制）</span>
               </div>
             </div>
-            <input class="hidden" id="aPlusBulkInput" type="file" multiple accept="image/*,video/*" />
+            <input class="hidden" id="aPlusBulkInput" type="file" multiple accept=".jpg,.jpeg,image/jpeg,video/*" />
             <div class="notice hidden" id="aPlusPool"></div>
             <div class="mapping-list" id="aPlusRules"></div>
             <div class="aplus-module-frame">
@@ -1596,10 +1684,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <div class="dropzone" id="brandDrop">
               <div>
                 <strong>把全部品牌故事图片拖到这里</strong>
-                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序；图片必须小于 10MB（亚马逊口径：1000KB = 1MB）</span>
+                <span>系统先识别一组手机端/电脑端完整图，其余图片按文件名自然排序；仅支持 JPG/JPEG，图片必须小于 10MB</span>
               </div>
             </div>
-            <input class="hidden" id="brandBulkInput" type="file" multiple accept="image/*" />
+            <input class="hidden" id="brandBulkInput" type="file" multiple accept=".jpg,.jpeg,image/jpeg" />
             <div class="notice hidden" id="brandPool"></div>
             <div class="mapping-list" id="brandRules"></div>
             <div class="aplus-module-frame">
@@ -1646,6 +1734,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     </div>
   </div>
 
+  <script src="/tools/vendor/piexifjs/piexif.js"></script>
   <script>
     const state = {
       gallery: [],
@@ -1672,6 +1761,12 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       listingRequestSequence: 0,
       activeListingRequestId: 0,
       listingAbortController: null,
+      coreImageKeywords: [],
+      sceneImageKeywords: [],
+      imageKeywordContextKey: "",
+      imageKeywordRequestSequence: 0,
+      imageKeywordAbortController: null,
+      imageKeywordTimer: null,
       authToken: "",
       feishuTaskInFlight: false,
       taskLog: {
@@ -1713,6 +1808,13 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       listingColorFilterPanel: document.getElementById("listingColorFilterPanel"),
       listingColorFilters: document.getElementById("listingColorFilters"),
       listingColorCurrent: document.getElementById("listingColorCurrent"),
+      imageKeywordPanel: document.getElementById("imageKeywordPanel"),
+      imageKeywordMeta: document.getElementById("imageKeywordMeta"),
+      coreImageKeywordInput: document.getElementById("coreImageKeywordInput"),
+      sceneImageKeywordInput: document.getElementById("sceneImageKeywordInput"),
+      imageKeywordStatus: document.getElementById("imageKeywordStatus"),
+      imageKeywordCount: document.getElementById("imageKeywordCount"),
+      refreshImageKeywords: document.getElementById("refreshImageKeywords"),
       galleryNamingExample: document.getElementById("galleryNamingExample"),
       galleryRules: document.getElementById("galleryRules"),
       aPlusRules: document.getElementById("aPlusRules"),
@@ -1793,6 +1895,222 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.listingStatus.classList.remove("hidden");
       els.listingStatus.textContent = text;
       els.listingStatus.classList.toggle("warn", type === "warn");
+    }
+
+    function listingTitleOf(row) {
+      return firstText(row, [
+        "标题",
+        "title",
+        "listing_title",
+        "listingTitle",
+        "product_title",
+        "productTitle",
+      ]);
+    }
+
+    function parseImageKeywords(value = "") {
+      const seen = new Set();
+      return String(value)
+        .split(/[\n,，;；]+/)
+        .map((item) => item.trim().replace(/\s+/g, " "))
+        .filter((item) => {
+          const key = item.toLocaleLowerCase();
+          if (!item || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+    }
+
+    function combinedImageKeywords() {
+      return parseImageKeywords(
+        `${els.coreImageKeywordInput?.value || ""}\n${els.sceneImageKeywordInput?.value || ""}`,
+      );
+    }
+
+    function imageKeywordMetadata() {
+      const core = parseImageKeywords(els.coreImageKeywordInput?.value || "");
+      const scene = parseImageKeywords(els.sceneImageKeywordInput?.value || "");
+      const all = combinedImageKeywords();
+      return {
+        all,
+        title: core[0] || "",
+        subject: core[1] || "",
+        tags: scene[0] || "",
+        comment: scene[1] || "",
+      };
+    }
+
+    function imageKeywordValidationError() {
+      const keywords = combinedImageKeywords();
+      if (keywords.length > 10) return `当前有 ${keywords.length} 个关键词，请删减到 10 个以内`;
+      return "";
+    }
+
+    function renderImageKeywordPanel({ syncInput = false } = {}) {
+      const groups = selectedListingGroups();
+      els.imageKeywordPanel.classList.toggle("hidden", !groups.length);
+      if (!groups.length) return;
+      if (syncInput) {
+        els.coreImageKeywordInput.value = state.coreImageKeywords.join("\n");
+        els.sceneImageKeywordInput.value = state.sceneImageKeywords.join("\n");
+      }
+      state.coreImageKeywords = parseImageKeywords(els.coreImageKeywordInput.value);
+      state.sceneImageKeywords = parseImageKeywords(els.sceneImageKeywordInput.value);
+      const total = combinedImageKeywords().length;
+      const invalid = total > 10;
+      els.imageKeywordCount.textContent =
+        `核心 ${state.coreImageKeywords.length} · 场景 ${state.sceneImageKeywords.length} · 合计 ${total} / 建议5-10`;
+      els.imageKeywordCount.classList.toggle("invalid", invalid);
+      if (!state.imageKeywordContextKey) {
+        els.imageKeywordMeta.textContent = "选择 Listing 后自动生成关键词建议";
+      }
+    }
+
+    function imageKeywordApiUrl() {
+      return location.hostname === "localhost" || location.hostname === "127.0.0.1"
+        ? "/api/kanban/tools/upload/image-keywords"
+        : "https://api.junlee.top/kanban/tools/upload/image-keywords";
+    }
+
+    function keywordListingPayload(groups = selectedListingGroups()) {
+      return groups.map((group) => ({
+        shop: group.shop,
+        parentAsin: group.parentAsin,
+        titles: [...new Set(group.rows.map(listingTitleOf).filter(Boolean))].slice(0, 50),
+      }));
+    }
+
+    function keywordContextSignature(groups = selectedListingGroups()) {
+      return JSON.stringify(
+        keywordListingPayload(groups)
+          .map((item) => ({ parentAsin: item.parentAsin, shop: item.shop }))
+          .sort((left, right) =>
+            left.shop.localeCompare(right.shop, "zh-CN") ||
+            left.parentAsin.localeCompare(right.parentAsin, "en")
+          ),
+      );
+    }
+
+    function cancelImageKeywordRequest() {
+      state.imageKeywordRequestSequence += 1;
+      state.imageKeywordAbortController?.abort();
+      state.imageKeywordAbortController = null;
+      if (state.imageKeywordTimer) {
+        clearTimeout(state.imageKeywordTimer);
+        state.imageKeywordTimer = null;
+      }
+      els.refreshImageKeywords.disabled = false;
+    }
+
+    function scheduleImageKeywordSuggestions() {
+      if (state.imageKeywordTimer) clearTimeout(state.imageKeywordTimer);
+      if (!selectedListingGroups().length) return;
+      state.imageKeywordTimer = setTimeout(() => {
+        state.imageKeywordTimer = null;
+        fetchImageKeywordSuggestions();
+      }, 500);
+    }
+
+    function imageKeywordMetaText(payload) {
+      const contexts = Array.isArray(payload?.contexts) ? payload.contexts : [];
+      const sourceLabels = {
+        "category-search-term": "同店铺同品类真实搜索词",
+        "search-term": "自身365天核心词第1页 / 场景词扫描全部搜索词",
+        title: "Listing标题兜底",
+      };
+      const counts = new Map();
+      contexts.forEach((context) => {
+        const productLabel = context.productType === "new" ? "新品" : "老品";
+        const sourceLabel = sourceLabels[context.source] || context.source || "未匹配";
+        const key = `${productLabel} · ${sourceLabel}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+      const summary = [...counts].map(([label, count]) => `${label} ${count}组`).join("；");
+      const peerScenes = Array.isArray(payload?.sceneItems)
+        ? payload.sceneItems.filter((item) => item?.source === "category-search-term").length
+        : 0;
+      return [
+        summary,
+        peerScenes ? `同品类真实搜索词补充场景 ${peerScenes}个` : "",
+        payload?.reportDate ? `范围 ${payload.reportDate}` : "",
+      ]
+        .filter(Boolean)
+        .join("；");
+    }
+
+    async function fetchImageKeywordSuggestions({ force = false } = {}) {
+      const groups = selectedListingGroups();
+      if (!groups.length) {
+        renderImageKeywordPanel();
+        return;
+      }
+      const signature = keywordContextSignature(groups);
+      if (
+        !force &&
+        signature === state.imageKeywordContextKey &&
+        combinedImageKeywords().length
+      ) {
+        return;
+      }
+      const token = authToken();
+      if (!token) {
+        els.imageKeywordStatus.textContent = "登录状态未就绪，请点击重新获取";
+        els.imageKeywordStatus.classList.add("invalid");
+        return;
+      }
+      cancelImageKeywordRequest();
+      const requestId = ++state.imageKeywordRequestSequence;
+      const controller = new AbortController();
+      state.imageKeywordAbortController = controller;
+      els.refreshImageKeywords.disabled = true;
+      els.imageKeywordStatus.textContent = "正在识别新老品并获取核心关键词...";
+      els.imageKeywordStatus.classList.remove("invalid");
+      try {
+        const response = await fetch(imageKeywordApiUrl(), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            spu: (els.spu.value || "").trim(),
+            listings: keywordListingPayload(groups),
+            limit: 10,
+          }),
+          signal: controller.signal,
+        });
+        const payload = await readJsonResponse(response);
+        if (requestId !== state.imageKeywordRequestSequence) return;
+        const data = payload?.data || {};
+        state.imageKeywordContextKey = signature;
+        state.coreImageKeywords = Array.isArray(data.coreKeywords)
+          ? data.coreKeywords.map((item) => String(item || "").trim()).filter(Boolean)
+          : Array.isArray(data.keywords)
+            ? data.keywords.map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+        state.sceneImageKeywords = Array.isArray(data.sceneKeywords)
+          ? data.sceneKeywords.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+        renderImageKeywordPanel({ syncInput: true });
+        els.imageKeywordMeta.textContent = imageKeywordMetaText(data) || "关键词建议已生成";
+        const warnings = Array.isArray(data.warnings) ? data.warnings.filter(Boolean) : [];
+        const validationError = imageKeywordValidationError();
+        els.imageKeywordStatus.textContent = warnings.length
+          ? `已降级处理：${warnings.join("；")}`
+          : validationError || "关键词建议可修改或留空；填写后将写入 JPEG 详情及二进制末尾";
+        els.imageKeywordStatus.classList.toggle("invalid", Boolean(warnings.length || validationError));
+      } catch (error) {
+        if (error.name === "AbortError" || requestId !== state.imageKeywordRequestSequence) return;
+        state.imageKeywordContextKey = signature;
+        renderImageKeywordPanel();
+        els.imageKeywordStatus.textContent = `关键词获取失败，可手工填写：${error.message}`;
+        els.imageKeywordStatus.classList.add("invalid");
+      } finally {
+        if (requestId === state.imageKeywordRequestSequence) {
+          state.imageKeywordAbortController = null;
+          els.refreshImageKeywords.disabled = false;
+        }
+      }
     }
 
     function setFeishuTaskStatus(text, type = "normal") {
@@ -2173,6 +2491,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function resetListingResults(message = "") {
       cancelListingRequest();
+      cancelImageKeywordRequest();
       state.listings = [];
       state.listingGroups = [];
       state.selectedListingKeys.clear();
@@ -2180,6 +2499,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       state.selectedListingColors.clear();
       state.expandedListingKeys.clear();
       state.queriedSpu = "";
+      state.coreImageKeywords = [];
+      state.sceneImageKeywords = [];
+      state.imageKeywordContextKey = "";
+      els.coreImageKeywordInput.value = "";
+      els.sceneImageKeywordInput.value = "";
       renderListingColorFilters();
       renderListingTable();
       renderAsinSummary();
@@ -2423,6 +2747,24 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       } else {
         els.listingSelection.textContent = `已选 ${groups.length} 个店铺 / 父 ASIN 组合，共 ${asinCount} 个子 ASIN`;
       }
+      const keywordSignature = groups.length ? keywordContextSignature(groups) : "";
+      if (keywordSignature !== state.imageKeywordContextKey) {
+        cancelImageKeywordRequest();
+        state.imageKeywordContextKey = keywordSignature;
+        state.coreImageKeywords = [];
+        state.sceneImageKeywords = [];
+        els.coreImageKeywordInput.value = "";
+        els.sceneImageKeywordInput.value = "";
+        els.imageKeywordMeta.textContent = groups.length
+          ? "正在准备关键词建议"
+          : "选择 Listing 后自动生成关键词建议";
+        els.imageKeywordStatus.textContent = groups.length
+          ? "等待获取核心关键词..."
+          : "关键词建议可修改或留空；填写后将写入 JPEG 详情及二进制末尾";
+        els.imageKeywordStatus.classList.remove("invalid");
+        if (groups.length) scheduleImageKeywordSuggestions();
+      }
+      renderImageKeywordPanel();
       renderListingColorFilters();
     }
 
@@ -3039,23 +3381,29 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     const AMAZON_KB_BYTES = 1000;
     const AMAZON_MB_BYTES = AMAZON_KB_BYTES * 1000;
     const AMAZON_IMAGE_MAX_BYTES = 10 * AMAZON_MB_BYTES;
-    const WEBP_REJECTION_MESSAGE = "不支持 WebP 图片，请转换为 JPG、JPEG 或 PNG 后再上传。";
+    const JPEG_ACCEPT = ".jpg,.jpeg,image/jpeg";
+    const JPEG_REJECTION_MESSAGE = "图片只支持 JPG/JPEG 格式，以保证关键词能写入 EXIF 详情。";
 
-    function isWebpFile(file) {
-      return String(file?.type || "").trim().toLowerCase() === "image/webp" ||
-        /\.webp$/i.test(String(file?.name || "").trim());
+    function isJpegFile(file) {
+      const type = String(file?.type || "").trim().toLowerCase();
+      const name = String(file?.name || "").trim();
+      const typeMatches = !type || type === "image/jpeg" || type === "image/jpg";
+      return typeMatches && /\.jpe?g$/i.test(name);
     }
 
-    function rejectWebpSelections(values, fileOf = (value) => value) {
+    function rejectNonJpegSelections(values, fileOf = (value) => value) {
       const incoming = Array.from(values || []).filter(Boolean);
       const rejected = incoming
         .map((value) => fileOf(value))
-        .filter((file) => file && isWebpFile(file));
+        .filter((file) => file && isImageFile(file) && !isJpegFile(file));
       if (rejected.length) {
         const names = rejected.map((file) => file.name || "未命名文件").join("\n");
-        alert(`${WEBP_REJECTION_MESSAGE}\n\n${names}`);
+        alert(`${JPEG_REJECTION_MESSAGE}\n\n${names}`);
       }
-      return incoming.filter((value) => !isWebpFile(fileOf(value)));
+      return incoming.filter((value) => {
+        const file = fileOf(value);
+        return !file || !isImageFile(file) || isJpegFile(file);
+      });
     }
 
     function isImageFile(file) {
@@ -3072,11 +3420,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       if (!file) {
         return { level: "error", message: "未选择图片文件" };
       }
-      if (isWebpFile(file)) {
-        return { level: "error", message: WEBP_REJECTION_MESSAGE };
-      }
       if (!isImageFile(file)) {
         return { level: "error", message: "只支持图片文件" };
+      }
+      if (!isJpegFile(file)) {
+        return { level: "error", message: JPEG_REJECTION_MESSAGE };
       }
       const size = Number(file.size || 0);
       if (!Number.isFinite(size) || size <= 0) {
@@ -3171,9 +3519,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return null;
     }
 
+    async function hasJpegSignature(file) {
+      const bytes = new Uint8Array(await file.slice(0, 3).arrayBuffer());
+      return bytes.length === 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    }
+
     async function validateImageAsset(file, context = {}) {
       const basic = validateImageFile(file);
       if (basic.level === "error") return basic;
+      if (!(await hasJpegSignature(file))) {
+        return { level: "error", message: "文件内容不是有效的 JPEG 图片" };
+      }
       if (context.kind === "brand" && Number(file.size || 0) >= 9.3 * AMAZON_MB_BYTES) {
         return {
           level: "error",
@@ -3283,7 +3639,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignBrandFiles(files) {
-      const acceptedFiles = rejectWebpSelections(files);
+      const acceptedFiles = rejectNonJpegSelections(files);
       const assignment = await buildBrandInitialAssignment(acceptedFiles);
       if (!assignment.total) return;
       if (!assignment.images.length) {
@@ -3490,7 +3846,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignGalleryEntries(entries) {
-      const acceptedEntries = rejectWebpSelections(entries, (entry) => entry?.file);
+      const acceptedEntries = rejectNonJpegSelections(entries, (entry) => entry?.file);
       const assignment = await buildGalleryInitialAssignment(acceptedEntries);
       if (!assignment.total) return;
       state.gallery = assignment.groups;
@@ -3555,9 +3911,6 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function validateSlotFile(component, slot, file = slot.file) {
       if (!file) return { level: "", message: "" };
-      if (isWebpFile(file)) {
-        return { level: "error", message: WEBP_REJECTION_MESSAGE };
-      }
       if (!fileKindMatches(slot, file)) {
         return {
           level: "error",
@@ -3751,7 +4104,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     async function autoAssignAPlusFiles(files) {
-      const incoming = rejectWebpSelections(files);
+      const incoming = rejectNonJpegSelections(files);
       if (!incoming.length) return;
       const invalidImages = [];
       const validIncoming = incoming.filter((file) => {
@@ -4001,7 +4354,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <div class="field"><label>ZIP 内文件名</label><div class="target" title="${group.folderName}/${target}">${group.folderName}/${target}</div></div>
           `;
           row.querySelector(".preview-here").appendChild(
-            createPreview(group, item, "image/*"),
+            createPreview(group, item, JPEG_ACCEPT),
           );
           card.appendChild(row);
         });
@@ -4124,7 +4477,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <div class="field flags-here"><label>AI标记</label></div>
             <div class="field"><label>输出文件名</label><div class="target" title="${target}">${target}</div></div>
           `;
-          const accept = slot.role === "video" ? "video/*" : "image/*";
+          const accept = slot.role === "video" ? "video/*" : JPEG_ACCEPT;
           row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
           row.querySelector(".source").textContent = `${label} · ${fileLabel(slot.file)}`;
           const previewField = row.querySelector(".preview-here");
@@ -4205,7 +4558,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           `;
           row.querySelector(".flags-here").appendChild(createAiFlagControls(slot));
           const previewField = row.querySelector(".preview-here");
-          previewField.appendChild(createPreview(component, slot, "image/*"));
+          previewField.appendChild(createPreview(component, slot, JPEG_ACCEPT));
           const validation = validateSlotFile(component, slot);
           if (validation.message) {
             const message = document.createElement("div");
@@ -4579,6 +4932,96 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return out;
     }
 
+    function utf16LeNullTerminated(value) {
+      const text = String(value || "");
+      const bytes = [];
+      for (let index = 0; index < text.length; index += 1) {
+        const code = text.charCodeAt(index);
+        bytes.push(code & 0xff, (code >>> 8) & 0xff);
+      }
+      bytes.push(0, 0);
+      return bytes;
+    }
+
+    function bytesToBinaryString(bytes) {
+      let binary = "";
+      const chunkSize = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+      }
+      return binary;
+    }
+
+    function binaryStringToBytes(binary) {
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index) & 0xff;
+      }
+      return bytes;
+    }
+
+    async function jpegWithKeywordExif(file, metadata) {
+      if (!globalThis.piexif) {
+        throw new Error("piexifjs 未加载，无法写入图片详情");
+      }
+      if (!isJpegFile(file)) {
+        throw new Error(`${file?.name || "图片"}：${JPEG_REJECTION_MESSAGE}`);
+      }
+      const zeroth = {};
+      zeroth[piexif.ImageIFD.XPTitle] = utf16LeNullTerminated(metadata.title);
+      zeroth[piexif.ImageIFD.XPSubject] = utf16LeNullTerminated(metadata.subject);
+      zeroth[piexif.ImageIFD.XPKeywords] = utf16LeNullTerminated(metadata.tags);
+      zeroth[piexif.ImageIFD.XPComment] = utf16LeNullTerminated(metadata.comment);
+      const exifBytes = piexif.dump({
+        "0th": zeroth,
+        Exif: {},
+        GPS: {},
+        Interop: {},
+        "1st": {},
+        thumbnail: null,
+      });
+      const sourceBytes = new Uint8Array(await file.arrayBuffer());
+      const jpegBinary = bytesToBinaryString(sourceBytes);
+      const outputBinary = piexif.insert(exifBytes, jpegBinary);
+      return binaryStringToBytes(outputBinary);
+    }
+
+    async function imageFileWithKeywordMetadata(original, metadata) {
+      const exifJpeg = await jpegWithKeywordExif(original, metadata);
+      const suffix = new TextEncoder().encode(`\r\n${metadata.all.join("\r\n")}\r\n`);
+      const embedded = new File(
+        [exifJpeg, suffix],
+        original.name,
+        {
+          type: "image/jpeg",
+          lastModified: original.lastModified || Date.now(),
+        },
+      );
+      if (embedded.size >= AMAZON_IMAGE_MAX_BYTES) {
+        throw new Error(
+          `${original.name} 写入EXIF后达到 ${formatAmazonImageSize(embedded.size)}，必须小于10MB`,
+        );
+      }
+      return embedded;
+    }
+
+    async function entriesWithEmbeddedKeywords(entries, metadata = imageKeywordMetadata()) {
+      if (!metadata.all.length) return entries;
+      return Promise.all(entries.map(async (entry) => {
+        if (!entry.isImage) return entry;
+        const original = entry.file;
+        const embedded = await imageFileWithKeywordMetadata(original, metadata);
+        return { ...entry, file: embedded };
+      }));
+    }
+
+    async function preparedZipEntries(entries, root, includeImageFlags) {
+      const embeddedEntries = await entriesWithEmbeddedKeywords(entries);
+      return includeImageFlags
+        ? withImageFlagJson(embeddedEntries, root)
+        : embeddedEntries;
+    }
+
     async function buildZip(entries) {
       const encoder = new TextEncoder();
       const localParts = [];
@@ -4641,9 +5084,25 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         alert("请先选择要打包的文件");
         return;
       }
-      const zip = await buildZip(
-        type === "gallery" ? entries : withImageFlagJson(entries, root),
-      );
+      if (entries.some((entry) => entry.isImage)) {
+        const keywordError = imageKeywordValidationError();
+        if (keywordError) {
+          alert(`图片关键词未准备完成：\n${keywordError}`);
+          return;
+        }
+      }
+      let zip;
+      try {
+        const preparedEntries = await preparedZipEntries(
+          entries,
+          root,
+          type !== "gallery",
+        );
+        zip = await buildZip(preparedEntries);
+      } catch (error) {
+        alert(`图片详情写入失败：\n${error.message}`);
+        return;
+      }
       const url = URL.createObjectURL(zip);
       const a = document.createElement("a");
       a.href = url;
@@ -4840,9 +5299,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     async function buildUploadZip(entries, root, { includeImageFlags = true } = {}) {
       if (!entries.length) return null;
-      const sourceEntries = includeImageFlags
-        ? withImageFlagJson(entries, root)
-        : entries;
+      const sourceEntries = await preparedZipEntries(entries, root, includeImageFlags);
       const [zip, sourceFingerprint] = await Promise.all([
         buildZip(sourceEntries),
         sourceFilesFingerprint(sourceEntries),
@@ -4855,13 +5312,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       };
     }
 
-    function gpsrImageUploadFile() {
+    async function gpsrImageUploadFile() {
       if (!state.gpsrImage) return null;
       const extension = extOf(state.gpsrImage, ".jpg");
+      const metadata = imageKeywordMetadata();
+      const embedded = metadata.all.length
+        ? await imageFileWithKeywordMetadata(state.gpsrImage, metadata)
+        : state.gpsrImage;
       return {
         filename: `${spuPrefix()}-GPSR合规图片${extension}`,
-        contentType: state.gpsrImage.type || "application/octet-stream",
-        blob: state.gpsrImage,
+        contentType: "image/jpeg",
+        blob: embedded,
       };
     }
 
@@ -5352,7 +5813,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const galleryFiles = collectGalleryFiles();
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
-      const gpsrImage = gpsrImageUploadFile();
+      const hasGpsrImage = Boolean(state.gpsrImage);
       const token = authToken();
       const spu = (els.spu.value || "").trim();
       const listingGroups = selectedListingGroups();
@@ -5384,6 +5845,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         setFeishuTaskInFlight(false);
         return;
       }
+      if (
+        hasGpsrImage ||
+        [...galleryFiles, ...aPlusFiles, ...brandFiles].some((entry) => entry.isImage)
+      ) {
+        const keywordError = imageKeywordValidationError();
+        if (keywordError) {
+          setFeishuTaskStatus(`图片关键词未准备完成：${keywordError}`, "warn");
+          setFeishuTaskInFlight(false);
+          return;
+        }
+      }
       const galleryValidationErrors = currentGalleryValidationErrors();
       if (galleryValidationErrors.length) {
         setFeishuTaskStatus(
@@ -5411,7 +5883,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         setFeishuTaskInFlight(false);
         return;
       }
-      if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !gpsrImage) {
+      if (!galleryFiles.length && !aPlusFiles.length && !brandFiles.length && !hasGpsrImage) {
         setFeishuTaskStatus("请先选择橱窗图、GPSR、A+ 或品牌故事素材文件", "warn");
         setFeishuTaskInFlight(false);
         return;
@@ -5419,6 +5891,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
       setFeishuTaskStatus("正在整理上传文件...");
       try {
+        const gpsrImage = await gpsrImageUploadFile();
         const galleryZip = await buildUploadZip(
           galleryFiles,
           galleryRoot(),
@@ -5653,8 +6126,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           : { level: "error", message: "未选择图片文件" };
         if (validation.level === "error") {
           state.gpsrImage = null;
-          if (file && isWebpFile(file)) {
-            alert(`${file.name}\n${WEBP_REJECTION_MESSAGE}`);
+          if (file && isImageFile(file) && !isJpegFile(file)) {
+            alert(`${file.name}\n${JPEG_REJECTION_MESSAGE}`);
           }
           setFeishuTaskStatus(
             `GPSR图片校验未通过：${file?.name || "未选择文件"}：${validation.message}`,
@@ -5669,6 +6142,22 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.uploadFeishuTask.addEventListener("click", uploadFeishuTask);
       els.refreshTaskLog.addEventListener("click", () => loadTaskLog());
       els.fetchListingBtn.addEventListener("click", fetchListingData);
+      els.refreshImageKeywords.addEventListener("click", () => {
+        fetchImageKeywordSuggestions({ force: true });
+      });
+      const handleImageKeywordInput = () => {
+        state.coreImageKeywords = parseImageKeywords(els.coreImageKeywordInput.value);
+        state.sceneImageKeywords = parseImageKeywords(els.sceneImageKeywordInput.value);
+        renderImageKeywordPanel();
+        const validationError = imageKeywordValidationError();
+        const keywordCount = combinedImageKeywords().length;
+        els.imageKeywordStatus.textContent = validationError || (keywordCount
+          ? "关键词已人工调整，将写入 JPEG 详情及二进制末尾"
+          : "关键词已清空，本次不写入 EXIF 或二进制埋词");
+        els.imageKeywordStatus.classList.toggle("invalid", Boolean(validationError));
+      };
+      els.coreImageKeywordInput.addEventListener("input", handleImageKeywordInput);
+      els.sceneImageKeywordInput.addEventListener("input", handleImageKeywordInput);
       [
         ["gallery", els.galleryZip],
         ["aPlus", els.aPlusZip],

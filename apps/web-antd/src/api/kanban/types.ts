@@ -237,6 +237,12 @@ export interface NetProfitOverview {
     columnDimension: string;
     columnLabel: string;
     columns: string[];
+    columnTotals?: Array<{
+      investment: number;
+      netProfit: number;
+      parentAsinCount: number;
+      roi: number;
+    }>;
     rowDimension: string;
     rowLabel: string;
     rows: Array<{
@@ -247,6 +253,12 @@ export interface NetProfitOverview {
         roi: number;
       }>;
       name: string;
+      total?: {
+        investment: number;
+        netProfit: number;
+        parentAsinCount: number;
+        roi: number;
+      };
     }>;
   };
   period: string;
@@ -262,12 +274,17 @@ export interface NetProfitOverview {
   breakEven: {
     avgDaysToBreakEven: number;
     pendingCount: number;
+    periodFrom?: string;
+    periodTo?: string;
+    precision?: 'month';
     rows: Array<{
       breakEvenDate: string;
+      breakEvenMonth?: string;
       daysToBreakEven: null | number;
       developmentDate: string;
       lifetimeNetProfit: number;
       parentAsin: string;
+      precision?: 'month_end';
       shop: string;
       spu: string;
       status: string;
@@ -1088,6 +1105,198 @@ export interface AnalyticsReportColumn {
     | 'text'
     | 'trend';
   label: string;
+}
+
+export interface AdCvrOptimizationSuggestion {
+  action?: string;
+  action_label?: string;
+  actionLabel?: string;
+  action_type: string;
+  ad_group_id: string;
+  ad_group_name: string;
+  alternative_action: string;
+  campaign_id: string;
+  campaign_name: string;
+  clicks: number | string;
+  color: string;
+  confidence?: string;
+  confidence_label?: string;
+  cvr: null | number | string;
+  decision_status: string;
+  diagnosis?: string;
+  diagnosis_label?: string;
+  entity_name: string;
+  entity_type: string;
+  execution_status: string;
+  level: string;
+  metrics: Record<string, any>;
+  natural_cvr: null | number | string;
+  orders: number | string;
+  parent_asin: string;
+  profile_id: string;
+  priority: number;
+  qualified_clicks: null | number;
+  reason: string;
+  relevance_label: string;
+  relevance_score: null | number | string;
+  responsible: string;
+  sales: number | string;
+  search_term: string;
+  selected: boolean;
+  severity: string;
+  site: string;
+  spend: number | string;
+  spend_share: null | number | string;
+  sponsored_type: string;
+  spu: string;
+  store_name: string;
+  suggestion_id: string;
+  target_cvr: null | number | string;
+  targeting_text: string;
+}
+
+export interface AdCvrOptimizationOverview {
+  filters: {
+    actions: Array<{ label: string; value: string }>;
+    costTypes: string[];
+    countries: string[];
+    entityStates: string[];
+    levels: Array<{ label: string; value: string }>;
+    responsibles: string[];
+    serviceStatuses: string[];
+    sponsoredTypes: string[];
+    statuses: string[];
+    stores: string[];
+    targetingTypes: string[];
+  };
+  pagination: { page: number; pageSize: number; total: number };
+  rows: AdCvrOptimizationSuggestion[];
+  snapshot: null | Record<string, any>;
+  summary: {
+    byAction: Record<string, number>;
+    byLevel: Record<string, number>;
+    pending: number;
+    review: number;
+    selected: number;
+    spend: number;
+    total: number;
+  };
+}
+
+export type AdCampaignDetailSection =
+  | 'ad_groups'
+  | 'ads'
+  | 'negative_targets'
+  | 'placements'
+  | 'search_terms'
+  | 'targets';
+
+export interface AdCampaignDetailGroup {
+  id: string;
+  name: string;
+  parentAsin: string;
+  spu: string;
+  status: string;
+}
+
+export interface AdCampaignDetailMeta {
+  campaignId: string;
+  campaignName: string;
+  country: string;
+  groups: AdCampaignDetailGroup[];
+  profileId: string;
+  responsibles: string[];
+  serviceStatus: string;
+  source: 'database_identity';
+  sponsoredType: string;
+  spu: string;
+  status: string;
+  storeName: string;
+}
+
+export interface AdCampaignDetailMetricRow {
+  acos: null | number;
+  adGroupId: string;
+  adGroupName: string;
+  asin: string;
+  bid: number;
+  clicks: number;
+  cpa: null | number;
+  cpc: null | number;
+  createdAt: string;
+  ctr: null | number;
+  cvr: null | number;
+  id: string;
+  impressions: number;
+  matchType: string;
+  name: string;
+  orders: number;
+  placement: string;
+  roas: null | number;
+  rawFields?: Record<string, unknown>;
+  sales: number;
+  searchTerm: string;
+  sku: string;
+  spend: number;
+  status: string;
+  targeting: string;
+  type: string;
+}
+
+export interface AdCampaignDetailField {
+  key: string;
+  label: string;
+  sourceKey: string;
+}
+
+export interface AdCampaignDetailMetrics {
+  acos: null | number;
+  clicks: number;
+  cpa: null | number;
+  cpc: null | number;
+  ctr: null | number;
+  cvr: null | number;
+  impressions: number;
+  orders: number;
+  roas: null | number;
+  sales: number;
+  spend: number;
+}
+
+export interface AdCampaignDetailTrendPoint
+  extends AdCampaignDetailMetrics {
+  date: string;
+}
+
+export interface AdCampaignDetailSectionResult {
+  availableFields: AdCampaignDetailField[];
+  cacheHit: boolean;
+  fetchedAt: string;
+  pagination: { page: number; pageSize: number; total: number };
+  partial?: boolean;
+  period: { endDate: string; startDate: string };
+  rows: AdCampaignDetailMetricRow[];
+  section: AdCampaignDetailSection;
+  refreshScheduled?: boolean;
+  source:
+    | 'database_ad_group_daily_metrics'
+    | 'lingxing_live_api'
+    | 'lingxing_live_api_stale_fallback';
+  stale?: boolean;
+  summary: AdCampaignDetailMetrics;
+  trend: AdCampaignDetailTrendPoint[];
+  warnings: string[];
+}
+
+export interface AdCampaignDetailTrendResult {
+  cacheHit: boolean;
+  fetchedAt: string;
+  period: { endDate: string; startDate: string };
+  refreshScheduled?: boolean;
+  source: 'database_ad_group_daily_metrics' | 'lingxing_live_api';
+  stale?: boolean;
+  trend: AdCampaignDetailTrendPoint[];
+  warnings: string[];
 }
 
 export interface AnalyticsReportTrendPoint {

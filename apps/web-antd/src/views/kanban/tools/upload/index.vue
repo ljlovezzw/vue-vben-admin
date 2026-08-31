@@ -4,7 +4,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useAccessStore } from '@vben/stores';
 
 const baseUrl = import.meta.env.BASE_URL || '/';
-const toolUrl = `${baseUrl.replace(/\/$/, '')}/tools/upload-tool.html?v=20260824-upload-idempotency`;
+const toolUrl = `${baseUrl.replace(/\/$/, '')}/tools/upload-tool.html?v=20260826-image-exif-v4`;
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const accessStore = useAccessStore();
 

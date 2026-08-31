@@ -57,6 +57,8 @@ import type {
 
 import { requestClient, silentRequestClient } from '#/api/request';
 
+export * from './ad-cvr-optimization';
+
 export type {
   AlertLevel,
   InAppCardNotification,
