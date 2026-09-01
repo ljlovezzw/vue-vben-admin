@@ -1155,6 +1155,40 @@ export interface AdCvrOptimizationSuggestion {
   targeting_text: string;
 }
 
+export interface AdCvrOptimizationOperatorSummaryRow {
+  acosChangePp: null | number;
+  actionableSuggestionCount: number;
+  adGroupCount: number;
+  campaignCount: number;
+  currentAcos: null | number;
+  cvrChangePp: null | number;
+  department: string;
+  efficiencyGroupCount: number;
+  estimatedAcos: null | number;
+  estimatedAcosImprovementPp: null | number;
+  estimatedSavings: number;
+  estimatedSpendReductionPct: number;
+  growthGroupCount: number;
+  highPriorityCount: number;
+  optimizationGroupCount: number;
+  optimizationSpend: number;
+  previousAcos: null | number;
+  previousCvr: null | number;
+  previousSales: number;
+  previousSpend: number;
+  recentAcos: null | number;
+  recentCvr: null | number;
+  recentDays: number;
+  recentSales: number;
+  recentSpend: number;
+  responsible: string;
+  sales: number;
+  salesChangePct: null | number;
+  spend: number;
+  spendChangePct: null | number;
+  previousDays: number;
+}
+
 export interface AdCvrOptimizationOverview {
   filters: {
     actions: Array<{ label: string; value: string }>;
@@ -1170,6 +1204,17 @@ export interface AdCvrOptimizationOverview {
     targetingTypes: string[];
   };
   pagination: { page: number; pageSize: number; total: number };
+  operatorSummary: {
+    methodology: {
+      baseline: string;
+      estimatedAcosImprovement: string;
+      estimatedSavings: string;
+      filterScope: string;
+      recentTrend: string;
+    };
+    rows: AdCvrOptimizationOperatorSummaryRow[];
+    total: AdCvrOptimizationOperatorSummaryRow;
+  };
   rows: AdCvrOptimizationSuggestion[];
   snapshot: null | Record<string, any>;
   summary: {

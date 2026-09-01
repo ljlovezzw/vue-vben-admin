@@ -1352,6 +1352,11 @@
       font-size: 12px;
     }
 
+    .task-log-queue {
+      color: #9a3412;
+      font-weight: 700;
+    }
+
     .task-log-error {
       display: flex;
       align-items: flex-start;
@@ -5403,6 +5408,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         const completedNodes = Array.isArray(item.completedNodes) && item.completedNodes.length
           ? item.completedNodes.join("，")
           : "未完成节点";
+        const queueInfo = item.statusKind === "running" && item.queuePosition
+          ? `<span class="task-log-queue">前方排队 ${Number(item.queueAhead || 0)} 个 · 当前第 ${Number(item.queuePosition)} 位</span>`
+          : "";
         const errorReason = item.statusKind === "failed"
           ? (item.errorReason || "失败原因未记录")
           : "";
@@ -5420,6 +5428,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             <span>店铺 ${escapeHtml(item.shop || "-")}</span>
             <span>父ASIN ${escapeHtml(item.parentAsin || "-")}</span>
             <span>${escapeHtml(completedNodes)}</span>
+            ${queueInfo}
           </div>
           ${errorReason ? `<div class="task-log-error"><span>失败原因：${escapeHtml(errorReason)}</span>${errorLogLink}</div>` : ""}
         `;

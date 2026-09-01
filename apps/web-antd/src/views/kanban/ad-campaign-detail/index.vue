@@ -99,10 +99,16 @@ const sectionOptions: Array<{ key: AdCampaignDetailSection; label: string }> = [
 
 const groupOptions = computed(() => [
   { label: `全部广告组（${meta.value?.groups.length || 0}）`, value: '' },
-  ...(meta.value?.groups || []).map((group) => ({
-    label: group.name || group.id,
-    value: group.id,
-  })),
+  ...(meta.value?.groups || [])
+    .toSorted((left, right) => {
+      const leftActive = isActiveStatus(left.status) ? 0 : 1;
+      const rightActive = isActiveStatus(right.status) ? 0 : 1;
+      return leftActive - rightActive || textCompare(left.name, right.name);
+    })
+    .map((group) => ({
+      label: group.name || group.id,
+      value: group.id,
+    })),
 ]);
 
 function coreFieldKey(dataIndex: string) {
@@ -118,17 +124,18 @@ function coreEntityLabel(section: AdCampaignDetailSection) {
 
 function coreFieldOptionsForSection(section: AdCampaignDetailSection) {
   const fields: Array<{ dataIndex: string; label: string }> = [];
-  if (section !== 'ad_groups')
+  if (!['ad_groups', 'ads', 'placements'].includes(section))
     fields.push({ dataIndex: 'adGroupName', label: '广告组' });
-  fields.push({
-    dataIndex: 'name',
-    label: coreEntityLabel(section),
-  });
   if (section === 'ads') {
     fields.push(
-      { dataIndex: 'sku', label: 'MSKU' },
       { dataIndex: 'asin', label: 'ASIN' },
+      { dataIndex: 'sku', label: 'MSKU' },
     );
+  } else {
+    fields.push({
+      dataIndex: 'name',
+      label: coreEntityLabel(section),
+    });
   }
   if (['negative_targets', 'search_terms', 'targets'].includes(section)) {
     fields.push(
@@ -138,7 +145,10 @@ function coreFieldOptionsForSection(section: AdCampaignDetailSection) {
   }
   if (section === 'targets') fields.push({ dataIndex: 'bid', label: '竞价' });
   if (section === 'negative_targets') {
-    fields.push({ dataIndex: 'createdAt', label: '创建时间' });
+    fields.push(
+      { dataIndex: 'status', label: '有效' },
+      { dataIndex: 'createdAt', label: '创建时间' },
+    );
   } else {
     fields.push(
       { dataIndex: 'impressions', label: '曝光' },
@@ -151,8 +161,10 @@ function coreFieldOptionsForSection(section: AdCampaignDetailSection) {
       { dataIndex: 'cvr', label: 'CVR' },
       { dataIndex: 'acos', label: 'ACoS' },
       { dataIndex: 'roas', label: 'ROAS' },
-      { dataIndex: 'status', label: '状态' },
     );
+    if (['ad_groups', 'ads', 'targets'].includes(section)) {
+      fields.push({ dataIndex: 'status', label: '有效' });
+    }
   }
   return fields.map<AdCampaignDetailField>((field) => ({
     key: coreFieldKey(field.dataIndex),
@@ -217,9 +229,32 @@ function numberCompare(left?: null | number, right?: null | number) {
   return Number(left || 0) - Number(right || 0);
 }
 
+const displayRows = computed(() =>
+  [...(detail.value?.rows || [])].toSorted((left, right) => {
+    const leftActive = isActiveStatus(left.status) ? 0 : 1;
+    const rightActive = isActiveStatus(right.status) ? 0 : 1;
+    return (
+      leftActive - rightActive ||
+      numberCompare(right.spend, left.spend) ||
+      textCompare(left.name, right.name)
+    );
+  }),
+);
+
 const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
   const isCoreVisible = (dataIndex: string) =>
     selectedFieldKeys.value.includes(coreFieldKey(dataIndex));
+  const statusColumns: TableColumnsType<AdCampaignDetailMetricRow> =
+    isCoreVisible('status')
+      ? [
+          {
+            dataIndex: 'status',
+            fixed: 'left',
+            title: '有效',
+            width: 88,
+          },
+        ]
+      : [];
   const extraColumns = () =>
     visibleExtraFields.value.map((field) => ({
       dataIndex: field.key,
@@ -241,7 +276,7 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
       width: 220,
     });
   }
-  if (isCoreVisible('name')) {
+  if (isCoreVisible('name') && activeSection.value !== 'ads') {
     identityColumns.push({
       dataIndex: 'name',
       fixed: 'left',
@@ -251,11 +286,17 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
     });
   }
   if (activeSection.value === 'ads') {
+    if (isCoreVisible('asin')) {
+      identityColumns.push({
+        dataIndex: 'asin',
+        fixed: 'left',
+        sorter: (left, right) => textCompare(left.asin, right.asin),
+        title: 'ASIN',
+        width: 180,
+      });
+    }
     if (isCoreVisible('sku')) {
       identityColumns.push({ dataIndex: 'sku', title: 'MSKU', width: 160 });
-    }
-    if (isCoreVisible('asin')) {
-      identityColumns.push({ dataIndex: 'asin', title: 'ASIN', width: 130 });
     }
   }
   if (
@@ -285,14 +326,14 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
         width: 150,
       });
     }
-    return [...identityColumns, ...extraColumns()];
+    return [...statusColumns, ...identityColumns, ...extraColumns()];
   }
   const metricColumns: TableColumnsType<AdCampaignDetailMetricRow> = [];
   if (isCoreVisible('impressions')) {
     metricColumns.push({
       dataIndex: 'impressions',
       sorter: (left, right) => left.impressions - right.impressions,
-      title: '曝光',
+      title: '曝光量',
       width: 105,
     });
   }
@@ -326,11 +367,8 @@ const columns = computed<TableColumnsType<AdCampaignDetailMetricRow>>(() => {
       width,
     });
   }
-  if (isCoreVisible('status')) {
-    metricColumns.push({ dataIndex: 'status', title: '状态', width: 110 });
-  }
   metricColumns.unshift(...identityColumns);
-  return [...metricColumns, ...extraColumns()];
+  return [...statusColumns, ...metricColumns, ...extraColumns()];
 });
 
 // Ant Table cannot render rows while its columns are temporarily empty during
@@ -378,6 +416,34 @@ function statusColor(value?: string) {
   return 'blue';
 }
 
+function isActiveStatus(value?: string) {
+  const status = String(value || '').toLowerCase();
+  return ['active', 'enabled', '已启用', '投放中'].includes(status);
+}
+
+function statusLabel(value?: string, header = false) {
+  const status = String(value || '').toLowerCase();
+  if (['active', 'enabled', '投放中'].includes(status)) {
+    return header ? '已启用' : '投放中';
+  }
+  if (['paused', '已暂停'].includes(status)) return '已暂停';
+  if (['archived', '归档'].includes(status)) return '已归档';
+  if (['ended', '已结束'].includes(status)) return '已结束';
+  return value || '-';
+}
+
+function sponsoredTypeLabel(value?: string) {
+  const type = String(value || '').toUpperCase();
+  return (
+    {
+      SB: 'SB广告',
+      SBV: 'SBV广告',
+      SD: 'SD广告',
+      SP: 'SP广告',
+    } as Record<string, string>
+  )[type] || value || '-';
+}
+
 function metricCell(record: AdCampaignDetailMetricRow, key: string) {
   const value = record[key as keyof AdCampaignDetailMetricRow] as null | number;
   if (['acos', 'ctr', 'cvr'].includes(key)) return percent(value);
@@ -391,7 +457,7 @@ function detailRecord(record: Record<string, any>) {
 }
 
 function fieldStorageKey() {
-  return `ad-campaign-detail-fields:${profileId.value}:${campaignId.value}:${activeSection.value}`;
+  return `ad-campaign-detail-fields:v3:${profileId.value}:${campaignId.value}:${activeSection.value}`;
 }
 
 function defaultFieldKeys() {
@@ -745,12 +811,10 @@ onBeforeUnmount(() => {
           <div class="title-block">
             <div class="title-row">
               <h1>{{ meta?.campaignName || campaignId }}</h1>
-              <Tag color="blue">{{ meta?.sponsoredType || '-' }}</Tag>
+              <Tag color="blue">{{ sponsoredTypeLabel(meta?.sponsoredType) }}</Tag>
               <Tag :color="statusColor(meta?.status)">
-{{
-                meta?.status || '-'
-              }}
-</Tag>
+                {{ statusLabel(meta?.status, true) }}
+              </Tag>
             </div>
             <p>
               {{ meta?.storeName || '-' }} · 活动 ID {{ campaignId }} ·
@@ -868,8 +932,8 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="field-picker-actions">
                   <Button size="small" type="link" @click="selectAllFields">
-全选
-</Button>
+                    全选
+                  </Button>
                   <Button
                     size="small"
                     type="link"
@@ -897,7 +961,7 @@ onBeforeUnmount(() => {
         <Table
           class="detail-table"
           :columns="tableColumns"
-          :data-source="sectionLoading ? [] : detail?.rows || []"
+          :data-source="sectionLoading ? [] : displayRows"
           :pagination="{
             current: detail?.pagination.page || page,
             pageSize: detail?.pagination.pageSize || pageSize,
@@ -928,10 +992,8 @@ onBeforeUnmount(() => {
             </template>
             <template v-else-if="column?.dataIndex === 'status'">
               <Tag :color="statusColor(record.status)">
-{{
-                record.status || '-'
-              }}
-</Tag>
+                {{ statusLabel(record.status) }}
+              </Tag>
             </template>
             <template v-else-if="column?.dataIndex === 'bid'">
               {{ money(record.bid) }}

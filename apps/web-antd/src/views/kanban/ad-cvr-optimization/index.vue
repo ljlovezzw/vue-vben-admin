@@ -2,6 +2,7 @@
 import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
+  AdCvrOptimizationOperatorSummaryRow,
   AdCvrOptimizationOverview,
   AdCvrOptimizationSuggestion,
 } from '#/api/kanban/types';
@@ -205,6 +206,60 @@ const metricHelp: Record<string, string> = {
   target_cvr: '自然 CVR + 2.5 个百分点',
 };
 
+type OperatorSummaryDisplayRow = AdCvrOptimizationOperatorSummaryRow & {
+  isTotal?: boolean;
+};
+
+const operatorSummaryColumns: TableColumnsType<OperatorSummaryDisplayRow> = [
+  {
+    dataIndex: 'department',
+    fixed: 'left',
+    key: 'department',
+    title: '部门',
+    width: 112,
+  },
+  {
+    dataIndex: 'responsible',
+    fixed: 'left',
+    key: 'responsible',
+    title: '运营负责人',
+    width: 112,
+  },
+  { dataIndex: 'campaignCount', key: 'campaignCount', title: '广告活动', width: 92 },
+  { dataIndex: 'adGroupCount', key: 'adGroupCount', title: '广告组', width: 84 },
+  {
+    dataIndex: 'optimizationGroupCount',
+    key: 'optimizationGroupCount',
+    title: '需要优化',
+    width: 170,
+  },
+  { dataIndex: 'spend', key: 'spend', title: '近30天花费', width: 130 },
+  {
+    dataIndex: 'optimizationSpend',
+    key: 'optimizationSpend',
+    title: '涉及优化花费',
+    width: 146,
+  },
+  {
+    dataIndex: 'estimatedSavings',
+    key: 'estimatedSavings',
+    title: '预计节约',
+    width: 138,
+  },
+  {
+    dataIndex: 'estimatedAcosImprovementPp',
+    key: 'estimatedAcosImprovementPp',
+    title: '预计ACoS改善',
+    width: 190,
+  },
+  {
+    dataIndex: 'recentTrend',
+    key: 'recentTrend',
+    title: '近期变化（日均/比率）',
+    width: 220,
+  },
+];
+
 const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
   { key: 'select', fixed: 'left', title: '', width: 46 },
   { dataIndex: 'level', key: 'level', title: '层级', width: 92 },
@@ -308,11 +363,15 @@ const snapshotRange = computed(() => {
   return `${snapshot.range_start} 至 ${snapshot.range_end}`;
 });
 function normalizeCountry(value: unknown) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase();
 }
 
 function storeCountry(store: unknown) {
-  const match = String(store || '').trim().match(/-([a-z]{2})$/i);
+  const match = String(store || '')
+    .trim()
+    .match(/-([a-z]{2})$/i);
   return match ? normalizeCountry(match[1]) : '';
 }
 
@@ -326,9 +385,10 @@ const storeOptions = computed(() => {
     query.countries.map((country) => normalizeCountry(country)),
   );
   const stores = data.value?.filters.stores ?? [];
-  const visibleStores = selectedCountries.size > 0
-    ? stores.filter((store) => selectedCountries.has(storeCountry(store)))
-    : stores;
+  const visibleStores =
+    selectedCountries.size > 0
+      ? stores.filter((store) => selectedCountries.has(storeCountry(store)))
+      : stores;
 
   return visibleStores.map((value) => ({
     label: value,
@@ -351,7 +411,9 @@ const countryOptions = computed(() =>
 watch(
   () => [...query.countries],
   () => {
-    const allowedStores = new Set(storeOptions.value.map((option) => option.value));
+    const allowedStores = new Set(
+      storeOptions.value.map((option) => option.value),
+    );
     query.stores = query.stores.filter((store) => allowedStores.has(store));
   },
 );
@@ -403,11 +465,26 @@ const summaryItems = computed(() => [
     value: String(data.value?.summary.review ?? 0),
   },
   {
-    label: '涉及花费',
+    label: '广告总花费',
     tone: 'money',
-    value: money(data.value?.summary.spend ?? 0),
+    value: money(data.value?.operatorSummary?.total.spend ?? 0),
   },
 ]);
+
+const operatorSummaryRows = computed<OperatorSummaryDisplayRow[]>(() => {
+  const summary = data.value?.operatorSummary;
+  if (!summary) return [];
+  return [
+    ...summary.rows,
+    { ...summary.total, isTotal: true },
+  ];
+});
+
+const operatorSummaryHeadline = computed(() => {
+  const total = data.value?.operatorSummary?.total;
+  if (!total) return '等待汇总数据';
+  return `${total.campaignCount.toLocaleString('zh-CN')} 个广告活动 · ${total.adGroupCount.toLocaleString('zh-CN')} 个广告组 · ${total.optimizationGroupCount.toLocaleString('zh-CN')} 组需要优化`;
+});
 
 function options(values: string[], labels: Record<string, string> = {}) {
   return uniqueOptionValues(values).map((value) => ({
@@ -426,6 +503,42 @@ function money(value: number | string) {
     maximumFractionDigits: 2,
     minimumFractionDigits: 2,
   })}`;
+}
+
+function rate(value: null | number | string) {
+  if (value === null || value === undefined || value === '') return '-';
+  return `${Number(value).toFixed(2)}%`;
+}
+
+function signedChange(value: null | number, suffix = '%') {
+  if (value === null || !Number.isFinite(value)) return '-';
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}${suffix}`;
+}
+
+function trendClass(value: null | number, lowerIsBetter = false) {
+  if (value === null || value === 0 || !Number.isFinite(value)) return 'trend-neutral';
+  const favorable = lowerIsBetter ? value < 0 : value > 0;
+  return favorable ? 'trend-positive' : 'trend-negative';
+}
+
+function optimizationCoverage(row: AdCvrOptimizationOperatorSummaryRow) {
+  if (!row.spend) return '0.00%';
+  return `${((row.optimizationSpend / row.spend) * 100).toFixed(2)}%`;
+}
+
+function filterByResponsible(row: OperatorSummaryDisplayRow) {
+  if (row.isTotal || row.responsible === '未分配') return;
+  query.responsible = row.responsible;
+  void load(true);
+}
+
+function operatorSummaryRowClassName(row: OperatorSummaryDisplayRow) {
+  return row.isTotal ? 'operator-total-row' : '';
+}
+
+function operatorSummaryRecord(record: Record<string, any>) {
+  return record as OperatorSummaryDisplayRow;
 }
 
 function adjustmentText(record: AdCvrOptimizationSuggestion) {
@@ -936,6 +1049,125 @@ onMounted(() => load());
       </div>
     </section>
 
+    <section class="operator-summary-band">
+      <header class="operator-summary-head">
+        <div>
+          <h2>运营优化汇总</h2>
+          <p>{{ operatorSummaryHeadline }}</p>
+        </div>
+        <Tooltip
+          :title="[
+            data?.operatorSummary?.methodology.baseline,
+            data?.operatorSummary?.methodology.estimatedSavings,
+            data?.operatorSummary?.methodology.estimatedAcosImprovement,
+            data?.operatorSummary?.methodology.recentTrend,
+            data?.operatorSummary?.methodology.filterScope,
+          ].filter(Boolean).join('；')"
+        >
+          <span class="methodology-help"><Info :size="14" />估算口径</span>
+        </Tooltip>
+      </header>
+      <Table
+        :columns="operatorSummaryColumns"
+        :data-source="operatorSummaryRows"
+        :loading="loading"
+        :pagination="false"
+        :row-class-name="operatorSummaryRowClassName"
+        :row-key="(row) => `${row.department}-${row.responsible}-${row.isTotal ? 'total' : 'operator'}`"
+        :scroll="{ x: 1394, y: 292 }"
+        size="small"
+      >
+        <template #bodyCell="{ column, record }">
+          <strong v-if="column.dataIndex === 'department'">
+            {{ record.department }}
+          </strong>
+          <button
+            v-else-if="column.dataIndex === 'responsible' && !record.isTotal && record.responsible !== '未分配'"
+            class="operator-filter-link"
+            type="button"
+            @click="filterByResponsible(operatorSummaryRecord(record))"
+          >
+            {{ record.responsible }}
+          </button>
+          <strong v-else-if="column.dataIndex === 'responsible'">
+            {{ record.responsible }}
+          </strong>
+          <span
+            v-else-if="['campaignCount', 'adGroupCount'].includes(String(column.dataIndex))"
+            class="count-value"
+          >
+            {{ Number(record[String(column.dataIndex)] || 0).toLocaleString('zh-CN') }}
+          </span>
+          <div
+            v-else-if="column.dataIndex === 'optimizationGroupCount'"
+            class="optimization-count-cell"
+          >
+            <strong>{{ record.optimizationGroupCount.toLocaleString('zh-CN') }} 组</strong>
+            <span>{{ record.actionableSuggestionCount.toLocaleString('zh-CN') }} 条建议</span>
+            <Tag v-if="record.highPriorityCount" color="red">
+              高优先 {{ record.highPriorityCount.toLocaleString('zh-CN') }}
+            </Tag>
+          </div>
+          <strong v-else-if="column.dataIndex === 'spend'" class="money-value">
+            {{ money(record.spend) }}
+          </strong>
+          <div
+            v-else-if="column.dataIndex === 'optimizationSpend'"
+            class="metric-stack"
+          >
+            <strong>{{ money(record.optimizationSpend) }}</strong>
+            <span>覆盖 {{ optimizationCoverage(operatorSummaryRecord(record)) }}</span>
+          </div>
+          <div
+            v-else-if="column.dataIndex === 'estimatedSavings'"
+            class="metric-stack saving-value"
+          >
+            <strong>{{ money(record.estimatedSavings) }}</strong>
+            <span>预计降幅 {{ rate(record.estimatedSpendReductionPct) }}</span>
+          </div>
+          <div
+            v-else-if="column.dataIndex === 'estimatedAcosImprovementPp'"
+            class="acos-improvement-cell"
+          >
+            <strong>{{ rate(record.currentAcos) }} → {{ rate(record.estimatedAcos) }}</strong>
+            <span v-if="record.estimatedAcosImprovementPp !== null">
+              改善 {{ record.estimatedAcosImprovementPp.toFixed(2) }}pp
+            </span>
+            <span v-else>销售额为 0，暂不估算</span>
+          </div>
+          <div v-else-if="column.dataIndex === 'recentTrend'" class="recent-trend-cell">
+            <span>
+              <small>花费</small>
+              <b :class="trendClass(record.spendChangePct, true)">
+                {{ signedChange(record.spendChangePct) }}
+              </b>
+            </span>
+            <span>
+              <small>销售额</small>
+              <b :class="trendClass(record.salesChangePct)">
+                {{ signedChange(record.salesChangePct) }}
+              </b>
+            </span>
+            <span>
+              <small>ACoS</small>
+              <b :class="trendClass(record.acosChangePp, true)">
+                {{ signedChange(record.acosChangePp, 'pp') }}
+              </b>
+            </span>
+            <span>
+              <small>CVR</small>
+              <b :class="trendClass(record.cvrChangePp)">
+                {{ signedChange(record.cvrChangePp, 'pp') }}
+              </b>
+            </span>
+          </div>
+        </template>
+        <template #emptyText>
+          <Empty description="当前范围没有运营汇总数据" />
+        </template>
+      </Table>
+    </section>
+
     <section class="action-bar">
       <div class="selection-status">
         <Checkbox
@@ -1433,7 +1665,11 @@ onMounted(() => load());
   border-radius: 3px;
 }
 
-:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-option::before) {
+:global(
+  .ad-optimization-scope-dropdown
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+    .scope-option::before
+) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1495,7 +1731,8 @@ onMounted(() => load());
 }
 
 .filter-item :deep(.ant-input-affix-wrapper:hover),
-.filter-item :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
+.filter-item
+  :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
   border-color: #84adff;
 }
 
@@ -1605,18 +1842,29 @@ onMounted(() => load());
     background-color 0.15s ease;
 }
 
-:global(.ad-optimization-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled)) {
+:global(
+  .ad-optimization-dropdown
+    .ant-select-item-option-active:not(.ant-select-item-option-disabled)
+) {
   color: #175cd3;
   background: #f5f9ff;
 }
 
-:global(.ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled)) {
+:global(
+  .ad-optimization-dropdown
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+) {
   font-weight: 700;
   color: #175cd3;
   background: #eff8ff;
 }
 
-:global(.ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled).ant-select-item-option-active) {
+:global(
+  .ad-optimization-dropdown
+    .ant-select-item-option-selected:not(
+      .ant-select-item-option-disabled
+    ).ant-select-item-option-active
+) {
   background: #e6f4ff;
 }
 
@@ -1624,8 +1872,16 @@ onMounted(() => load());
   color: #2563eb;
 }
 
-:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-code),
-:global(.ad-optimization-scope-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled) .scope-site-badge) {
+:global(
+  .ad-optimization-scope-dropdown
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+    .scope-code
+),
+:global(
+  .ad-optimization-scope-dropdown
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+    .scope-site-badge
+) {
   color: #175cd3;
   background: #dff1ff;
   border-color: #84adff;
@@ -1637,6 +1893,179 @@ onMounted(() => load());
 
 :global(.ad-optimization-dropdown .ant-empty) {
   margin: 8px 0;
+}
+
+.operator-summary-band {
+  margin-top: 12px;
+  overflow: hidden;
+  background: var(--opt-panel);
+  border: 1px solid var(--opt-border);
+  border-radius: 6px;
+}
+
+.operator-summary-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--opt-border);
+}
+
+.operator-summary-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--opt-text);
+}
+
+.operator-summary-head p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--opt-muted);
+}
+
+.methodology-help {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 5px;
+  align-items: center;
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #175cd3;
+  cursor: help;
+}
+
+.operator-summary-band :deep(.ant-table) {
+  font-size: 13px;
+}
+
+.operator-summary-band :deep(.ant-table-thead > tr > th) {
+  padding: 9px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  color: #344054;
+  text-align: center;
+  background: #f8fafc;
+  border-color: var(--opt-border);
+}
+
+.operator-summary-band :deep(.ant-table-tbody > tr > td) {
+  padding: 8px 10px;
+  text-align: center;
+  border-color: var(--opt-border);
+}
+
+.operator-summary-band :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
+  background: #fbfdff;
+}
+
+.operator-summary-band :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
+  background: #f0f7ff;
+}
+
+.operator-summary-band :deep(.ant-table-tbody > tr.operator-total-row > td) {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  font-weight: 750;
+  background: #eef4ff;
+  border-top: 1px solid #b2ccff;
+}
+
+.operator-filter-link {
+  padding: 0;
+  font: inherit;
+  font-weight: 750;
+  color: #175cd3;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.operator-filter-link:hover,
+.operator-filter-link:focus-visible {
+  text-decoration: underline;
+}
+
+.operator-filter-link:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 3px;
+}
+
+.count-value,
+.optimization-count-cell strong,
+.metric-stack strong,
+.acos-improvement-cell strong {
+  font-variant-numeric: tabular-nums;
+  color: var(--opt-text);
+}
+
+.optimization-count-cell,
+.metric-stack,
+.acos-improvement-cell {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.optimization-count-cell span,
+.metric-stack span,
+.acos-improvement-cell span {
+  font-size: 11px;
+  color: var(--opt-muted);
+}
+
+.optimization-count-cell :deep(.ant-tag) {
+  margin: 3px 0 0;
+  font-size: 10px;
+  line-height: 18px;
+}
+
+.saving-value strong,
+.acos-improvement-cell span {
+  color: #067647;
+}
+
+.recent-trend-cell {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  text-align: left;
+}
+
+.recent-trend-cell span {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.recent-trend-cell small {
+  font-size: 11px;
+  color: var(--opt-muted);
+  white-space: nowrap;
+}
+
+.recent-trend-cell b {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.trend-positive {
+  color: #067647;
+}
+
+.trend-negative {
+  color: #d92d20;
+}
+
+.trend-neutral {
+  color: var(--opt-muted);
 }
 
 .action-bar {
@@ -1927,6 +2356,10 @@ onMounted(() => load());
     align-items: flex-start;
   }
 
+  .operator-summary-head {
+    align-items: flex-start;
+  }
+
   .summary-strip,
   .filter-band {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2059,11 +2492,31 @@ onMounted(() => load());
   border-color: #475467;
 }
 
+:global(.dark) .operator-summary-band :deep(.ant-table-thead > tr > th) {
+  color: #cbd5e1;
+  background: #182230;
+}
+
+:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
+  background: #101828;
+}
+
+:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
+  background: #1d2939;
+}
+
+:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr.operator-total-row > td) {
+  background: #25304a;
+  border-top-color: #475467;
+}
+
 :global(.dark) .filter-item :deep(.ant-select-selection-item) {
   color: #b2ccff;
 }
 
-:global(.dark) .filter-item :deep(.ant-select-multiple .ant-select-selection-item) {
+:global(.dark)
+  .filter-item
+  :deep(.ant-select-multiple .ant-select-selection-item) {
   color: #b2ccff;
   background: #19345d;
   border-color: #315b9d;
@@ -2098,12 +2551,20 @@ onMounted(() => load());
   color: #cbd5e1;
 }
 
-:global(.dark .ad-optimization-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled)) {
+:global(
+  .dark
+    .ad-optimization-dropdown
+    .ant-select-item-option-active:not(.ant-select-item-option-disabled)
+) {
   color: #b2ccff;
   background: #203451;
 }
 
-:global(.dark .ad-optimization-dropdown .ant-select-item-option-selected:not(.ant-select-item-option-disabled)) {
+:global(
+  .dark
+    .ad-optimization-dropdown
+    .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+) {
   color: #b2ccff;
   background: #19345d;
 }
