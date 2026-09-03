@@ -5,6 +5,7 @@ import type {
   AdMonitorFilters,
   AdMonitorOverview,
   AdMonitorTrend,
+  BeerDressCalendarOverview,
   AnalyticsOverview,
   AnalyticsReportOverview,
   Asin360Overview,
@@ -61,6 +62,8 @@ export * from './ad-cvr-optimization';
 
 export type {
   AlertLevel,
+  BeerDressCalendarAction,
+  BeerDressCalendarOverview,
   InAppCardNotification,
   InAppCardNotificationHistory,
   KanbanCoreKpi,
@@ -238,6 +241,12 @@ export interface TargetTrackerParams {
   site?: string;
   store?: string;
   year?: number;
+}
+
+export interface BeerDressCalendarParams {
+  asOfDate?: string;
+  priority?: string;
+  responsible?: string;
 }
 
 export interface CreateConfigUserPayload {
@@ -633,6 +642,12 @@ export async function fetchTargetTrackerOverview(
   params: TargetTrackerParams = {},
 ): Promise<TargetTrackerOverview> {
   return requestClient.get('/kanban/targets/overview', { params });
+}
+
+export async function fetchBeerDressCalendarOverview(
+  params: BeerDressCalendarParams = {},
+): Promise<BeerDressCalendarOverview> {
+  return requestClient.get('/kanban/beer-dress-calendar/overview', { params });
 }
 
 export async function fetchAsin360Overview(

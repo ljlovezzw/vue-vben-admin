@@ -1842,6 +1842,46 @@ export interface TargetTrackerOverview {
   updatedAt: string;
 }
 
+export interface BeerDressCalendarAction {
+  parentAsin?: string;
+  action: string;
+  actual: number;
+  category: string;
+  currentPrice: number;
+  expectedProgress: number;
+  inventory: number;
+  inventoryAvailable?: number;
+  inventoryInbound?: number;
+  inventoryRefreshedAt?: string;
+  inventorySellable?: number;
+  inventoryDays: number;
+  metricDate: string;
+  priority: 'P0' | 'P1' | '正常';
+  progress: null | number;
+  recent30: number;
+  progressGap: null | number;
+  reason: string;
+  responsible: string;
+  site: string;
+  spu: string;
+  status: string;
+  suggestedPrice: number;
+  target: number;
+}
+
+export interface BeerDressCalendarOverview {
+  asOfDate: string;
+  calendar?: Array<{ active: boolean; end: string; fromRate: number; name: string; start: string; toRate: number }>;
+  categories: Array<{ actual: number; name: string; progress: number; remaining: number; target: number }>;
+  holiday: { daysToStart: number; end: string; name: string; start: string };
+  lastRefreshedAt: string;
+  operatorTargets?: Array<{ responsible: string; target: number; targetSales: number }>;
+  phase: { daysToEnd: number; end: string; expectedRate: number; name: string; progress: number; start: string; toRate: number };
+  summary: { actual: number; expectedProgress: number; inventoryAlerts: number; p0: number; p1: number; priceActions: number; progress: number; target: number };
+  actions: BeerDressCalendarAction[];
+  thresholds: Record<string, number>;
+}
+
 export type ShippingMode = 'air' | 'sea' | 'truck';
 
 export type ShippingPackagingModel =

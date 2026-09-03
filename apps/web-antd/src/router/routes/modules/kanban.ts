@@ -65,6 +65,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'KanbanBeerDressCalendar',
+        path: 'beer-dress-calendar',
+        component: () => import('#/views/kanban/beer-dress-calendar/index.vue'),
+        meta: {
+          authority: ['kanban:monitor'],
+          icon: 'lucide:calendar-days',
+          title: '啤酒服销售日历',
+        },
+      },
+      {
         name: 'KanbanAsin360',
         path: 'asin360',
         component: () => import('#/views/kanban/asin360/index.vue'),
