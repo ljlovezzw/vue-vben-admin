@@ -87,6 +87,10 @@ const showDot = computed(() =>
 const activeInAppCardNotification = computed(
   () => inAppCardNotifications.value[0] ?? null,
 );
+const activeBeerDressCalendarNotification = computed(() => {
+  const item = activeInAppCardNotification.value;
+  return item?.scene === 'beer_dress_calendar' ? item : null;
+});
 const notificationHistoryStatusOptions = [
   { label: '全部', value: 'all' },
   { label: '未读', value: 'pending' },
@@ -227,11 +231,103 @@ function cardPlainText(item: InAppCardNotification) {
 
 function notificationSceneText(scene: string) {
   const labels: Record<string, string> = {
+    beer_dress_calendar: '啤酒服销售日历',
     cold_start_fba_arrival: '新品 FBA 到货',
     cold_start_performance_bonus: '冷启动优秀表现',
     first_week_visual_cvr_low: '第一周低 CVR',
   };
   return labels[scene] || scene || '卡片通知';
+}
+
+function calendarEvent(item: InAppCardNotification | null) {
+  return (
+    item?.event && typeof item.event === 'object' ? item.event : {}
+  ) as Record<string, any>;
+}
+
+function calendarPhase(item: InAppCardNotification | null) {
+  const event = calendarEvent(item);
+  return (
+    event.overview?.phase && typeof event.overview.phase === 'object'
+      ? event.overview.phase
+      : {}
+  ) as Record<string, any>;
+}
+
+function calendarHoliday(item: InAppCardNotification | null) {
+  const event = calendarEvent(item);
+  return (
+    event.overview?.holiday && typeof event.overview.holiday === 'object'
+      ? event.overview.holiday
+      : {}
+  ) as Record<string, any>;
+}
+
+function calendarRows(item: InAppCardNotification | null) {
+  const rows = calendarEvent(item).rows;
+  return Array.isArray(rows) ? rows.slice(0, 8) : [];
+}
+
+function calendarNumber(value: unknown) {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric)
+    ? new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(
+        numeric,
+      )
+    : '0';
+}
+
+function calendarPrice(value: unknown) {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) && numeric > 0
+    ? `€${numeric.toFixed(2)}`
+    : '待录入';
+}
+
+function calendarPercent(value: unknown) {
+  const numeric = Number(value || 0);
+  return Number.isFinite(numeric) ? `${(numeric * 100).toFixed(1)}%` : '0.0%';
+}
+
+function calendarProgressWidth(value: unknown) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) return '0%';
+  return `${Math.min(100, Math.max(0, numeric * 100))}%`;
+}
+
+function calendarRemaining(item: InAppCardNotification | null) {
+  const event = calendarEvent(item);
+  return Math.max(0, Number(event.target || 0) - Number(event.actual || 0));
+}
+
+function calendarPriorityColor(priority: unknown) {
+  if (priority === 'P0') return 'error';
+  if (priority === 'P1') return 'warning';
+  return 'default';
+}
+
+function calendarActionUrl(item: InAppCardNotification | null) {
+  const elements = Array.isArray(item?.card?.elements)
+    ? item.card.elements
+    : [];
+  for (const element of elements as Array<Record<string, any>>) {
+    if (element.tag !== 'action' || !Array.isArray(element.actions)) continue;
+    const action = element.actions.find(
+      (candidate: Record<string, any>) =>
+        typeof candidate?.url === 'string' && candidate.url,
+    );
+    if (action?.url) return String(action.url);
+  }
+  return '';
+}
+
+function openCalendarNotification(item: InAppCardNotification | null) {
+  const url = calendarActionUrl(item);
+  if (url) {
+    navigateTo(url);
+  } else {
+    router.push({ name: 'KanbanBeerDressCalendar' });
+  }
 }
 
 function notificationTime(item: InAppCardNotification) {
@@ -622,9 +718,197 @@ onBeforeUnmount(() => {
         :keyboard="false"
         :mask-closable="false"
         :open="Boolean(activeInAppCardNotification)"
-        width="640px"
+        width="780px"
       >
-        <div v-if="activeInAppCardNotification" class="in-app-card-notice">
+        <div
+          v-if="activeBeerDressCalendarNotification"
+          class="beer-dress-popup"
+        >
+          <div class="beer-dress-popup-heading">
+            <div>
+              <h2>啤酒服销售日历</h2>
+              <p>
+                {{
+                  calendarEvent(activeBeerDressCalendarNotification)
+                    .responsible_name || '未分配'
+                }}
+                ·
+                {{
+                  calendarEvent(activeBeerDressCalendarNotification)
+                    .report_date || '-'
+                }}
+              </p>
+            </div>
+            <Tag color="processing">
+{{
+              calendarPhase(activeBeerDressCalendarNotification).name ||
+              '当前阶段'
+            }}
+</Tag>
+          </div>
+
+          <div class="beer-dress-popup-holiday">
+            <div>
+              <span class="beer-dress-popup-label">节日主战场</span>
+              <strong>{{
+                calendarHoliday(activeBeerDressCalendarNotification).name ||
+                '慕尼黑啤酒节 Oktoberfest'
+              }}</strong>
+            </div>
+            <span>
+              {{
+                calendarHoliday(activeBeerDressCalendarNotification).start ||
+                '-'
+              }}
+              —
+              {{
+                calendarHoliday(activeBeerDressCalendarNotification).end || '-'
+              }}
+            </span>
+          </div>
+
+          <div class="beer-dress-popup-kpis">
+            <div>
+              <span>全年销量目标</span>
+              <strong>{{
+                  calendarNumber(
+                    calendarEvent(activeBeerDressCalendarNotification).target,
+                  )
+                }}
+                件</strong>
+            </div>
+            <div>
+              <span>已完成销量</span>
+              <strong>{{
+                  calendarNumber(
+                    calendarEvent(activeBeerDressCalendarNotification).actual,
+                  )
+                }}
+                件</strong>
+            </div>
+            <div>
+              <span>待确认事项</span>
+              <strong>{{
+                  calendarNumber(
+                    calendarEvent(activeBeerDressCalendarNotification)
+                      .pending_count,
+                  )
+                }}
+                项</strong>
+            </div>
+            <div>
+              <span>P0 / P1</span>
+              <strong>{{
+                  calendarNumber(
+                    calendarEvent(activeBeerDressCalendarNotification).p0,
+                  )
+                }}
+                /
+                {{
+                  calendarNumber(
+                    calendarEvent(activeBeerDressCalendarNotification).p1,
+                  )
+                }}</strong>
+            </div>
+          </div>
+
+          <div class="beer-dress-popup-progress">
+            <div class="beer-dress-popup-progress-heading">
+              <span>目标完成率
+                <strong>{{
+                  calendarPercent(
+                    calendarEvent(activeBeerDressCalendarNotification).progress,
+                  )
+                }}</strong></span>
+              <span>阶段基准
+                {{
+                  calendarPercent(
+                    calendarPhase(activeBeerDressCalendarNotification)
+                      .expectedRate,
+                  )
+                }}</span>
+            </div>
+            <div class="beer-dress-popup-progress-track">
+              <span
+                :style="{
+                  width: calendarProgressWidth(
+                    calendarEvent(activeBeerDressCalendarNotification).progress,
+                  ),
+                }"
+              ></span>
+            </div>
+            <p>
+              已完成
+              {{
+                calendarNumber(
+                  calendarEvent(activeBeerDressCalendarNotification).actual,
+                )
+              }}
+              件 ·
+              {{
+                calendarRemaining(activeBeerDressCalendarNotification) > 0
+                  ? `距目标还差 ${calendarNumber(calendarRemaining(activeBeerDressCalendarNotification))} 件`
+                  : '已达到全年目标'
+              }}
+            </p>
+          </div>
+
+          <div class="beer-dress-popup-section-heading">
+            <strong>优先处理事项</strong>
+            <span>展示前 8 项，剩余事项请打开完整日历</span>
+          </div>
+          <div
+            v-if="calendarRows(activeBeerDressCalendarNotification).length > 0"
+            class="beer-dress-popup-actions"
+          >
+            <div
+              v-for="row in calendarRows(activeBeerDressCalendarNotification)"
+              :key="row.actionKey || `${row.spu}-${row.parentAsin}`"
+              class="beer-dress-popup-action"
+            >
+              <div class="beer-dress-popup-action-top">
+                <Tag :color="calendarPriorityColor(row.priority)">
+{{
+                  row.priority || '正常'
+                }}
+</Tag>
+                <strong>{{ row.spu || '-' }}</strong>
+                <span>{{ row.category || '未分类' }}</span>
+                <span class="beer-dress-popup-action-name">{{
+                  row.action || '稳价观察'
+                }}</span>
+              </div>
+              <div class="beer-dress-popup-action-facts">
+                <span>售价 {{ calendarPrice(row.currentPrice) }} →
+                  {{ calendarPrice(row.suggestedPrice) }}</span>
+                <span>库存 {{ calendarNumber(row.inventory) }} 件 /
+                  {{ calendarNumber(row.inventoryDays) }} 天</span>
+                <span>近 30 天 {{ calendarNumber(row.recent30) }} 件</span>
+              </div>
+              <p>{{ row.reason || '请按日历节奏继续观察。' }}</p>
+            </div>
+          </div>
+          <Empty v-else description="当前没有待确认事项" />
+
+          <div class="beer-dress-popup-footer">
+            <Button
+              v-if="calendarActionUrl(activeBeerDressCalendarNotification)"
+              @click="
+                openCalendarNotification(activeBeerDressCalendarNotification)
+              "
+            >
+              打开完整日历
+            </Button>
+            <Button
+              :loading="ackLoadingId === activeBeerDressCalendarNotification.id"
+              type="primary"
+              @click="acknowledgeActiveInAppNotification"
+            >
+              已收到，确认处理
+            </Button>
+          </div>
+        </div>
+        <div v-else-if="activeInAppCardNotification" class="in-app-card-notice">
           <div class="in-app-card-title">
             {{ cardTitle(activeInAppCardNotification) }}
           </div>
@@ -788,6 +1072,242 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.beer-dress-popup {
+  color: #172033;
+}
+
+.beer-dress-popup-heading {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-right: 24px;
+}
+
+.beer-dress-popup-heading h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.beer-dress-popup-heading p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.beer-dress-popup-holiday {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  margin-top: 18px;
+  font-size: 13px;
+  color: #7c2d12;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+}
+
+.beer-dress-popup-holiday > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.beer-dress-popup-label {
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9a3412;
+  letter-spacing: 0.04em;
+  background: #ffedd5;
+  border-radius: 999px;
+}
+
+.beer-dress-popup-holiday strong {
+  font-weight: 700;
+  color: #431407;
+}
+
+.beer-dress-popup-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.beer-dress-popup-kpis > div {
+  min-width: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.beer-dress-popup-kpis span,
+.beer-dress-popup-kpis strong {
+  display: block;
+}
+
+.beer-dress-popup-kpis span {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.beer-dress-popup-kpis strong {
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.beer-dress-popup-progress {
+  padding: 14px 0 4px;
+}
+
+.beer-dress-popup-progress-heading,
+.beer-dress-popup-action-facts,
+.beer-dress-popup-section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.beer-dress-popup-progress-heading {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.beer-dress-popup-progress-heading strong {
+  font-size: 15px;
+  color: #0f766e;
+}
+
+.beer-dress-popup-progress-track {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border-radius: 999px;
+}
+
+.beer-dress-popup-progress-track span {
+  display: block;
+  height: 100%;
+  background: #0f766e;
+  border-radius: inherit;
+}
+
+.beer-dress-popup-progress p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.beer-dress-popup-section-heading {
+  padding: 13px 0 8px;
+  margin-top: 5px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.beer-dress-popup-section-heading strong {
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.beer-dress-popup-section-heading span {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.beer-dress-popup-actions {
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+.beer-dress-popup-action {
+  padding: 12px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.beer-dress-popup-action-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: #475569;
+}
+
+.beer-dress-popup-action-top strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.beer-dress-popup-action-name {
+  margin-left: auto;
+  font-weight: 650;
+  color: #0f766e;
+}
+
+.beer-dress-popup-action-facts {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}
+
+.beer-dress-popup-action p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.beer-dress-popup-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 18px;
+}
+
+@media (max-width: 680px) {
+  .beer-dress-popup-heading,
+  .beer-dress-popup-holiday,
+  .beer-dress-popup-section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .beer-dress-popup-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .beer-dress-popup-action-name {
+    margin-left: 0;
+  }
+
+  .beer-dress-popup-footer {
+    flex-direction: column-reverse;
+  }
+
+  .beer-dress-popup-footer .ant-btn {
+    width: 100%;
+  }
+}
+
 .in-app-card-notice {
   color: #0f172a;
 }
