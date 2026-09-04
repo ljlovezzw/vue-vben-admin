@@ -650,6 +650,22 @@ export async function fetchBeerDressCalendarOverview(
   return requestClient.get('/kanban/beer-dress-calendar/overview', { params });
 }
 
+export async function confirmBeerDressCalendarAction(
+  actionKey: string,
+  asOfDate?: string,
+): Promise<{
+  actionKey: string;
+  confirmedAt: string;
+  confirmedBy: string;
+  status: string;
+}> {
+  return requestClient.post(
+    `/kanban/beer-dress-calendar/actions/${encodeURIComponent(actionKey)}/confirm`,
+    undefined,
+    { params: asOfDate ? { asOfDate } : undefined },
+  );
+}
+
 export async function fetchAsin360Overview(
   params: Asin360OverviewParams,
   signal?: AbortSignal,

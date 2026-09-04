@@ -1843,6 +1843,7 @@ export interface TargetTrackerOverview {
 }
 
 export interface BeerDressCalendarAction {
+  actionKey: string;
   parentAsin?: string;
   action: string;
   actual: number;
@@ -1865,6 +1866,8 @@ export interface BeerDressCalendarAction {
   site: string;
   spu: string;
   status: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
   suggestedPrice: number;
   target: number;
 }
