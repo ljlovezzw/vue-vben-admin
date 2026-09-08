@@ -40,7 +40,7 @@ const routes: RouteRecordRaw[] = [
           authority: ['kanban:ads'],
           icon: 'lucide:list-checks',
           keepAlive: true,
-          title: '广告CVR优化',
+          title: '广告优化建议',
         },
       },
       {

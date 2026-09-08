@@ -3,6 +3,9 @@ import type {
   AdCampaignDetailSection,
   AdCampaignDetailSectionResult,
   AdCampaignDetailTrendResult,
+  AdCvrOptimizationExecutionResult,
+  AdCvrOptimizationOperationContext,
+  AdCvrOptimizationOperationResult,
   AdCvrOptimizationOverview,
 } from './types';
 
@@ -26,10 +29,52 @@ export async function updateAdCvrOptimizationDecisions(
 
 export async function executeAdCvrOptimizationSuggestions(
   suggestionIds: string[],
-): Promise<Record<string, any>> {
-  return requestClient.post('/kanban/ads/cvr-optimization/execute', {
-    suggestionIds,
-  });
+  budgetAdjustments: Record<string, number> = {},
+): Promise<AdCvrOptimizationExecutionResult> {
+  return requestClient.post(
+    '/kanban/ads/cvr-optimization/execute',
+    {
+      budgetAdjustments,
+      suggestionIds,
+    },
+    { timeout: 300_000 },
+  );
+}
+
+export async function fetchAdCvrOptimizationOperationContext(
+  suggestionId: string,
+): Promise<AdCvrOptimizationOperationContext> {
+  return requestClient.get(
+    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/operation-context`,
+    { timeout: 300_000 },
+  );
+}
+
+export async function updateAdCvrOptimizationCampaign(
+  suggestionId: string,
+  payload: {
+    campaignName?: string;
+    dailyBudget?: number;
+    expectedCampaignName?: string;
+    expectedDailyBudget?: number;
+  },
+): Promise<AdCvrOptimizationOperationResult> {
+  return requestClient.put(
+    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/campaign`,
+    payload,
+    { timeout: 300_000 },
+  );
+}
+
+export async function updateAdCvrOptimizationAdGroup(
+  suggestionId: string,
+  payload: { adGroupName: string; expectedAdGroupName?: string },
+): Promise<AdCvrOptimizationOperationResult> {
+  return requestClient.put(
+    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/ad-group`,
+    payload,
+    { timeout: 300_000 },
+  );
 }
 
 export async function fetchAdCampaignDetailMeta(

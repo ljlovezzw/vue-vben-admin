@@ -13,7 +13,7 @@ import { computed, onMounted, ref } from 'vue';
 
 import { Download, RotateCw } from '@vben/icons';
 
-import { message, Spin } from 'ant-design-vue';
+import { message, Popover, Spin } from 'ant-design-vue';
 
 import {
   exportShippingWorkspace,
@@ -106,6 +106,15 @@ const totalReturned = computed(() =>
     : bootstrapTotalReturnedQty.value,
 );
 const totalShipped = computed(() => Number(summary.value?.shippedQty || 0));
+const shippedByMonth = computed(() => summary.value?.shippedByMonth ?? []);
+
+function shippedMonthLabel(month: string) {
+  if (month === 'unknown') {
+    return '未记录日期';
+  }
+  const [year, value] = month.split('-');
+  return `${year}年${Number(value)}月`;
+}
 const todayDate = computed(() => latestAsOfDate());
 const todayReceipts = computed(() =>
   receipts.value.filter((row) => row.receiptDate === todayDate.value),
@@ -648,9 +657,37 @@ onMounted(loadPage);
               <article class="kpi-card green">
                 <span>累计回货数量</span><strong>{{ integer(totalReturned) }}</strong><small>良品 {{ integer(summary?.totalGoodQty) }}</small>
               </article>
-              <article class="kpi-card cyan">
-                <span>已发货数量</span><strong>{{ integer(totalShipped) }}</strong><small>来自 STA 货件详情，仅统计目标 SKU</small>
-              </article>
+              <Popover placement="bottom" trigger="hover">
+                <template #content>
+                  <div class="shipped-month-popover">
+                    <strong>圣诞发货期间月度明细</strong>
+                    <div
+                      v-if="shippedByMonth.length === 0"
+                      class="shipped-month-empty"
+                    >
+                      暂无月度明细
+                    </div>
+                    <div
+                      v-for="item in shippedByMonth"
+                      :key="item.month"
+                      class="shipped-month-row"
+                    >
+                      <span>{{ shippedMonthLabel(item.month) }}</span>
+                      <b>{{ integer(item.qty) }}</b>
+                    </div>
+                    <div
+                      v-if="shippedByMonth.length > 0"
+                      class="shipped-month-total"
+                    >
+                      <span>合计</span>
+                      <b>{{ integer(totalShipped) }}</b>
+                    </div>
+                  </div>
+                </template>
+                <article class="kpi-card cyan shipped-kpi-card">
+                  <span>已发货数量</span><strong>{{ integer(totalShipped) }}</strong><small>来自 STA 货件详情，仅统计目标 SKU</small>
+                </article>
+              </Popover>
               <article class="kpi-card orange">
                 <span>总计划完成率</span><strong>{{ percent(summary?.totalPlanCompletionRate) }}</strong><small>已发货数量 / 国家渠道总计划</small>
               </article>
@@ -1867,6 +1904,50 @@ textarea:focus {
   font-size: 28px;
   line-height: 1.15;
   color: #162235;
+}
+
+.shipped-kpi-card {
+  cursor: help;
+}
+
+.shipped-month-popover {
+  min-width: 210px;
+  color: #334155;
+}
+
+.shipped-month-popover > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #162235;
+}
+
+.shipped-month-row,
+.shipped-month-total {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 26px;
+}
+
+.shipped-month-row b,
+.shipped-month-total b {
+  color: #0891b2;
+}
+
+.shipped-month-total {
+  padding-top: 6px;
+  margin-top: 6px;
+  font-weight: 700;
+  border-top: 1px solid #e2e8f0;
+}
+
+.shipped-month-total b {
+  color: #162235;
+}
+
+.shipped-month-empty {
+  color: #64748b;
 }
 
 .data-panel {

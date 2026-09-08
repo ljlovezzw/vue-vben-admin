@@ -293,6 +293,139 @@ export interface NetProfitOverview {
   };
 }
 
+export interface NetProfitTrendData {
+  metrics: {
+    cashIncome: number[];
+    grossMarginRate: number[];
+    grossProfit: number[];
+    investment: number[];
+    marketingFeeRate: number[];
+    netProfit: number[];
+    otherFeeRate: number[];
+    roi: number[];
+    standardFeeRate: number[];
+  };
+  mom: Array<null | number>;
+  movingAverage: {
+    ma3: Array<null | number>;
+    ma6: Array<null | number>;
+  };
+  periodLabels: string[];
+  periods: string[];
+  yoy: Array<null | number>;
+}
+
+export interface NetProfitWaterfallData {
+  periodLabel: string;
+  steps: Array<{
+    cumulative: number;
+    label: string;
+    percentage: number;
+    type: 'decrease' | 'end' | 'start';
+    value: number;
+  }>;
+  total: {
+    cashIncome: number;
+    netProfit: number;
+    profitMargin: number;
+    totalFees: number;
+  };
+}
+
+export interface NetProfitCostDriverData {
+  currentPeriod: string;
+  drivers: Array<{
+    change: number;
+    contribution: number;
+    currentValue: number;
+    name: string;
+    previousValue: number;
+    rawChange: number;
+  }>;
+  previousPeriod: string;
+  totalChange: number;
+}
+
+export type NetProfitPortfolioQuadrant =
+  | 'cashCow'
+  | 'dog'
+  | 'questionMark'
+  | 'star'
+  | 'unclassified';
+
+export interface NetProfitPortfolioItem {
+  cashIncome: number;
+  dimension: string;
+  growthRate: null | number;
+  name: string;
+  netProfit: number;
+  profitContribution: number;
+  quadrant: NetProfitPortfolioQuadrant;
+  roi: number;
+}
+
+export interface NetProfitPortfolioData {
+  comparePeriod: string;
+  currentPeriod: string;
+  dimension: string;
+  items: NetProfitPortfolioItem[];
+  methodology: {
+    comparisonBasis: 'custom' | 'none' | 'sequential' | 'yoy' | string;
+    contributionThreshold: number;
+    growthThreshold: number;
+    note: string;
+  };
+  quadrants: Record<NetProfitPortfolioQuadrant, number>;
+}
+
+export type NetProfitRiskAlertType =
+  | 'continuous_loss'
+  | 'low_gross_margin'
+  | 'low_net_margin'
+  | 'low_roi_high_investment'
+  | 'negative_gross_profit';
+
+export interface NetProfitRiskAlert {
+  dimension: string;
+  dimensionValue: string;
+  message: string;
+  metrics: Record<string, number | string>;
+  recommendation: string;
+  severity: 'high' | 'low' | 'medium';
+  type: NetProfitRiskAlertType;
+}
+
+export interface NetProfitDashboardData {
+  alerts: NetProfitRiskAlert[];
+  benchmarks: {
+    minGrossMargin: number;
+    minNetMargin: number;
+    minRoi: number;
+  };
+  costDrivers: NetProfitCostDriverData;
+  kpi: {
+    cashIncome: number;
+    investment: number;
+    netProfit: number;
+    profitMargin: number;
+    riskScore: number;
+    roi: number;
+  };
+  periodLabel: string;
+  portfolio: NetProfitPortfolioData;
+  trend: NetProfitTrendData;
+  waterfall: NetProfitWaterfallData;
+}
+
+export interface NetProfitGroupsResult {
+  dimension: string;
+  dimensionLabel: string;
+  groups: NetProfitGroupRow[];
+  periodFrom: string;
+  periodLabel: string;
+  periodTo: string;
+}
+
 export interface NetProfitDetailRow {
   amount: number;
   asin: string;
@@ -1155,6 +1288,51 @@ export interface AdCvrOptimizationSuggestion {
   targeting_text: string;
 }
 
+export interface AdCvrOptimizationOperationContext {
+  adGroupAvailable: boolean;
+  adGroupError: string;
+  adGroupId: string;
+  adGroupName: string;
+  adType: string;
+  budgetBlockedReason: string;
+  budgetEditable: boolean;
+  budgetType: string;
+  campaignId: string;
+  campaignName: string;
+  dailyBudget: null | number;
+  profileId: string;
+  settingsSource: 'snapshot';
+  storeName: string;
+  suggestionId: string;
+}
+
+export interface AdCvrOptimizationOperationResult {
+  adGroupName?: string;
+  adjustmentPercent?: number;
+  batchId?: string;
+  campaignName?: string;
+  dailyBudget?: null | number;
+  message: string;
+  status: 'succeeded' | 'unchanged';
+}
+
+export interface AdCvrOptimizationExecutionItem {
+  actionType: string;
+  batchId?: string;
+  message: string;
+  status: 'failed' | 'succeeded' | 'unchanged';
+  suggestionId: string;
+}
+
+export interface AdCvrOptimizationExecutionResult {
+  failed: number;
+  message: string;
+  results: AdCvrOptimizationExecutionItem[];
+  status: 'partial_failed' | 'succeeded';
+  succeeded: number;
+  unchanged: number;
+}
+
 export interface AdCvrOptimizationOperatorSummaryRow {
   acosChangePp: null | number;
   actionableSuggestionCount: number;
@@ -1170,12 +1348,16 @@ export interface AdCvrOptimizationOperatorSummaryRow {
   estimatedSpendReductionPct: number;
   growthGroupCount: number;
   highPriorityCount: number;
+  highPriorityPendingGroupCount: number;
+  lowConfidencePendingGroupCount: number;
   optimizationGroupCount: number;
   optimizationSpend: number;
   previousAcos: null | number;
   previousCvr: null | number;
   previousSales: number;
   previousSpend: number;
+  qualifiedSuggestionClicks: number;
+  qualifiedSuggestionCount: number;
   recentAcos: null | number;
   recentCvr: null | number;
   recentDays: number;
@@ -1190,6 +1372,14 @@ export interface AdCvrOptimizationOperatorSummaryRow {
 }
 
 export interface AdCvrOptimizationOverview {
+  dashboard: {
+    highPriorityGroupChange: null | number;
+    highPriorityGroupCount: number;
+    lowConfidenceGroupCount: number;
+    previousSnapshotDate: null | string;
+    qualifiedSuggestionClicks: number;
+    qualifiedSuggestionCount: number;
+  };
   filters: {
     actions: Array<{ label: string; value: string }>;
     costTypes: string[];
@@ -1220,6 +1410,7 @@ export interface AdCvrOptimizationOverview {
   summary: {
     byAction: Record<string, number>;
     byLevel: Record<string, number>;
+    bySeverity: Record<'high' | 'low' | 'medium', number>;
     pending: number;
     review: number;
     selected: number;
@@ -1874,13 +2065,67 @@ export interface BeerDressCalendarAction {
 
 export interface BeerDressCalendarOverview {
   asOfDate: string;
-  calendar?: Array<{ active: boolean; end: string; fromRate: number; name: string; start: string; toRate: number }>;
-  categories: Array<{ actual: number; name: string; progress: number; remaining: number; target: number }>;
+  calendar?: Array<{
+    active: boolean;
+    end: string;
+    fromRate: number;
+    name: string;
+    start: string;
+    toRate: number;
+  }>;
+  categories: Array<{
+    actual: number;
+    dailyDemand?: null | number;
+    name: string;
+    progress: number;
+    remaining: number;
+    target: number;
+  }>;
   holiday: { daysToStart: number; end: string; name: string; start: string };
+  nextHoliday?: {
+    daysToEnd: number;
+    daysToStart: number;
+    end: string;
+    name: string;
+    start: string;
+    status: string;
+  };
+  remainingSalesDays?: number;
+  carryover?: {
+    days: number;
+    end: string;
+    isIncremental: boolean;
+    name: string;
+    note: string;
+    ratio: number;
+    start: string;
+    target: number;
+  };
   lastRefreshedAt: string;
-  operatorTargets?: Array<{ responsible: string; target: number; targetSales: number }>;
-  phase: { daysToEnd: number; end: string; expectedRate: number; name: string; progress: number; start: string; toRate: number };
-  summary: { actual: number; expectedProgress: number; inventoryAlerts: number; p0: number; p1: number; priceActions: number; progress: number; target: number };
+  operatorTargets?: Array<{
+    responsible: string;
+    target: number;
+    targetSales: number;
+  }>;
+  phase: {
+    daysToEnd: number;
+    end: string;
+    expectedRate: number;
+    name: string;
+    progress: number;
+    start: string;
+    toRate: number;
+  };
+  summary: {
+    actual: number;
+    expectedProgress: number;
+    inventoryAlerts: number;
+    p0: number;
+    p1: number;
+    priceActions: number;
+    progress: number;
+    target: number;
+  };
   actions: BeerDressCalendarAction[];
   thresholds: Record<string, number>;
 }
@@ -2201,6 +2446,10 @@ export interface ShippingSimulationResult {
     seaFreightRate: number;
     seaFreightTargetMaxRate: number;
     seaFreightTargetMinRate: number;
+    shippedByMonth: Array<{
+      month: string;
+      qty: number;
+    }>;
     shippedPrimaryCompletionRate: number;
     shippedQty: number;
     shippedSeaFreightQty: number;

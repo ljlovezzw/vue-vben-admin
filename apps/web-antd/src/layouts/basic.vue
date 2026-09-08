@@ -87,10 +87,20 @@ const showDot = computed(() =>
 const activeInAppCardNotification = computed(
   () => inAppCardNotifications.value[0] ?? null,
 );
+const inAppNotificationCollapsed = ref(false);
 const activeBeerDressCalendarNotification = computed(() => {
   const item = activeInAppCardNotification.value;
   return item?.scene === 'beer_dress_calendar' ? item : null;
 });
+watch(
+  () => activeInAppCardNotification.value?.id,
+  (id, previousId) => {
+    if (id && id !== previousId) {
+      inAppNotificationCollapsed.value = false;
+    }
+  },
+  { immediate: true },
+);
 const notificationHistoryStatusOptions = [
   { label: '全部', value: 'all' },
   { label: '未读', value: 'pending' },
@@ -200,6 +210,7 @@ const handleClick = (item: NotificationItem) => {
       (notice) => notice.id === item.inAppEventId,
     );
     if (target) {
+      inAppNotificationCollapsed.value = false;
       inAppCardNotifications.value = [
         target,
         ...inAppCardNotifications.value.filter(
@@ -213,6 +224,10 @@ const handleClick = (item: NotificationItem) => {
     navigateTo(item.link, item.query, item.state);
   }
 };
+
+function collapseActiveInAppNotification() {
+  inAppNotificationCollapsed.value = true;
+}
 
 function cardTitle(item: InAppCardNotification | null) {
   if (!item) return '卡片通知';
@@ -717,7 +732,9 @@ onBeforeUnmount(() => {
         :footer="null"
         :keyboard="false"
         :mask-closable="false"
-        :open="Boolean(activeInAppCardNotification)"
+        :open="
+          Boolean(activeInAppCardNotification) && !inAppNotificationCollapsed
+        "
         width="780px"
       >
         <div
@@ -740,11 +757,11 @@ onBeforeUnmount(() => {
               </p>
             </div>
             <Tag color="processing">
-{{
-              calendarPhase(activeBeerDressCalendarNotification).name ||
-              '当前阶段'
-            }}
-</Tag>
+              {{
+                calendarPhase(activeBeerDressCalendarNotification).name ||
+                '当前阶段'
+              }}
+            </Tag>
           </div>
 
           <div class="beer-dress-popup-holiday">
@@ -868,10 +885,8 @@ onBeforeUnmount(() => {
             >
               <div class="beer-dress-popup-action-top">
                 <Tag :color="calendarPriorityColor(row.priority)">
-{{
-                  row.priority || '正常'
-                }}
-</Tag>
+                  {{ row.priority || '正常' }}
+                </Tag>
                 <strong>{{ row.spu || '-' }}</strong>
                 <span>{{ row.category || '未分类' }}</span>
                 <span class="beer-dress-popup-action-name">{{
@@ -891,6 +906,12 @@ onBeforeUnmount(() => {
           <Empty v-else description="当前没有待确认事项" />
 
           <div class="beer-dress-popup-footer">
+            <Button
+              title="保留未读状态，稍后可从通知入口打开"
+              @click="collapseActiveInAppNotification"
+            >
+              收起
+            </Button>
             <Button
               v-if="calendarActionUrl(activeBeerDressCalendarNotification)"
               @click="
@@ -923,6 +944,12 @@ onBeforeUnmount(() => {
             {{ block.text }}
           </div>
           <div class="in-app-card-actions">
+            <Button
+              title="保留未读状态，稍后可从通知入口打开"
+              @click="collapseActiveInAppNotification"
+            >
+              收起
+            </Button>
             <Button
               :loading="ackLoadingId === activeInAppCardNotification.id"
               type="primary"
@@ -1344,6 +1371,7 @@ onBeforeUnmount(() => {
 
 .in-app-card-actions {
   display: flex;
+  gap: 10px;
   justify-content: flex-end;
   padding-top: 18px;
 }

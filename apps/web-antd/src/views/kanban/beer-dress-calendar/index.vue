@@ -35,7 +35,12 @@ const pendingRows = computed(() =>
 );
 const visibleRows = computed(() => rows.value.slice(0, 8));
 const operators = computed(() => [
-  ...new Set(rows.value.map((row) => row.responsible).filter(Boolean)),
+  ...new Set(
+    [
+      ...(data.value?.operatorTargets ?? []).map((row) => row.responsible),
+      ...rows.value.map((row) => row.responsible),
+    ].filter(Boolean),
+  ),
 ]);
 const summary = computed(
   () =>
@@ -47,6 +52,30 @@ const summary = computed(
       p1: 0,
       priceActions: 0,
       progress: 0,
+      target: 0,
+    },
+);
+const nextHoliday = computed(
+  () =>
+    data.value?.nextHoliday ?? {
+      daysToEnd: 0,
+      daysToStart: 0,
+      end: '2026-10-11',
+      name: '坎斯塔特民俗节 Cannstatter Volksfest',
+      start: '2026-09-25',
+      status: '距开幕',
+    },
+);
+const carryover = computed(
+  () =>
+    data.value?.carryover ?? {
+      days: 0,
+      end: '2026-10-31',
+      isIncremental: false,
+      name: '不莱梅自由市场 Freimarkt',
+      note: '已包含在清仓回款期，不与慕尼黑重复相加',
+      ratio: 0,
+      start: '2026-10-16',
       target: 0,
     },
 );
@@ -94,6 +123,13 @@ function qty(value: number) {
     maximumFractionDigits: 0,
   });
 }
+function dailyDemand(item: { dailyDemand?: null | number; remaining: number }) {
+  if (item.dailyDemand !== null && item.dailyDemand !== undefined) {
+    return qty(item.dailyDemand);
+  }
+  const days = Number(data.value?.remainingSalesDays || 0);
+  return days > 0 ? qty(item.remaining / days) : '—';
+}
 function money(value: number) {
   return value ? `€${Number(value).toFixed(2)}` : '待录入';
 }
@@ -129,18 +165,43 @@ onMounted(load);
               class="refresh-button"
               :loading="loading"
               @click="load"
-              >
-刷新
-</Button>
+            >
+              刷新
+            </Button>
           </header>
+
+          <section class="top-controls" aria-label="通知筛选">
+            <div class="top-controls-copy">
+              <span class="section-label">VIEW SCOPE</span>
+              <strong>先选负责人，再看优先级</strong>
+            </div>
+            <div class="filters">
+              <Select
+                v-model:value="responsible"
+                allow-clear
+                placeholder="全部负责人"
+                :options="operators.map((x) => ({ label: x, value: x }))"
+                @change="load"
+              />
+              <Select
+                v-model:value="priority"
+                allow-clear
+                placeholder="全部优先级"
+                :options="[
+                  { label: 'P0 紧急', value: 'P0' },
+                  { label: 'P1 关注', value: 'P1' },
+                  { label: '正常', value: '正常' },
+                ]"
+                @change="load"
+              />
+            </div>
+          </section>
 
           <section class="notice-intro">
             <div>
               <Tag color="volcano">
-{{
-                pendingRows.length > 0 ? '待处理' : '已清空'
-              }}
-</Tag>
+                {{ pendingRows.length > 0 ? '待处理' : '已清空' }}
+              </Tag>
               <h2>
                 {{
                   pendingRows.length > 0
@@ -168,20 +229,61 @@ onMounted(load);
 
           <section class="context-grid" aria-label="销售节点与阶段">
             <article class="festival-panel">
-              <div class="context-topline"><Tag color="volcano">P0 主战场</Tag><span>TOP1 · 目标集中</span></div>
+              <div class="context-topline">
+                <Tag color="volcano">P0 主战场</Tag><span>TOP1 · 目标集中</span>
+              </div>
               <h2>{{ data.holiday.name }}</h2>
               <p>{{ data.holiday.start }} — {{ data.holiday.end }}</p>
               <div class="countdown">
-                <strong>{{ data.holiday.daysToStart > 0 ? data.holiday.daysToStart : 0 }}</strong><span>天距开幕</span>
+                <strong>{{
+                  data.holiday.daysToStart > 0 ? data.holiday.daysToStart : 0
+                }}</strong><span>天距开幕</span>
               </div>
-              <div class="context-action">当前动作：{{ rows[0]?.action || '稳价观察' }} · 优先清理 P0 事项</div>
+              <div class="context-action">
+                当前动作：{{ rows[0]?.action || '稳价观察' }} · 优先清理 P0 事项
+              </div>
             </article>
             <article class="phase-panel">
               <span class="phase-kicker">当前销售阶段</span>
               <h2>{{ data.phase.name }} · {{ pct(data.phase.progress) }}</h2>
-              <p>{{ data.phase.start }} — {{ data.phase.end }} · 距阶段结束 {{ data.phase.daysToEnd }} 天</p>
-              <Progress :percent="data.phase.progress * 100" :show-info="false" stroke-color="#356ae6" />
-              <div class="phase-meta"><span>阶段应达 {{ pct(data.phase.expectedRate) }}</span><span>目标终点 {{ pct(data.phase.toRate) }}</span></div>
+              <p>
+                {{ data.phase.start }} — {{ data.phase.end }} · 距阶段结束
+                {{ data.phase.daysToEnd }} 天
+              </p>
+              <Progress
+                :percent="data.phase.progress * 100"
+                :show-info="false"
+                stroke-color="#356ae6"
+              />
+              <div class="phase-meta">
+                <span>阶段应达 {{ pct(data.phase.expectedRate) }}</span><span>目标终点 {{ pct(data.phase.toRate) }}</span>
+              </div>
+            </article>
+          </section>
+
+          <section class="forward-grid" aria-label="后续节日与承接计划">
+            <article class="forward-panel next-holiday-panel">
+              <div class="forward-label">下一个节日</div>
+              <h2>{{ nextHoliday.name }}</h2>
+              <div class="forward-countdown">
+                <strong>{{
+                  nextHoliday.daysToStart > 0 ? nextHoliday.daysToStart : 0
+                }}</strong>
+                <span>天</span>
+              </div>
+              <p>
+                {{ nextHoliday.status }} · {{ nextHoliday.start }} 开幕 ·
+                {{ nextHoliday.end }}
+              </p>
+            </article>
+            <article class="forward-panel carryover-panel">
+              <div class="forward-label">承接量</div>
+              <h2>{{ carryover.name }}</h2>
+              <div class="carryover-value">
+                <strong>{{ qty(carryover.target) }}</strong>
+                <span>件</span>
+              </div>
+              <p>{{ carryover.start }} — {{ carryover.end }} · 非独立增量</p>
             </article>
           </section>
 
@@ -215,15 +317,37 @@ onMounted(load);
           </div>
 
           <section class="rhythm-section" aria-label="类目节奏">
-            <div class="rhythm-heading"><div><span class="section-label">CATEGORY RHYTHM</span><h2>还能卖多少 × 每天要卖多少</h2></div><span>距阶段结束 {{ data.phase.daysToEnd }} 天 · 计划基准</span></div>
-            <div v-if="data.categories.length" class="category-grid">
-              <article v-for="item in data.categories" :key="item.name" class="category-item">
-                <div class="category-title"><strong>{{ item.name }}</strong><span>季节目标 {{ qty(item.target) }}</span></div>
-                <Progress :percent="Math.min(item.progress * 100, 100)" :show-info="false" stroke-color="#356ae6" />
-                <div class="category-stats"><span>计划剩余<strong>{{ qty(item.remaining) }}</strong></span><span>当前进度<strong>{{ pct(item.progress) }}</strong></span><span>日均需求<strong>{{ data.phase.daysToEnd > 0 ? qty(item.remaining / data.phase.daysToEnd) : '—' }}</strong></span></div>
+            <div class="rhythm-heading">
+              <div>
+                <span class="section-label">CATEGORY RHYTHM</span>
+                <h2>还能卖多少 × 每天要卖多少</h2>
+              </div>
+              <span>距销售周期结束 {{ data.remainingSalesDays || 0 }} 天 ·
+                计划基准</span>
+            </div>
+            <div v-if="data.categories.length > 0" class="category-grid">
+              <article
+                v-for="item in data.categories"
+                :key="item.name"
+                class="category-item"
+              >
+                <div class="category-title">
+                  <strong>{{ item.name }}</strong><span>季节目标 {{ qty(item.target) }}</span>
+                </div>
+                <Progress
+                  :percent="Math.min(item.progress * 100, 100)"
+                  :show-info="false"
+                  stroke-color="#356ae6"
+                />
+                <div class="category-stats">
+                  <span>计划剩余<strong>{{ qty(item.remaining) }}</strong></span><span>当前进度<strong>{{ pct(item.progress) }}</strong></span><span>日均需求<strong>{{ dailyDemand(item) }}</strong></span>
+                </div>
               </article>
             </div>
-            <p class="rhythm-note">目标来源为运营啤酒服 SPU 月目标汇总；不莱梅与主节日目标不重复累计。</p>
+            <p class="rhythm-note">
+              目标来源为运营啤酒服 SPU 月目标汇总；日均需求 = 计划剩余 ÷
+              剩余销售天数（含当天）；不莱梅与主节日目标不重复累计。
+            </p>
           </section>
 
           <section class="queue-section">
@@ -243,9 +367,7 @@ onMounted(load);
               >
                 <div class="queue-priority">
                   <Tag :color="priorityColor(row.priority)">
-{{
-                    row.priority
-                  }}
+                    {{ row.priority }}
 </Tag><span>{{ row.responsible }}</span>
                 </div>
                 <div class="queue-main">
@@ -271,38 +393,18 @@ onMounted(load);
                   :disabled="row.status === '已确认'"
                   :loading="confirmingKey === row.actionKey"
                   @click="confirmAction(row)"
-                  >
-{{ statusLabel(row) }}
-</Button>
+                >
+                  {{ statusLabel(row) }}
+                </Button>
               </article>
             </div>
             <Empty v-else description="当前没有可执行事项" />
           </section>
 
           <footer class="notice-footer">
-            <div class="filters">
-              <Select
-                v-model:value="responsible"
-                allow-clear
-                placeholder="全部负责人"
-                :options="operators.map((x) => ({ label: x, value: x }))"
-                @change="load"
-              />
-              <Select
-                v-model:value="priority"
-                allow-clear
-                placeholder="全部优先级"
-                :options="[
-                  { label: 'P0 紧急', value: 'P0' },
-                  { label: 'P1 关注', value: 'P1' },
-                  { label: '正常', value: '正常' },
-                ]"
-                @change="load"
-              />
-            </div>
             <Button type="link" @click="detailVisible = true">
-查看完整通知（{{ rows.length }} 项）
-</Button>
+              查看完整通知（{{ rows.length }} 项）
+            </Button>
           </footer>
         </main>
 
@@ -327,18 +429,16 @@ onMounted(load);
             >
               <div class="modal-row-head">
                 <Tag :color="priorityColor(row.priority)">
-{{
-                  row.priority
-                }}
+                  {{ row.priority }}
 </Tag><strong>{{ row.spu }}</strong><span>{{ row.responsible }} · {{ row.category }}</span><Button
                   size="small"
                   :type="row.status === '已确认' ? 'default' : 'primary'"
                   :disabled="row.status === '已确认'"
                   :loading="confirmingKey === row.actionKey"
                   @click="confirmAction(row)"
-                  >
-{{ statusLabel(row) }}
-</Button>
+                >
+                  {{ statusLabel(row) }}
+                </Button>
               </div>
               <div class="modal-row-facts">
                 {{ row.action }} · 现价 {{ money(row.currentPrice) }} →
@@ -434,24 +534,131 @@ h2 {
   font-size: 12px;
   color: #b8cdc3;
 }
-.context-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 12px; padding: 0 30px 12px; }
-.festival-panel, .phase-panel { min-height: 166px; padding: 18px 20px; border: 1px solid #e6dfd2; border-radius: 13px; }
-.festival-panel { background: #fff3dc; border-color: #e8c476; }
-.phase-panel { background: #fffdf8; }
-.context-topline, .phase-meta, .rhythm-heading, .category-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.context-topline > span { color: #8f6a2d; font-size: 11px; }
-.festival-panel h2, .phase-panel h2 { margin-top: 11px; font-size: 20px; }
-.festival-panel p, .phase-panel p { margin-top: 5px; color: #6f7f7a; font-size: 12px; }
-.countdown { display: flex; align-items: baseline; gap: 6px; margin-top: 14px; color: #9a510d; }
-.countdown strong { font-size: 40px; line-height: 1; }
-.countdown span { font-size: 12px; }
-.context-action { padding-top: 10px; margin-top: 12px; color: #705d3d; border-top: 1px solid #ead7ab; font-size: 12px; }
-.phase-kicker { display: block; margin-bottom: 2px; color: #ad5d37; font-size: 11px; font-weight: 700; letter-spacing: .1em; }
-.phase-panel :deep(.ant-progress) { margin-top: 17px; }
-.phase-meta { margin-top: 8px; color: #6f7f7a; font-size: 11px; }
+
+.context-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: 12px;
+  padding: 0 30px 12px;
+}
+
+.festival-panel,
+.phase-panel {
+  min-height: 166px;
+  padding: 18px 20px;
+  border: 1px solid #e6dfd2;
+  border-radius: 13px;
+}
+
+.festival-panel {
+  background: #fff3dc;
+  border-color: #e8c476;
+}
+
+.phase-panel {
+  background: #fffdf8;
+}
+
+.context-topline,
+.phase-meta,
+.rhythm-heading,
+.category-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.context-topline > span {
+  font-size: 11px;
+  color: #8f6a2d;
+}
+
+.festival-panel h2,
+.phase-panel h2 {
+  margin-top: 11px;
+  font-size: 20px;
+}
+
+.festival-panel p,
+.phase-panel p {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #6f7f7a;
+}
+
+.countdown {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 14px;
+  color: #9a510d;
+}
+
+.countdown strong {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.countdown span {
+  font-size: 12px;
+}
+
+.context-action {
+  padding-top: 10px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #705d3d;
+  border-top: 1px solid #ead7ab;
+}
+
+.phase-kicker {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ad5d37;
+  letter-spacing: 0.1em;
+}
+
+.phase-panel :deep(.ant-progress) {
+  margin-top: 17px;
+}
+
+.phase-meta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #6f7f7a;
+}
 
 .refresh-button {
   color: #eaf1e9;
+}
+
+.top-controls {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 30px;
+  background: #f7f4ec;
+  border-bottom: 1px solid #e9e2d7;
+}
+
+.top-controls-copy {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.top-controls-copy .section-label {
+  margin: 0;
+  color: #a65d43;
+}
+
+.top-controls-copy strong {
+  font-size: 12px;
+  color: #405c55;
 }
 
 .notice-intro {
@@ -491,6 +698,75 @@ h2 {
   display: block;
   margin: 4px 0;
   font-size: 21px;
+}
+
+.forward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0 30px 12px;
+}
+
+.forward-panel {
+  min-height: 132px;
+  padding: 17px 20px;
+  background: #f7faf7;
+  border: 1px solid #dfe5e1;
+  border-radius: 13px;
+}
+
+.next-holiday-panel {
+  background: #f1f5fb;
+  border-color: #d8e1f0;
+}
+
+.carryover-panel {
+  background: #f4f7ed;
+  border-color: #dce5c9;
+}
+
+.forward-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #718079;
+  letter-spacing: 0.08em;
+}
+
+.forward-panel h2 {
+  margin-top: 8px;
+  font-size: 17px;
+  color: #244a46;
+}
+
+.forward-countdown,
+.carryover-value {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 8px;
+}
+
+.forward-countdown strong,
+.carryover-value strong {
+  font-size: 30px;
+  line-height: 1;
+  color: #315d8c;
+}
+
+.carryover-value strong {
+  color: #48652f;
+}
+
+.forward-countdown span,
+.carryover-value span {
+  font-size: 12px;
+  color: #6f7f7a;
+}
+
+.forward-panel p {
+  margin-top: 7px;
+  font-size: 11px;
+  color: #718079;
 }
 
 .metrics-strip {
@@ -534,17 +810,68 @@ h2 {
 .pace-line {
   padding: 20px 30px 8px;
 }
-.rhythm-section { padding: 15px 30px 17px; border-top: 1px solid #eee9df; }
-.rhythm-heading > span { color: #8b9690; font-size: 11px; }
-.category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.category-item { padding: 13px 14px; background: #f1f4f8; border-radius: 10px; }
-.category-title strong { color: #1d3f4e; font-size: 14px; }
-.category-title span { color: #718079; font-size: 11px; }
-.category-item :deep(.ant-progress) { margin-top: 9px; }
-.category-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 9px; }
-.category-stats span { color: #77837d; font-size: 10px; }
-.category-stats strong { display: block; margin-top: 3px; color: #1d3f4e; font-size: 14px; }
-.rhythm-note { margin-top: 10px; color: #816a43; font-size: 11px; }
+
+.rhythm-section {
+  padding: 15px 30px 17px;
+  border-top: 1px solid #eee9df;
+}
+
+.rhythm-heading > span {
+  font-size: 11px;
+  color: #8b9690;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.category-item {
+  padding: 13px 14px;
+  background: #f1f4f8;
+  border-radius: 10px;
+}
+
+.category-title strong {
+  font-size: 14px;
+  color: #1d3f4e;
+}
+
+.category-title span {
+  font-size: 11px;
+  color: #718079;
+}
+
+.category-item :deep(.ant-progress) {
+  margin-top: 9px;
+}
+
+.category-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.category-stats span {
+  font-size: 10px;
+  color: #77837d;
+}
+
+.category-stats strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  color: #1d3f4e;
+}
+
+.rhythm-note {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #816a43;
+}
 
 .pace-label {
   display: flex;
@@ -732,11 +1059,33 @@ h2 {
     padding-left: 18px;
   }
 
+  .top-controls {
+    flex-direction: column;
+    align-items: stretch;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .top-controls-copy {
+    justify-content: space-between;
+  }
+
   .notice-intro {
     flex-direction: column;
     align-items: flex-start;
   }
-  .context-grid { grid-template-columns: 1fr; padding-left: 18px; padding-right: 18px; }
+
+  .context-grid {
+    grid-template-columns: 1fr;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .forward-grid {
+    grid-template-columns: 1fr;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
 
   .metrics-strip {
     grid-template-columns: repeat(2, 1fr);
@@ -752,8 +1101,15 @@ h2 {
     padding-right: 18px;
     padding-left: 18px;
   }
-  .rhythm-section { padding-left: 18px; padding-right: 18px; }
-  .category-grid { grid-template-columns: 1fr; }
+
+  .rhythm-section {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
 
   .queue-row {
     grid-template-columns: 1fr auto;

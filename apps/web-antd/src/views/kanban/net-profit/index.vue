@@ -2,6 +2,7 @@
 import type { TableColumnsType } from 'ant-design-vue';
 
 import type {
+  NetProfitDashboardData,
   NetProfitDetails,
   NetProfitGroupRow,
   NetProfitOverview,
@@ -17,6 +18,7 @@ import {
   Drawer,
   Empty,
   message,
+  Popover,
   Segmented,
   Select,
   Spin,
@@ -26,10 +28,15 @@ import {
 
 import {
   fetchNetProfitBreakEven,
+  fetchNetProfitDashboard,
   fetchNetProfitDetails,
+  fetchNetProfitGroups,
   fetchNetProfitOverview,
   fetchNetProfitPivot,
 } from '#/api/kanban';
+
+import FacetSelect from './components/FacetSelect.vue';
+import StrategicDashboard from './components/StrategicDashboard.vue';
 
 interface ProfitQuery {
   brands: string[];
@@ -51,6 +58,7 @@ interface ProfitQuery {
 
 interface ProfitTab {
   breakEven: NetProfitOverview['breakEven'];
+  dashboard: NetProfitDashboardData | null;
   dirty: boolean;
   key: string;
   label: string;
@@ -58,9 +66,28 @@ interface ProfitTab {
   panel: ProfitPanel;
   pivot: NetProfitOverview['pivot'];
   query: ProfitQuery;
+  rankingMode: RankingMode;
+  rankingTree: ProfitTreeNode[];
+  expandedRowKeys: string[];
 }
 
-type ProfitPanel = 'breakEven' | 'pivot' | 'ranking';
+interface ProfitTreePathItem {
+  dimension: string;
+  dimensionLabel: string;
+  value: string;
+}
+
+interface ProfitTreeNode extends NetProfitGroupRow {
+  children?: ProfitTreeNode[];
+  depth: number;
+  displayRank?: number;
+  expandedDimension?: string;
+  key: string;
+  lineage: ProfitTreePathItem[];
+  parentNetProfit?: number;
+}
+
+type ProfitPanel = 'breakEven' | 'dashboard' | 'pivot' | 'ranking';
 type RankingMode = 'loss' | 'profit' | 'roi';
 type ProfitFacetKey =
   | 'brands'
@@ -113,12 +140,18 @@ function cloneQuery(source: ProfitQuery): ProfitQuery {
 const loading = ref(false);
 const breakEvenLoading = ref(false);
 const pivotLoading = ref(false);
+const dashboardLoading = ref(false);
 const overview = ref<NetProfitOverview | null>(null);
+const dashboard = ref<NetProfitDashboardData | null>(null);
 const detailLoading = ref(false);
 const detailOpen = ref(false);
 const detailResult = ref<NetProfitDetails | null>(null);
 const detailTitle = ref('纯利明细');
 const rankingMode = ref<RankingMode>('profit');
+const rankingTree = ref<ProfitTreeNode[]>([]);
+const expandedRowKeys = ref<string[]>([]);
+const treeLoadingKeys = ref<Set<string>>(new Set());
+const treePickerNodeKey = ref('');
 function emptyPivot(): NetProfitOverview['pivot'] {
   return {
     columnDimension: 'category2',
@@ -146,6 +179,7 @@ const panel = ref<ProfitPanel>('ranking');
 const tabs = ref<ProfitTab[]>([
   {
     breakEven: emptyBreakEven(),
+    dashboard: null,
     dirty: false,
     key: 'profit-1',
     label: '分析视图 1',
@@ -153,12 +187,19 @@ const tabs = ref<ProfitTab[]>([
     panel: 'ranking',
     pivot: emptyPivot(),
     query: createQuery(),
+    rankingMode: 'profit',
+    rankingTree: [],
+    expandedRowKeys: [],
   },
 ]);
 const query = reactive<ProfitQuery>(createQuery());
 let overviewRequestSequence = 0;
 let pivotRequestSequence = 0;
 let breakEvenRequestSequence = 0;
+let dashboardRequestSequence = 0;
+let treeGeneration = 0;
+let treeRequestSequence = 0;
+const treeRequestIds = new Map<string, number>();
 let filterLoadTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingFacetKey: null | ProfitFacetKey = null;
 
@@ -201,11 +242,13 @@ const fallbackDimensions = [
   { key: 'category3', label: '产品线' },
   { key: 'account', label: '账号' },
   { key: 'parentAsin', label: '父ASIN' },
+  { key: 'spu', label: 'SPU' },
+  { key: 'shop', label: '店铺' },
 ];
 
-const groupColumns: TableColumnsType<NetProfitGroupRow> = [
-  { title: '排名', key: 'rank', width: 64, align: 'center' },
-  { title: '维度', dataIndex: 'name', key: 'name', width: 220 },
+const groupColumns: TableColumnsType<ProfitTreeNode> = [
+  { title: '排名', key: 'rank', width: 72, align: 'center' },
+  { title: '维度', dataIndex: 'name', key: 'name', width: 360 },
   {
     title: '纯利',
     dataIndex: 'netProfit',
@@ -221,7 +264,7 @@ const groupColumns: TableColumnsType<NetProfitGroupRow> = [
     width: 170,
   },
   { title: 'ROI', dataIndex: 'roi', key: 'roi', align: 'right', width: 110 },
-  { title: '贡献度', key: 'contribution', align: 'right', width: 120 },
+  { title: '层级贡献', key: 'contribution', align: 'right', width: 120 },
   { title: '规模', key: 'scale', width: 180 },
 ];
 
@@ -327,20 +370,62 @@ const roiPlainText = computed(() => {
   const verb = roi >= 0 ? '净赚' : '亏损';
   return `每投入 ¥1.00，${verb} ¥${Math.abs(roi).toFixed(2)}`;
 });
-const rankingRows = computed(() => {
-  const rows = [...(overview.value?.groups ?? [])];
+function treeNodeKey(lineage: ProfitTreePathItem[]) {
+  return lineage
+    .map(
+      (item) =>
+        `${encodeURIComponent(item.dimension)}=${encodeURIComponent(item.value)}`,
+    )
+    .join('>');
+}
+
+function createTreeNodes(
+  groups: NetProfitGroupRow[],
+  parentLineage: ProfitTreePathItem[] = [],
+  parentNetProfit?: number,
+): ProfitTreeNode[] {
+  return groups.map((group) => {
+    const lineage = [
+      ...parentLineage,
+      {
+        dimension: group.dimension,
+        dimensionLabel: group.dimensionLabel,
+        value: group.name,
+      },
+    ];
+    return {
+      ...group,
+      depth: parentLineage.length,
+      key: treeNodeKey(lineage),
+      lineage,
+      parentNetProfit,
+    };
+  });
+}
+
+function sortTreeRows(rows: ProfitTreeNode[]): ProfitTreeNode[] {
+  let visibleRows = [...rows];
   if (rankingMode.value === 'roi') {
-    return rows
+    visibleRows = visibleRows
       .filter((item) => item.investment > 0)
       .toSorted((left, right) => right.roi - left.roi);
-  }
-  if (rankingMode.value === 'loss') {
-    return rows
+  } else if (rankingMode.value === 'loss') {
+    visibleRows = visibleRows
       .filter((item) => item.netProfit < 0)
       .toSorted((left, right) => left.netProfit - right.netProfit);
+  } else {
+    visibleRows = visibleRows.toSorted(
+      (left, right) => right.netProfit - left.netProfit,
+    );
   }
-  return rows.toSorted((left, right) => right.netProfit - left.netProfit);
-});
+  return visibleRows.map((row, index) => ({
+    ...row,
+    children: row.children ? sortTreeRows(row.children) : undefined,
+    displayRank: index + 1,
+  }));
+}
+
+const rankingRows = computed(() => sortTreeRows(rankingTree.value));
 const expenseStructure = computed(() => {
   const total = Number(summary.value?.investment || 0);
   return [
@@ -356,6 +441,7 @@ const panelOptions = [
   { label: '纯利与 ROI', value: 'ranking' },
   { label: '二维数据透视', value: 'pivot' },
   { label: '全周期盈亏平衡', value: 'breakEven' },
+  { label: '战略仪表盘', value: 'dashboard' },
 ];
 const rankingOptions = [
   { label: '纯利贡献', value: 'profit' },
@@ -386,10 +472,6 @@ const detailMoneyKeys = new Set([
   'purchaseCost',
   'standardFee',
 ]);
-
-function optionList(values: string[]) {
-  return values.map((value) => ({ label: value, value }));
-}
 
 function removeInvalidFacetSelections(
   available: NetProfitOverview['filters'],
@@ -430,7 +512,7 @@ function formatPercent(value: null | number | undefined) {
 }
 
 function formatRoi(value: null | number | undefined) {
-  return `${Number(value || 0).toFixed(2)}x`;
+  return Number(value || 0).toFixed(2);
 }
 
 function moneyClass(value: number) {
@@ -452,16 +534,26 @@ function saveActiveTab() {
   current.panel = panel.value;
   current.pivot = pivot.value;
   current.breakEven = breakEven.value;
+  current.dashboard = dashboard.value;
+  current.rankingMode = rankingMode.value;
+  current.rankingTree = rankingTree.value;
+  current.expandedRowKeys = [...expandedRowKeys.value];
 }
 
 function invalidatePendingLoads() {
   overviewRequestSequence += 1;
   pivotRequestSequence += 1;
   breakEvenRequestSequence += 1;
+  dashboardRequestSequence += 1;
+  treeGeneration += 1;
+  treeRequestIds.clear();
+  treeLoadingKeys.value = new Set();
+  treePickerNodeKey.value = '';
   clearTimeout(filterLoadTimer);
   loading.value = false;
   pivotLoading.value = false;
   breakEvenLoading.value = false;
+  dashboardLoading.value = false;
 }
 
 function applyTab(tab: ProfitTab) {
@@ -470,6 +562,10 @@ function applyTab(tab: ProfitTab) {
   panel.value = tab.panel;
   pivot.value = tab.pivot;
   breakEven.value = tab.breakEven;
+  dashboard.value = tab.dashboard;
+  rankingMode.value = tab.rankingMode;
+  rankingTree.value = tab.rankingTree;
+  expandedRowKeys.value = [...tab.expandedRowKeys];
 }
 
 function switchTab(key: string) {
@@ -489,6 +585,8 @@ function switchTab(key: string) {
     target.breakEven.rows.length === 0
   ) {
     void loadBreakEven();
+  } else if (target.panel === 'dashboard' && !target.dashboard) {
+    void loadDashboard();
   }
 }
 
@@ -499,6 +597,7 @@ function addTab() {
   const key = `profit-${Date.now()}`;
   const tab = {
     breakEven: emptyBreakEven(),
+    dashboard: null,
     dirty: true,
     key,
     label: `分析视图 ${tabs.value.length + 1}`,
@@ -506,6 +605,9 @@ function addTab() {
     panel: 'ranking' as ProfitPanel,
     pivot: emptyPivot(),
     query: cloneQuery(query),
+    rankingMode: rankingMode.value,
+    rankingTree: [],
+    expandedRowKeys: [],
   };
   tabs.value.push(tab);
   activeTabKey.value = key;
@@ -554,6 +656,8 @@ async function loadOverview() {
     }
     pendingFacetKey = null;
     overview.value = data;
+    rankingTree.value = createTreeNodes(data.groups);
+    expandedRowKeys.value = [];
     query.periodFrom = data.periodFrom || data.period || '';
     query.periodTo = data.periodTo || data.period || '';
     const current = activeTab.value;
@@ -563,11 +667,17 @@ async function loadOverview() {
       current.overview = data;
       current.pivot = emptyPivot();
       current.breakEven = emptyBreakEven();
+      current.dashboard = null;
+      current.rankingTree = rankingTree.value;
+      current.expandedRowKeys = [];
+      current.rankingMode = rankingMode.value;
     }
     pivot.value = emptyPivot();
     breakEven.value = emptyBreakEven();
+    dashboard.value = null;
     if (panel.value === 'pivot') await loadPivot();
     if (panel.value === 'breakEven') await loadBreakEven();
+    if (panel.value === 'dashboard') await loadDashboard();
   } catch (error) {
     message.error('纯利数据加载失败，请稍后重试');
     console.error('load net profit overview failed', error);
@@ -604,11 +714,31 @@ async function loadPivot() {
   }
 }
 
+async function loadDashboard() {
+  const requestId = ++dashboardRequestSequence;
+  dashboardLoading.value = true;
+  try {
+    const data = await fetchNetProfitDashboard(overviewParams());
+    if (requestId !== dashboardRequestSequence) return;
+    dashboard.value = data;
+    const current = activeTab.value;
+    if (current) current.dashboard = dashboard.value;
+  } catch (error) {
+    if (requestId !== dashboardRequestSequence) return;
+    dashboard.value = null;
+    message.error('经营驾驶舱加载失败，请稍后重试');
+    console.error('load net profit dashboard failed', error);
+  } finally {
+    if (requestId === dashboardRequestSequence) dashboardLoading.value = false;
+  }
+}
+
 function scheduleOverviewLoad(changedFacet?: null | ProfitFacetKey) {
   if (changedFacet !== undefined) pendingFacetKey = changedFacet;
   const current = activeTab.value;
   if (current) {
     current.breakEven = emptyBreakEven();
+    current.dashboard = null;
     current.dirty = true;
     current.pivot = emptyPivot();
   }
@@ -616,6 +746,9 @@ function scheduleOverviewLoad(changedFacet?: null | ProfitFacetKey) {
   invalidatePendingLoads();
   pivot.value = emptyPivot();
   breakEven.value = emptyBreakEven();
+  dashboard.value = null;
+  rankingTree.value = [];
+  expandedRowKeys.value = [];
   loading.value = true;
   filterLoadTimer = setTimeout(() => void loadOverview(), 450);
 }
@@ -624,6 +757,8 @@ function resetFilters() {
   pendingFacetKey = null;
   invalidatePendingLoads();
   Object.assign(query, createQuery());
+  rankingTree.value = [];
+  expandedRowKeys.value = [];
   const current = activeTab.value;
   if (current) current.dirty = true;
   void loadOverview();
@@ -636,34 +771,159 @@ function selectPanel(value: ProfitPanel) {
   if (value === 'pivot') void loadPivot();
   if (value === 'breakEven' && breakEven.value.rows.length === 0)
     void loadBreakEven();
+  if (value === 'dashboard' && !dashboard.value) void loadDashboard();
 }
 
 function handlePanelChange(value: unknown) {
   const next = String(value || '') as ProfitPanel;
-  if (['breakEven', 'pivot', 'ranking'].includes(next)) selectPanel(next);
+  if (['breakEven', 'dashboard', 'pivot', 'ranking'].includes(next))
+    selectPanel(next);
 }
 
-function groupContribution(value: number) {
-  const total = summary.value?.selectedNetProfit ?? 0;
-  return total ? value / total : 0;
+function findTreeNode(
+  rows: ProfitTreeNode[],
+  key: string,
+): ProfitTreeNode | undefined {
+  for (const row of rows) {
+    if (row.key === key) return row;
+    const child = row.children ? findTreeNode(row.children, key) : undefined;
+    if (child) return child;
+  }
+  return undefined;
+}
+
+function expansionOptions(record: ProfitTreeNode | Record<string, any>) {
+  const treeRecord = record as ProfitTreeNode;
+  const usedDimensions = new Set(
+    treeRecord.lineage.map((item) => item.dimension),
+  );
+  return dimensions.value.filter((item) => !usedDimensions.has(item.key));
+}
+
+function handleTreePickerOpen(
+  record: ProfitTreeNode | Record<string, any>,
+  open: boolean,
+) {
+  const treeRecord = record as ProfitTreeNode;
+  treePickerNodeKey.value = open ? treeRecord.key : '';
+}
+
+function selectExpansionDimension(
+  record: ProfitTreeNode | Record<string, any>,
+  dimension: string,
+) {
+  const treeRecord = record as ProfitTreeNode;
+  treePickerNodeKey.value = '';
+  void expandTreeNode(treeRecord, dimension);
+}
+
+function setTreeNodeLoading(key: string, loadingState: boolean) {
+  const next = new Set(treeLoadingKeys.value);
+  if (loadingState) next.add(key);
+  else next.delete(key);
+  treeLoadingKeys.value = next;
+}
+
+async function expandTreeNode(record: ProfitTreeNode, nextDimension: string) {
+  const sourceNode = findTreeNode(rankingTree.value, record.key);
+  if (!sourceNode) return;
+  const requestId = ++treeRequestSequence;
+  const generation = treeGeneration;
+  treeRequestIds.set(sourceNode.key, requestId);
+  setTreeNodeLoading(sourceNode.key, true);
+  try {
+    const data = await fetchNetProfitGroups({
+      ...overviewParams(),
+      dimension: nextDimension,
+      pathDimensions: sourceNode.lineage.map((item) => item.dimension),
+      pathValues: sourceNode.lineage.map((item) => item.value),
+    });
+    if (
+      generation !== treeGeneration ||
+      treeRequestIds.get(sourceNode.key) !== requestId
+    ) {
+      return;
+    }
+    const currentNode = findTreeNode(rankingTree.value, sourceNode.key);
+    if (!currentNode) return;
+    currentNode.children = createTreeNodes(
+      data.groups,
+      currentNode.lineage,
+      currentNode.netProfit,
+    );
+    currentNode.expandedDimension = data.dimension;
+    if (currentNode.children.length > 0) {
+      expandedRowKeys.value = [
+        ...new Set([...expandedRowKeys.value, currentNode.key]),
+      ];
+    } else {
+      currentNode.children = undefined;
+      expandedRowKeys.value = expandedRowKeys.value.filter(
+        (key) => key !== currentNode.key,
+      );
+      message.info(`“${currentNode.name}”在该维度下没有可展示数据`);
+    }
+    saveActiveTab();
+  } catch (error) {
+    if (generation !== treeGeneration) return;
+    const status = Number((error as any)?.response?.status || 0);
+    message.error(
+      status === 404
+        ? '树状分组接口尚未加载，请重启当前后端服务后重试'
+        : '下级纯利数据加载失败，请稍后重试',
+    );
+    console.error('load recursive net profit groups failed', error);
+  } finally {
+    if (treeRequestIds.get(sourceNode.key) === requestId) {
+      treeRequestIds.delete(sourceNode.key);
+      setTreeNodeLoading(sourceNode.key, false);
+    }
+  }
+}
+
+function handleExpandedRowsChange(keys: Array<number | string>) {
+  expandedRowKeys.value = keys.map(String);
+  const current = activeTab.value;
+  if (current) current.expandedRowKeys = [...expandedRowKeys.value];
+}
+
+function groupContribution(record: ProfitTreeNode | Record<string, any>) {
+  const treeRecord = record as ProfitTreeNode;
+  const total =
+    treeRecord.parentNetProfit ?? summary.value?.selectedNetProfit ?? 0;
+  return total ? treeRecord.netProfit / total : 0;
 }
 
 async function openGroupDetails(
   record: NetProfitGroupRow | Record<string, any>,
 ) {
-  const group = record as NetProfitGroupRow;
-  detailTitle.value = `${group.dimensionLabel || '维度'}：${group.name}`;
+  const group = record as ProfitTreeNode;
+  const lineage = group.lineage ?? [];
+  detailTitle.value =
+    lineage.length > 0
+      ? `${lineage.map((item) => item.value).join(' › ')} · MSKU 明细`
+      : `${group.dimensionLabel || '维度'}：${group.name}`;
   detailOpen.value = true;
   detailLoading.value = true;
   detailResult.value = null;
   try {
-    detailResult.value = await fetchNetProfitDetails({
-      ...overviewParams(),
-      dimension: group.dimension,
-      page: 1,
-      pageSize: 200,
-      value: group.name,
-    });
+    detailResult.value = await fetchNetProfitDetails(
+      lineage.length > 0
+        ? {
+            ...overviewParams(),
+            page: 1,
+            pageSize: 200,
+            pathDimensions: lineage.map((item) => item.dimension),
+            pathValues: lineage.map((item) => item.value),
+          }
+        : {
+            ...overviewParams(),
+            dimension: group.dimension,
+            page: 1,
+            pageSize: 200,
+            value: group.name,
+          },
+    );
   } catch (error) {
     message.error('纯利明细加载失败，请稍后重试');
     console.error('load net profit group details failed', error);
@@ -704,7 +964,10 @@ function breakEvenRows() {
 }
 
 onMounted(loadOverview);
-onBeforeUnmount(() => clearTimeout(filterLoadTimer));
+onBeforeUnmount(() => {
+  clearTimeout(filterLoadTimer);
+  invalidatePendingLoads();
+});
 </script>
 
 <template>
@@ -780,40 +1043,32 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
       <div class="filter-group organization-filter-group">
         <span class="filter-group-label">组织范围</span>
         <div class="filter-group-controls">
-          <Select
-            v-model:value="query.countries"
+          <FacetSelect
+            v-model="query.countries"
             class="filter-control wide"
-            mode="multiple"
             placeholder="国家"
-            :max-tag-count="1"
-            :options="optionList(filters.countries)"
+            :options="filters.countries"
             @change="scheduleOverviewLoad('countries')"
           />
-          <Select
-            v-model:value="query.brands"
+          <FacetSelect
+            v-model="query.brands"
             class="filter-control wide"
-            mode="multiple"
             placeholder="品牌"
-            :max-tag-count="1"
-            :options="optionList(filters.brands)"
+            :options="filters.brands"
             @change="scheduleOverviewLoad('brands')"
           />
-          <Select
-            v-model:value="query.departments"
+          <FacetSelect
+            v-model="query.departments"
             class="filter-control wide"
-            mode="multiple"
             placeholder="部门"
-            :max-tag-count="1"
-            :options="optionList(filters.departments)"
+            :options="filters.departments"
             @change="scheduleOverviewLoad('departments')"
           />
-          <Select
-            v-model:value="query.operators"
+          <FacetSelect
+            v-model="query.operators"
             class="filter-control wide"
-            mode="multiple"
             placeholder="运营"
-            :max-tag-count="1"
-            :options="optionList(filters.operators)"
+            :options="filters.operators"
             @change="scheduleOverviewLoad('operators')"
           />
         </div>
@@ -821,66 +1076,52 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
       <div class="filter-group product-filter-group">
         <span class="filter-group-label">商品维度</span>
         <div class="filter-group-controls">
-          <Select
-            v-model:value="query.suppliers"
+          <FacetSelect
+            v-model="query.suppliers"
             class="filter-control wide"
-            mode="multiple"
             placeholder="供应商"
-            :max-tag-count="1"
-            :options="optionList(filters.suppliers)"
+            :options="filters.suppliers"
             @change="scheduleOverviewLoad('suppliers')"
           />
-          <Select
-            v-model:value="query.developers"
+          <FacetSelect
+            v-model="query.developers"
             class="filter-control wide"
-            mode="multiple"
             placeholder="开发负责人"
-            :max-tag-count="1"
-            :options="optionList(filters.developers)"
+            :options="filters.developers"
             @change="scheduleOverviewLoad('developers')"
           />
-          <Select
-            v-model:value="query.category1"
+          <FacetSelect
+            v-model="query.category1"
             class="filter-control wide"
-            mode="multiple"
             placeholder="一级分类"
-            :max-tag-count="1"
-            :options="optionList(filters.category1)"
+            :options="filters.category1"
             @change="scheduleOverviewLoad('category1')"
           />
-          <Select
-            v-model:value="query.category2"
+          <FacetSelect
+            v-model="query.category2"
             class="filter-control wide"
-            mode="multiple"
             placeholder="二级分类"
-            :max-tag-count="1"
-            :options="optionList(filters.category2)"
+            :options="filters.category2"
             @change="scheduleOverviewLoad('category2')"
           />
-          <Select
-            v-model:value="query.category3"
+          <FacetSelect
+            v-model="query.category3"
             class="filter-control wide"
-            mode="multiple"
             placeholder="产品线"
-            :max-tag-count="1"
-            :options="optionList(filters.category3)"
+            :options="filters.category3"
             @change="scheduleOverviewLoad('category3')"
           />
-          <Select
-            v-model:value="query.productTypes"
+          <FacetSelect
+            v-model="query.productTypes"
             class="filter-control"
-            mode="multiple"
             placeholder="新老品"
-            :max-tag-count="1"
-            :options="optionList(filters.productTypes)"
+            :options="filters.productTypes"
             @change="scheduleOverviewLoad('productTypes')"
           />
         </div>
       </div>
       <div class="filter-actions">
-        <Button type="primary" :loading="loading" @click="loadOverview">
-          应用筛选
-        </Button>
+        <span>筛选自动生效</span>
         <Button @click="resetFilters">重置</Button>
       </div>
     </div>
@@ -1057,7 +1298,8 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
                   dimensions.find((item) => item.key === query.dimension)
                     ?.label || '维度'
                 }}
-                聚合，点击名称查看对应 MSKU 级利润和费用明细。
+                聚合。点击名称选择下一层维度；每一级都可继续展开，MSKU
+                明细入口独立保留。
               </p>
             </div>
             <Segmented v-model:value="rankingMode" :options="rankingOptions" />
@@ -1065,22 +1307,80 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
           <Table
             :columns="groupColumns"
             :data-source="rankingRows"
+            :expanded-row-keys="expandedRowKeys"
+            :indent-size="24"
             :pagination="false"
-            row-key="name"
+            row-key="key"
             size="middle"
+            @expanded-rows-change="handleExpandedRowsChange"
           >
-            <template #bodyCell="{ column, record, text, index }">
-              <span v-if="column.key === 'rank'" class="rank-badge">{{
-                index + 1
-              }}</span>
-              <button
-                v-else-if="column.key === 'name'"
-                class="group-name"
-                type="button"
-                @click="openGroupDetails(record)"
-              >
-                {{ text }} <ChevronRight :size="14" />
-              </button>
+            <template #bodyCell="{ column, record, text }">
+              <template v-if="column.key === 'rank'">
+                <span v-if="record.depth === 0" class="rank-badge">{{
+                  record.displayRank
+                }}</span>
+                <span v-else class="tree-level">L{{ record.depth + 1 }}</span>
+              </template>
+              <div v-else-if="column.key === 'name'" class="tree-name-cell">
+                <Popover
+                  :open="treePickerNodeKey === record.key"
+                  :trigger="['click']"
+                  placement="bottomLeft"
+                  @open-change="
+                    (open) => handleTreePickerOpen(record, Boolean(open))
+                  "
+                >
+                  <template #content>
+                    <div class="dimension-picker">
+                      <div class="dimension-picker-head">
+                        <strong>选择下一层维度</strong>
+                        <span>{{ record.name }}</span>
+                      </div>
+                      <div
+                        v-if="expansionOptions(record).length > 0"
+                        class="dimension-picker-options"
+                      >
+                        <button
+                          v-for="item in expansionOptions(record)"
+                          :key="item.key"
+                          type="button"
+                          @click="selectExpansionDimension(record, item.key)"
+                        >
+                          <span>{{ item.label }}</span>
+                          <small>查看下级贡献</small>
+                        </button>
+                      </div>
+                      <Empty
+                        v-else
+                        :image-style="{ height: '40px' }"
+                        description="已使用全部可展开维度"
+                      />
+                    </div>
+                  </template>
+                  <button class="group-name" type="button">
+                    <Spin v-if="treeLoadingKeys.has(record.key)" size="small" />
+                    <span>{{ text }}</span>
+                    <ChevronRight :size="14" />
+                  </button>
+                </Popover>
+                <span class="dimension-chip">{{ record.dimensionLabel }}</span>
+                <span v-if="record.expandedDimension" class="expanded-by">
+                  已按
+                  {{
+                    dimensions.find(
+                      (item) => item.key === record.expandedDimension,
+                    )?.label || record.expandedDimension
+                  }}
+                  展开
+                </span>
+                <button
+                  class="detail-link"
+                  type="button"
+                  @click="openGroupDetails(record)"
+                >
+                  MSKU 明细
+                </button>
+              </div>
               <span
                 v-else-if="column.key === 'netProfit'"
                 :class="moneyClass(record.netProfit)"
@@ -1093,7 +1393,7 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
                 :class="moneyClass(record.roi)"
                 >{{ formatRoi(record.roi) }}</span>
               <span v-else-if="column.key === 'contribution'">{{
-                formatPercent(groupContribution(record.netProfit))
+                formatPercent(groupContribution(record))
               }}</span>
               <span v-else-if="column.key === 'scale'">{{ formatInteger(record.parentAsinCount) }} 父ASIN ·
                 {{ formatInteger(record.accountCount) }} 账号</span>
@@ -1189,7 +1489,7 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
           </Spin>
         </section>
 
-        <section v-else class="panel">
+        <section v-else-if="panel === 'breakEven'" class="panel">
           <div class="panel-title">
             <div>
               <h2>全周期盈亏平衡</h2>
@@ -1218,6 +1518,10 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
               size="middle"
             />
           </Spin>
+        </section>
+
+        <section v-else-if="panel === 'dashboard'" class="panel">
+          <StrategicDashboard :data="dashboard" :loading="dashboardLoading" />
         </section>
       </template>
       <Empty v-else description="暂无纯利数据" />
@@ -1378,6 +1682,12 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
   grid-column: 5;
   gap: 8px;
   align-items: center;
+}
+
+.filter-actions > span {
+  font-size: 11px;
+  color: #718096;
+  white-space: nowrap;
 }
 
 .period-range {
@@ -1577,7 +1887,8 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
 .profit-equation button:focus-visible,
 .view-tab:focus-visible,
 .add-tab:focus-visible,
-.group-name:focus-visible {
+.group-name:focus-visible,
+.detail-link:focus-visible {
   outline: 3px solid rgb(22 119 255 / 24%);
   outline-offset: 2px;
 }
@@ -1752,6 +2063,106 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
   border-radius: 50%;
 }
 
+.tree-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 650;
+  color: #5f7087;
+  background: #edf2f7;
+  border-radius: 5px;
+}
+
+.tree-name-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  min-height: 28px;
+}
+
+.dimension-picker {
+  width: min(420px, calc(100vw - 48px));
+  padding: 3px;
+}
+
+.dimension-picker-head {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 3px 4px 10px;
+  border-bottom: 1px solid #e7ebf0;
+}
+
+.dimension-picker-head strong {
+  font-size: 13px;
+  color: #1c2a3d;
+}
+
+.dimension-picker-head span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: #6b7b8f;
+  white-space: nowrap;
+}
+
+.dimension-picker-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding-top: 8px;
+}
+
+.dimension-picker-options button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px 10px;
+  color: #25364c;
+  text-align: left;
+  cursor: pointer;
+  background: #f7f9fc;
+  border: 1px solid #dce4ed;
+  border-radius: 6px;
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out;
+}
+
+.dimension-picker-options button:hover {
+  color: #1558c0;
+  background: #edf5ff;
+  border-color: #83afe4;
+}
+
+.dimension-picker-options button:focus-visible {
+  outline: 3px solid rgb(22 119 255 / 24%);
+  outline-offset: 1px;
+}
+
+.dimension-picker-options span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.dimension-picker-options small {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: #78889c;
+}
+
 .group-name {
   display: inline-flex;
   gap: 4px;
@@ -1762,6 +2173,42 @@ onBeforeUnmount(() => clearTimeout(filterLoadTimer));
   cursor: pointer;
   background: transparent;
   border: 0;
+}
+
+.group-name:hover {
+  color: #0d47a1;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.dimension-chip,
+.expanded-by {
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: #607089;
+  background: #f1f4f8;
+  border-radius: 4px;
+}
+
+.expanded-by {
+  color: #35624f;
+  background: #edf8f3;
+}
+
+.detail-link {
+  padding: 2px 0;
+  margin-left: auto;
+  font-size: 11px;
+  color: #65758b;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.detail-link:hover {
+  color: #1558c0;
 }
 
 .positive {

@@ -2,22 +2,25 @@
 import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
 
 import type {
+  AdCvrOptimizationOperationContext,
   AdCvrOptimizationOperatorSummaryRow,
   AdCvrOptimizationOverview,
   AdCvrOptimizationSuggestion,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import {
   Check,
   CircleX,
+  Copy,
   ExternalLink,
   Eye,
   Info,
   RotateCw,
   Search,
+  Settings,
 } from '@vben/icons';
 
 import {
@@ -27,6 +30,7 @@ import {
   Drawer,
   Empty,
   Input,
+  InputNumber,
   message,
   Modal,
   Select,
@@ -38,36 +42,67 @@ import {
 } from 'ant-design-vue';
 
 import {
-  executeAdCvrOptimizationSuggestions,
+  fetchAdCvrOptimizationOperationContext,
   fetchAdCvrOptimizationOverview,
+  updateAdCvrOptimizationAdGroup,
+  updateAdCvrOptimizationCampaign,
   updateAdCvrOptimizationDecisions,
 } from '#/api/kanban/ad-cvr-optimization';
+
+import {
+  adCvrExecutionInProgress,
+  adCvrExecutionRevision,
+  runAdCvrExecutionTask,
+} from './execution-task';
 
 defineOptions({ name: 'KanbanAdCvrOptimization' });
 
 const loading = ref(false);
+const filtersExpanded = ref(false);
 const router = useRouter();
+const route = useRoute();
 const submitting = ref(false);
 const loadError = ref('');
 const data = ref<AdCvrOptimizationOverview | null>(null);
 const selectedIds = ref<string[]>([]);
 const detail = ref<AdCvrOptimizationSuggestion | null>(null);
+const operationOpen = ref(false);
+const operationLoading = ref(false);
+const operationSaving = ref<'' | 'budget' | 'campaign' | 'group'>('');
+const operationContext = ref<AdCvrOptimizationOperationContext | null>(null);
+const operationTarget = ref<AdCvrOptimizationSuggestion | null>(null);
+const campaignNameDraft = ref('');
+const adGroupNameDraft = ref('');
+const dailyBudgetDraft = ref<number | undefined>();
+const executionOpen = ref(false);
+const budgetAdjustmentDrafts = ref<Record<string, number | undefined>>({});
+let operationLoadToken = 0;
+let loadRequestSequence = 0;
+let overviewCacheGeneration = 0;
+const overviewCache = new Map<
+  string,
+  { expires: number; value: AdCvrOptimizationOverview }
+>();
+const overviewRequests = new Map<string, Promise<AdCvrOptimizationOverview>>();
 const query = reactive({
   actions: [] as string[],
   adGroupKeyword: '',
   campaignKeyword: '',
   costTypes: [] as string[],
   countries: [] as string[],
+  departments: [] as string[],
   entityStates: [] as string[],
   levels: [] as string[],
   lookupField: 'spu',
   lookupValue: '',
   page: 1,
   pageSize: 50,
+  projectTags: [] as string[],
   responsible: '',
   search: '',
   selectedOnly: true,
   serviceStatuses: [] as string[],
+  severities: [] as string[],
   statuses: ['pending'] as string[],
   stores: [] as string[],
   sponsoredTypes: [] as string[],
@@ -106,14 +141,16 @@ function displayAction(row: AdCvrOptimizationSuggestion) {
     row.action_type
   );
 }
-const rpaExecutableActions = new Set([
+const directExecutableActions = new Set([
   'close_ad_group',
   'close_campaign',
   'close_color',
-  'close_target',
-  'negative_asin',
-  'negative_keyword',
+  'decrease_budget',
+  'increase_budget',
 ]);
+const budgetExecutableActions = new Set(['decrease_budget', 'increase_budget']);
+const maxDirectExecutionBatch = 20;
+const completedExecutionStatuses = new Set(['succeeded']);
 const levelLabels: Record<string, string> = {
   ad_group: '广告组',
   campaign: '广告活动',
@@ -225,8 +262,18 @@ const operatorSummaryColumns: TableColumnsType<OperatorSummaryDisplayRow> = [
     title: '运营负责人',
     width: 112,
   },
-  { dataIndex: 'campaignCount', key: 'campaignCount', title: '广告活动', width: 92 },
-  { dataIndex: 'adGroupCount', key: 'adGroupCount', title: '广告组', width: 84 },
+  {
+    dataIndex: 'campaignCount',
+    key: 'campaignCount',
+    title: '广告活动',
+    width: 92,
+  },
+  {
+    dataIndex: 'adGroupCount',
+    key: 'adGroupCount',
+    title: '广告组',
+    width: 84,
+  },
   {
     dataIndex: 'optimizationGroupCount',
     key: 'optimizationGroupCount',
@@ -262,6 +309,7 @@ const operatorSummaryColumns: TableColumnsType<OperatorSummaryDisplayRow> = [
 
 const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
   { key: 'select', fixed: 'left', title: '', width: 46 },
+  { dataIndex: 'priority', key: 'priority', title: '优先级', width: 92 },
   { dataIndex: 'level', key: 'level', title: '层级', width: 92 },
   {
     dataIndex: 'entity_name',
@@ -273,7 +321,7 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
     dataIndex: 'ad_hierarchy',
     key: 'ad_hierarchy',
     title: '广告活动 / 广告组',
-    width: 230,
+    width: 280,
   },
   { dataIndex: 'store_name', key: 'store_name', title: '店铺', width: 130 },
   { dataIndex: 'responsible', key: 'responsible', title: '负责人', width: 90 },
@@ -302,7 +350,7 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
     title: '状态',
     width: 90,
   },
-  { key: 'operation', fixed: 'right', title: '', width: 72 },
+  { key: 'operation', fixed: 'right', title: '', width: 82 },
 ];
 
 const pagination = computed(() => ({
@@ -312,8 +360,23 @@ const pagination = computed(() => ({
   showTotal: (total: number) => `共 ${total} 条建议`,
   total: data.value?.pagination.total ?? 0,
 }));
+function isSuggestionExecuted(row: AdCvrOptimizationSuggestion) {
+  return completedExecutionStatuses.has(
+    String(row.execution_status || '')
+      .trim()
+      .toLowerCase(),
+  );
+}
+
+function isSuggestionSelectable(row: AdCvrOptimizationSuggestion) {
+  return !isSuggestionExecuted(row);
+}
+
+const selectableCurrentRows = computed(
+  () => data.value?.rows.filter((row) => isSuggestionSelectable(row)) ?? [],
+);
 const allCurrentSelected = computed(() => {
-  const current = data.value?.rows ?? [];
+  const current = selectableCurrentRows.value;
   return (
     current.length > 0 &&
     current.every((row) => selectedIds.value.includes(row.suggestion_id))
@@ -321,12 +384,24 @@ const allCurrentSelected = computed(() => {
 });
 const selectedRows = computed(
   () =>
-    data.value?.rows.filter((row) =>
-      selectedIds.value.includes(row.suggestion_id),
+    data.value?.rows.filter(
+      (row) =>
+        isSuggestionSelectable(row) &&
+        selectedIds.value.includes(row.suggestion_id),
     ) ?? [],
 );
+const selectedBudgetRows = computed(() =>
+  selectedRows.value.filter((row) =>
+    budgetExecutableActions.has(row.action_type),
+  ),
+);
+const selectedDirectRows = computed(() =>
+  selectedRows.value.filter(
+    (row) => !budgetExecutableActions.has(row.action_type),
+  ),
+);
 const someCurrentSelected = computed(() => {
-  const current = data.value?.rows ?? [];
+  const current = selectableCurrentRows.value;
   const selectedCount = current.filter((row) =>
     selectedIds.value.includes(row.suggestion_id),
   ).length;
@@ -340,22 +415,18 @@ const hasActiveFilters = computed(
     ) ||
     query.stores.length > 0 ||
     query.countries.length > 0 ||
+    query.departments.length > 0 ||
     query.sponsoredTypes.length > 0 ||
     query.targetingTypes.length > 0 ||
     query.costTypes.length > 0 ||
     query.entityStates.length > 0 ||
     query.serviceStatuses.length > 0 ||
+    query.severities.length > 0 ||
     query.levels.length > 0 ||
     query.actions.length > 0 ||
     query.statuses.length !== 1 ||
     query.statuses[0] !== 'pending' ||
     !query.selectedOnly,
-);
-const statusOptions = computed(() =>
-  (data.value?.filters.statuses ?? []).map((value) => ({
-    label: statusLabels[value] || value,
-    value,
-  })),
 );
 const snapshotRange = computed(() => {
   const snapshot = data.value?.snapshot;
@@ -418,6 +489,11 @@ watch(
   },
 );
 
+watch(adCvrExecutionRevision, () => {
+  selectedIds.value = [];
+  void load();
+});
+
 function uniqueOptionValues(values: string[]) {
   const seen = new Set<string>();
   return values.filter((value) => {
@@ -436,48 +512,52 @@ function labeledOptions(values: string[], labels: Record<string, string> = {}) {
 }
 const summaryItems = computed(() => [
   {
-    label: '今日待优化',
-    tone: 'primary',
-    value: String(data.value?.summary.pending ?? 0),
-  },
-  {
-    label: '高优先关闭',
+    label: '高优先级待处理',
+    note: highPriorityGroupNote(),
     tone: 'danger',
-    value: String(
-      (data.value?.summary.byAction.close_color ?? 0) +
-        (data.value?.summary.byAction.close_ad_group ?? 0) +
-        (data.value?.summary.byAction.close_campaign ?? 0),
-    ),
+    value: `${integer(data.value?.dashboard?.highPriorityGroupCount)} 组`,
   },
   {
-    label: '无花费检查',
+    label: '低CVR异常花费',
+    note: '近30天，按广告组去重',
     tone: 'warning',
-    value: String(data.value?.summary.byAction.check_bid ?? 0),
+    value: money(data.value?.operatorSummary?.total.optimizationSpend ?? 0),
   },
   {
-    label: '建议增投',
+    label: '异常点击',
+    note: `${integer(data.value?.dashboard?.qualifiedSuggestionCount)} 条建议达到有效点击门槛`,
+    tone: 'primary',
+    value: integer(data.value?.dashboard?.qualifiedSuggestionClicks),
+  },
+  {
+    label: '预计可节省',
+    note: `预计降幅 ${rate(data.value?.operatorSummary?.total.estimatedSpendReductionPct)}`,
     tone: 'success',
-    value: String(data.value?.summary.byAction.increase_budget ?? 0),
+    value: money(data.value?.operatorSummary?.total.estimatedSavings ?? 0),
   },
   {
-    label: '待人工检查',
+    label: '待人工复核',
+    note: '置信度不足，系统不自动执行',
     tone: 'neutral',
-    value: String(data.value?.summary.review ?? 0),
-  },
-  {
-    label: '广告总花费',
-    tone: 'money',
-    value: money(data.value?.operatorSummary?.total.spend ?? 0),
+    value: `${integer(data.value?.dashboard?.lowConfidenceGroupCount)} 组`,
   },
 ]);
+
+const highPriorityCount = computed(
+  () => data.value?.dashboard?.highPriorityGroupCount ?? 0,
+);
+
+const priorityQueue = computed(() =>
+  [...(data.value?.rows ?? [])]
+    .filter((row) => row.decision_status === 'pending')
+    .toSorted((left, right) => Number(right.priority) - Number(left.priority))
+    .slice(0, 3),
+);
 
 const operatorSummaryRows = computed<OperatorSummaryDisplayRow[]>(() => {
   const summary = data.value?.operatorSummary;
   if (!summary) return [];
-  return [
-    ...summary.rows,
-    { ...summary.total, isTotal: true },
-  ];
+  return [...summary.rows, { ...summary.total, isTotal: true }];
 });
 
 const operatorSummaryHeadline = computed(() => {
@@ -505,7 +585,27 @@ function money(value: number | string) {
   })}`;
 }
 
-function rate(value: null | number | string) {
+function integer(value: null | number | string | undefined) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? Math.round(number).toLocaleString('zh-CN')
+    : '0';
+}
+
+function highPriorityGroupNote() {
+  const dashboard = data.value?.dashboard;
+  if (
+    !dashboard?.previousSnapshotDate ||
+    dashboard.highPriorityGroupChange === null
+  ) {
+    return '首个快照，暂无日环比';
+  }
+  const change = dashboard.highPriorityGroupChange;
+  const sign = change > 0 ? '+' : '';
+  return `较 ${dashboard.previousSnapshotDate} ${sign}${change} 组`;
+}
+
+function rate(value: null | number | string | undefined) {
   if (value === null || value === undefined || value === '') return '-';
   return `${Number(value).toFixed(2)}%`;
 }
@@ -517,7 +617,8 @@ function signedChange(value: null | number, suffix = '%') {
 }
 
 function trendClass(value: null | number, lowerIsBetter = false) {
-  if (value === null || value === 0 || !Number.isFinite(value)) return 'trend-neutral';
+  if (value === null || value === 0 || !Number.isFinite(value))
+    return 'trend-neutral';
   const favorable = lowerIsBetter ? value < 0 : value > 0;
   return favorable ? 'trend-positive' : 'trend-negative';
 }
@@ -580,6 +681,105 @@ function severityColor(value: string) {
   return value === 'high' ? 'red' : (value === 'medium' ? 'orange' : 'default');
 }
 
+function isPriorityFilterActive(severity?: string) {
+  if (!severity) return query.severities.length === 0;
+  return query.severities.length === 1 && query.severities[0] === severity;
+}
+
+const allPendingPriorityCount = computed(() => {
+  const counts = data.value?.summary.bySeverity;
+  if (!counts) return data.value?.summary.pending ?? 0;
+  return counts.high + counts.medium + counts.low;
+});
+
+function setPriorityFilter(severity?: string) {
+  query.statuses = ['pending'];
+  query.severities = severity ? [severity] : [];
+  query.selectedOnly = true;
+  void load(true, true);
+}
+
+function priorityPreview(severity?: string) {
+  if (loading.value || adCvrExecutionInProgress.value) return;
+  void cachedOverview({
+    ...structuredClone(toRaw(query)),
+    page: 1,
+    statuses: ['pending'],
+    selectedOnly: true,
+    severities: severity ? [severity] : [],
+  }).catch(() => {});
+}
+
+function clearOverviewCache() {
+  overviewCacheGeneration += 1;
+  overviewCache.clear();
+  overviewRequests.clear();
+}
+
+async function cachedOverview(params: typeof query) {
+  const key = JSON.stringify(params);
+  const cached = overviewCache.get(key);
+  if (cached && cached.expires > Date.now())
+    return structuredClone(cached.value);
+  const existing = overviewRequests.get(key);
+  if (existing) return existing;
+  const generation = overviewCacheGeneration;
+  const request = fetchAdCvrOptimizationOverview(params).then((value) => {
+    if (generation === overviewCacheGeneration) {
+      if (overviewCache.size >= 8) overviewCache.clear();
+      overviewCache.set(key, {
+        expires: Date.now() + 30_000,
+        value: structuredClone(value),
+      });
+    }
+    return value;
+  });
+  overviewRequests.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (overviewRequests.get(key) === request) overviewRequests.delete(key);
+  }
+}
+
+function focusPending() {
+  setPriorityFilter();
+  requestAnimationFrame(() => {
+    document
+      .querySelector('.recommendation-card')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
+function priorityLabel(record: AdCvrOptimizationSuggestion) {
+  let level = '低';
+  if (record.severity === 'high') level = '高';
+  else if (record.severity === 'medium') level = '中';
+  return `${level} · ${Number(record.priority || 0)}`;
+}
+
+function queueImpact(record: AdCvrOptimizationSuggestion) {
+  const change = Math.abs(Number(record.metrics?.recommended_change_pct));
+  let ratio = 0;
+  if (
+    [
+      'close_ad_group',
+      'close_campaign',
+      'close_color',
+      'close_target',
+      'negative_asin',
+      'negative_keyword',
+    ].includes(record.action_type)
+  ) {
+    ratio = 1;
+  } else if (Number.isFinite(change) && change > 0) {
+    ratio = Math.min(change, 100) / 100;
+  }
+  return ratio > 0
+    ? `${money((Number(record.spend) * ratio) / 30)}/日`
+    : '人工复核';
+}
+
 function cvrTone(record: AdCvrOptimizationSuggestion) {
   const cvr = Number(record.cvr);
   const natural = Number(record.natural_cvr);
@@ -615,20 +815,252 @@ function openCampaignDetail(record: Record<string, any>) {
   });
 }
 
-async function load(reset = false) {
+async function copyName(value: unknown, label: string) {
+  const text = String(value || '').trim();
+  if (!text) {
+    message.warning(`当前没有可复制的${label}`);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    message.success(`${label}已复制`);
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = text;
+    input.style.position = 'fixed';
+    input.style.opacity = '0';
+    document.body.append(input);
+    input.select();
+    const copied = document.execCommand('copy');
+    input.remove();
+    copied
+      ? message.success(`${label}已复制`)
+      : message.error(`${label}复制失败`);
+  }
+}
+
+function patchOperationRows(
+  target: AdCvrOptimizationSuggestion,
+  values: { adGroupName?: string; campaignName?: string },
+) {
+  for (const row of data.value?.rows ?? []) {
+    if (
+      values.campaignName &&
+      row.profile_id === target.profile_id &&
+      row.campaign_id === target.campaign_id
+    ) {
+      row.campaign_name = values.campaignName;
+      if (row.metrics?.optimization_object) {
+        row.metrics.optimization_object.campaignName = values.campaignName;
+      }
+    }
+    if (
+      values.adGroupName &&
+      row.profile_id === target.profile_id &&
+      row.campaign_id === target.campaign_id &&
+      row.ad_group_id === target.ad_group_id
+    ) {
+      row.ad_group_name = values.adGroupName;
+      if (row.metrics?.optimization_object) {
+        row.metrics.optimization_object.adGroupName = values.adGroupName;
+      }
+    }
+  }
+}
+
+async function openOperation(record: Record<string, any>) {
+  const row = suggestionRecord(record);
+  if (!row.profile_id || !row.campaign_id) {
+    message.warning('当前建议缺少广告活动定位信息');
+    return;
+  }
+  const token = ++operationLoadToken;
+  operationTarget.value = row;
+  operationContext.value = null;
+  operationOpen.value = true;
+  operationLoading.value = true;
+  try {
+    const context = await fetchAdCvrOptimizationOperationContext(
+      row.suggestion_id,
+    );
+    if (token !== operationLoadToken) return;
+    operationContext.value = context;
+    campaignNameDraft.value = context.campaignName;
+    adGroupNameDraft.value = context.adGroupName;
+    dailyBudgetDraft.value = context.dailyBudget ?? undefined;
+  } catch (error) {
+    if (token === operationLoadToken) {
+      message.error(
+        `读取领星当前设置失败：${error instanceof Error ? error.message : error}`,
+      );
+    }
+  } finally {
+    if (token === operationLoadToken) operationLoading.value = false;
+  }
+}
+
+function confirmOperation(
+  title: string,
+  content: string,
+  saving: 'budget' | 'campaign' | 'group',
+  submit: () => Promise<void>,
+) {
+  Modal.confirm({
+    title,
+    content,
+    okText: '确认写入领星',
+    cancelText: '取消',
+    async onOk() {
+      operationSaving.value = saving;
+      try {
+        await submit();
+        clearOverviewCache();
+      } catch (error) {
+        message.error(
+          `写入领星失败：${error instanceof Error ? error.message : error}`,
+        );
+        throw error;
+      } finally {
+        operationSaving.value = '';
+      }
+    },
+  });
+}
+
+function closeOperation() {
+  operationLoadToken += 1;
+  operationOpen.value = false;
+}
+
+function saveCampaignName() {
+  const context = operationContext.value;
+  const target = operationTarget.value;
+  const newName = campaignNameDraft.value.trim();
+  if (!context || !target) return;
+  if (!newName) {
+    message.warning('广告活动名称不能为空');
+    return;
+  }
+  if (newName === context.campaignName) {
+    message.info('广告活动名称没有变化');
+    return;
+  }
+  confirmOperation(
+    '修改广告活动名称？',
+    `“${context.campaignName}”将修改为“${newName}”。`,
+    'campaign',
+    async () => {
+      const result = await updateAdCvrOptimizationCampaign(
+        target.suggestion_id,
+        {
+          campaignName: newName,
+          expectedCampaignName: context.campaignName,
+        },
+      );
+      context.campaignName = result.campaignName || newName;
+      campaignNameDraft.value = context.campaignName;
+      patchOperationRows(target, { campaignName: context.campaignName });
+      message.success(result.message || '广告活动名称已更新');
+    },
+  );
+}
+
+function saveDailyBudget() {
+  const context = operationContext.value;
+  const target = operationTarget.value;
+  const budget = dailyBudgetDraft.value;
+  if (!context || !target) return;
+  if (!context.budgetEditable) {
+    message.warning(context.budgetBlockedReason || '当前预算不可在此修改');
+    return;
+  }
+  if (!budget || budget <= 0) {
+    message.warning('日预算必须大于 0');
+    return;
+  }
+  if (budget === context.dailyBudget) {
+    message.info('日预算没有变化');
+    return;
+  }
+  confirmOperation(
+    '修改广告活动日预算？',
+    `日预算将从 ${context.dailyBudget ?? '-'} 修改为 ${budget}。`,
+    'budget',
+    async () => {
+      const payload: {
+        dailyBudget: number;
+        expectedDailyBudget?: number;
+      } = { dailyBudget: budget };
+      if (context.dailyBudget !== null) {
+        payload.expectedDailyBudget = context.dailyBudget;
+      }
+      const result = await updateAdCvrOptimizationCampaign(
+        target.suggestion_id,
+        payload,
+      );
+      context.dailyBudget = result.dailyBudget ?? budget;
+      dailyBudgetDraft.value = context.dailyBudget ?? undefined;
+      message.success(result.message || '广告活动日预算已更新');
+    },
+  );
+}
+
+function saveAdGroupName() {
+  const context = operationContext.value;
+  const target = operationTarget.value;
+  const newName = adGroupNameDraft.value.trim();
+  if (!context || !target || !context.adGroupAvailable) return;
+  if (!newName) {
+    message.warning('广告组名称不能为空');
+    return;
+  }
+  if (newName === context.adGroupName) {
+    message.info('广告组名称没有变化');
+    return;
+  }
+  confirmOperation(
+    '修改广告组名称？',
+    `“${context.adGroupName}”将修改为“${newName}”。`,
+    'group',
+    async () => {
+      const result = await updateAdCvrOptimizationAdGroup(
+        target.suggestion_id,
+        {
+          adGroupName: newName,
+          expectedAdGroupName: context.adGroupName,
+        },
+      );
+      context.adGroupName = result.adGroupName || newName;
+      adGroupNameDraft.value = context.adGroupName;
+      patchOperationRows(target, { adGroupName: context.adGroupName });
+      message.success(result.message || '广告组名称已更新');
+    },
+  );
+}
+
+async function load(reset = false, reuseCache = false) {
   if (reset) query.page = 1;
+  if (!reuseCache) {
+    clearOverviewCache();
+  }
+  const requestId = ++loadRequestSequence;
   loading.value = true;
   loadError.value = '';
   try {
-    data.value = await fetchAdCvrOptimizationOverview({ ...query });
+    const result = await cachedOverview(structuredClone(toRaw(query)));
+    if (requestId !== loadRequestSequence) return;
+    data.value = result;
     selectedIds.value = selectedIds.value.filter((id) =>
-      data.value?.rows.some((row) => row.suggestion_id === id),
+      data.value?.rows.some(
+        (row) => row.suggestion_id === id && isSuggestionSelectable(row),
+      ),
     );
   } catch (error) {
+    if (requestId !== loadRequestSequence) return;
     loadError.value = error instanceof Error ? error.message : String(error);
     message.error(`加载广告优化建议失败：${loadError.value}`);
   } finally {
-    loading.value = false;
+    if (requestId === loadRequestSequence) loading.value = false;
   }
 }
 
@@ -638,6 +1070,7 @@ function resetFilters() {
   query.campaignKeyword = '';
   query.costTypes = [];
   query.countries = [];
+  query.departments = [];
   query.entityStates = [];
   query.levels = [];
   query.lookupField = 'spu';
@@ -646,6 +1079,7 @@ function resetFilters() {
   query.search = '';
   query.selectedOnly = true;
   query.serviceStatuses = [];
+  query.severities = [];
   query.statuses = ['pending'];
   query.stores = [];
   query.sponsoredTypes = [];
@@ -654,16 +1088,20 @@ function resetFilters() {
 }
 
 function toggle(row: AdCvrOptimizationSuggestion, checked: boolean) {
+  if (checked && !isSuggestionSelectable(row)) return;
   selectedIds.value = checked
     ? [...new Set([...selectedIds.value, row.suggestion_id])]
     : selectedIds.value.filter((id) => id !== row.suggestion_id);
 }
 
 function toggleCurrent(checked: boolean) {
-  const current = data.value?.rows.map((row) => row.suggestion_id) ?? [];
+  const currentPageIds = data.value?.rows.map((row) => row.suggestion_id) ?? [];
+  const selectableIds = selectableCurrentRows.value.map(
+    (row) => row.suggestion_id,
+  );
   selectedIds.value = checked
-    ? [...new Set([...selectedIds.value, ...current])]
-    : selectedIds.value.filter((id) => !current.includes(id));
+    ? [...new Set([...selectedIds.value, ...selectableIds])]
+    : selectedIds.value.filter((id) => !currentPageIds.includes(id));
 }
 
 async function decide(status: 'approved' | 'dismissed' | 'pending') {
@@ -692,9 +1130,45 @@ async function decide(status: 'approved' | 'dismissed' | 'pending') {
   }
 }
 
+function snapshotBudget(row: AdCvrOptimizationSuggestion) {
+  const value = Number(
+    row.metrics?.daily_budget ??
+      row.metrics?.dailyBudget ??
+      row.metrics?.budget,
+  );
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function projectedBudget(row: AdCvrOptimizationSuggestion) {
+  const current = snapshotBudget(row);
+  const percent = budgetAdjustmentDrafts.value[row.suggestion_id];
+  if (!current || !percent || percent <= 0) return null;
+  const direction = row.action_type === 'increase_budget' ? 1 : -1;
+  return Math.round(current * (1 + (direction * percent) / 100) * 100) / 100;
+}
+
+function closeExecution() {
+  executionOpen.value = false;
+}
+
 function executeSelected() {
+  if (adCvrExecutionInProgress.value) {
+    message.info('已有广告优化任务正在执行，可继续使用其他页面');
+    return;
+  }
   if (selectedIds.value.length === 0) {
     message.warning('请先选择已确认建议');
+    return;
+  }
+  if (selectedRows.value.length !== selectedIds.value.length) {
+    selectedIds.value = selectedRows.value.map((row) => row.suggestion_id);
+    message.warning('已执行成功的建议不能重复提交');
+    return;
+  }
+  if (selectedIds.value.length > maxDirectExecutionBatch) {
+    message.warning(
+      `单次最多执行 ${maxDirectExecutionBatch} 条建议，请分批提交`,
+    );
     return;
   }
   const unapproved = selectedRows.value.filter(
@@ -705,36 +1179,51 @@ function executeSelected() {
     return;
   }
   const unsupported = selectedRows.value.filter(
-    (row) => !rpaExecutableActions.has(row.action_type),
+    (row) => !directExecutableActions.has(row.action_type),
   );
   if (unsupported.length > 0) {
     const labels = [...new Set(unsupported.map((row) => displayAction(row)))];
-    message.warning(`${labels.join('、')}缺少确定的自动执行参数，只能人工处理`);
+    message.warning(
+      `${labels.join('、')}暂未复现可安全执行的领星接口，只能人工处理`,
+    );
     return;
   }
-  Modal.confirm({
-    title: `提交 ${selectedIds.value.length} 条建议到执行队列？`,
-    content:
-      '系统只会提交已确认建议。未配置 RPA 时仅生成审计队列，不会修改广告账户。',
-    okText: '提交执行',
-    async onOk() {
-      submitting.value = true;
-      try {
-        const result = await executeAdCvrOptimizationSuggestions(
-          selectedIds.value,
-        );
-        message.success(result.message || `执行批次 ${result.batchId} 已创建`);
-        selectedIds.value = [];
-        await load();
-      } catch (error) {
-        message.error(
-          `提交执行失败：${error instanceof Error ? error.message : error}`,
-        );
-      } finally {
-        submitting.value = false;
-      }
-    },
-  });
+  budgetAdjustmentDrafts.value = Object.fromEntries(
+    selectedRows.value
+      .filter((row) => budgetExecutableActions.has(row.action_type))
+      .map((row) => [row.suggestion_id, undefined]),
+  );
+  executionOpen.value = true;
+}
+
+async function submitExecution() {
+  if (selectedRows.value.length !== selectedIds.value.length) {
+    executionOpen.value = false;
+    selectedIds.value = selectedRows.value.map((row) => row.suggestion_id);
+    message.warning('所选建议的执行状态已变化，请重新选择');
+    return;
+  }
+  const budgetAdjustments: Record<string, number> = {};
+  for (const row of selectedBudgetRows.value) {
+    const percent = Number(budgetAdjustmentDrafts.value[row.suggestion_id]);
+    const isDecrease = row.action_type === 'decrease_budget';
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      message.warning(`请为“${row.entity_name}”填写 0–100 之间的预算调整比例`);
+      return;
+    }
+    if (isDecrease && percent >= 100) {
+      message.warning(`“${row.entity_name}”降低预算必须小于 100%`);
+      return;
+    }
+    budgetAdjustments[row.suggestion_id] = percent;
+  }
+  const suggestionIds = selectedRows.value.map((row) => row.suggestion_id);
+  executionOpen.value = false;
+  try {
+    await runAdCvrExecutionTask(suggestionIds, budgetAdjustments);
+  } catch {
+    // The persistent notification owns execution errors and recovery guidance.
+  }
 }
 
 function tableChange(value: TablePaginationConfig) {
@@ -749,20 +1238,42 @@ function rowClassName(record: AdCvrOptimizationSuggestion) {
     : '';
 }
 
-onMounted(() => load());
+onMounted(() => {
+  const responsible = String(route.query.responsible || '').trim();
+  if (responsible) query.responsible = responsible;
+  const countries = route.query.countries;
+  if (countries) {
+    query.countries = Array.isArray(countries)
+      ? countries.map(String)
+      : [String(countries)];
+  }
+  const departments = route.query.departments;
+  if (departments) {
+    query.departments = Array.isArray(departments)
+      ? departments.map(String)
+      : [String(departments)];
+  }
+  const projectTags = route.query.projectTags;
+  if (projectTags) {
+    query.projectTags = Array.isArray(projectTags)
+      ? projectTags.map(String)
+      : [String(projectTags)];
+  }
+  void load();
+});
 </script>
 
 <template>
   <div class="optimization-page">
     <header class="page-head">
       <div>
-        <h1>广告 CVR 优化</h1>
+        <h1>广告低CVR智能优化台</h1>
         <p v-if="data?.snapshot">
-          30 天判断区间 {{ data.snapshot.range_start }} ~
+          统计区间：{{ data.snapshot.range_start }} 至
           {{ data.snapshot.range_end }} · 深层广告组
           {{ data.snapshot.deep_group_count }}/{{ data.snapshot.group_count }}
           <template v-if="data.snapshot.metadata_refreshed_at">
-            · 活动筛选元数据 {{ data.snapshot.metadata_refreshed_at }}
+            · 数据更新：{{ data.snapshot.metadata_refreshed_at }}
           </template>
         </p>
       </div>
@@ -782,12 +1293,16 @@ onMounted(() => load());
       </div>
     </header>
 
-    <Alert
-      class="policy-alert"
-      message="建议默认不会自动执行。颜色 → 投放内容 → 搜索词 → 广告组 → 广告活动按层级判断，命中上层动作后抑制下层关闭建议。"
-      show-icon
-      type="info"
-    />
+    <section class="priority-alert">
+      <div class="priority-alert-main">
+        <span class="priority-alert-icon"><Info :size="16" /></span>
+        <div>
+          <strong>今日有 {{ highPriorityCount }} 组高优先级问题</strong>
+          <p>建议先处理高点击、低转化的广告对象；系统建议默认不会自动执行。</p>
+        </div>
+      </div>
+      <Button type="primary" @click="focusPending">查看待处理</Button>
+    </section>
 
     <Alert
       v-if="loadError"
@@ -810,550 +1325,946 @@ onMounted(() => load());
       >
         <span>{{ item.label }}</span>
         <strong>{{ item.value }}</strong>
+        <small>{{ item.note }}</small>
       </div>
     </section>
 
     <section class="filter-band">
-      <label class="filter-item filter-date-range">
-        <span>统计区间</span>
-        <strong class="snapshot-range">{{ snapshotRange }}</strong>
-      </label>
-      <label class="filter-item">
-        <span>国家</span>
-        <Select
-          v-model:value="query.countries"
-          :options="countryOptions"
-          allow-clear
-          aria-label="国家"
-          max-tag-count="responsive"
-          mode="multiple"
-          option-filter-prop="searchLabel"
-          popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
-          placeholder="全部国家"
-          show-search
-        >
-          <template #option="{ label, code }">
-            <div class="scope-option">
-              <span class="scope-option-name">{{ label }}</span>
-              <span class="scope-code">{{ code }}</span>
-            </div>
-          </template>
-        </Select>
-      </label>
-      <label class="filter-item">
-        <span>店铺</span>
-        <Select
-          v-model:value="query.stores"
-          :options="storeOptions"
-          allow-clear
-          aria-label="店铺"
-          max-tag-count="responsive"
-          mode="multiple"
-          option-filter-prop="searchLabel"
-          popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
-          placeholder="全部店铺"
-          show-search
-        >
-          <template #option="{ label, site, tone }">
-            <div class="scope-option">
-              <span class="scope-option-name">{{ label }}</span>
-              <span class="scope-site-badge" :class="`is-${tone}`">
-                {{ site || '其他' }}
-              </span>
-            </div>
-          </template>
-        </Select>
-      </label>
-      <label class="filter-item">
-        <span>广告类型</span>
-        <Select
-          v-model:value="query.sponsoredTypes"
-          :options="
-            labeledOptions(
-              data?.filters.sponsoredTypes ?? [],
-              sponsoredTypeLabels,
-            )
-          "
-          allow-clear
-          aria-label="广告类型"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部广告类型"
-        />
-      </label>
-      <label class="filter-item">
-        <span>投放类型</span>
-        <Select
-          v-model:value="query.targetingTypes"
-          :options="
-            labeledOptions(
-              data?.filters.targetingTypes ?? [],
-              targetingTypeLabels,
-            )
-          "
-          allow-clear
-          aria-label="投放类型"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部投放类型"
-        />
-      </label>
-      <label class="filter-item">
-        <span>广告活动</span>
-        <Input
-          v-model:value="query.campaignKeyword"
-          allow-clear
-          aria-label="广告活动名称"
-          placeholder="输入广告活动名称"
-          @press-enter="load(true)"
-        />
-      </label>
-      <label class="filter-item">
-        <span>成本类型</span>
-        <Select
-          v-model:value="query.costTypes"
-          :options="options(data?.filters.costTypes ?? [], costTypeLabels)"
-          allow-clear
-          aria-label="成本类型"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部成本类型"
-        />
-      </label>
-      <label class="filter-item">
-        <span>状态</span>
-        <Select
-          v-model:value="query.entityStates"
-          :options="
-            labeledOptions(data?.filters.entityStates ?? [], stateLabels)
-          "
-          allow-clear
-          aria-label="广告活动状态"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部状态"
-        />
-      </label>
-      <label class="filter-item">
-        <span>服务状态</span>
-        <Select
-          v-model:value="query.serviceStatuses"
-          :options="
-            options(data?.filters.serviceStatuses ?? [], serviceStatusLabels)
-          "
-          allow-clear
-          aria-label="服务状态"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部服务状态"
-          show-search
-        />
-      </label>
-      <label class="filter-item lookup-field">
-        <span>查询维度</span>
-        <Select
-          v-model:value="query.lookupField"
-          :options="lookupOptions"
-          aria-label="查询维度"
-          popup-class-name="ad-optimization-dropdown"
-        />
-      </label>
-      <label class="filter-item lookup-value">
-        <span>查询值</span>
-        <Input
-          v-model:value="query.lookupValue"
-          allow-clear
-          aria-label="按所选维度查询"
-          placeholder="MSKU、ASIN、父 ASIN、SPU 或分类"
-          @press-enter="load(true)"
-        />
-      </label>
-      <label class="filter-item">
-        <span>负责人</span>
-        <Select
-          v-model:value="query.responsible"
-          :options="options(data?.filters.responsibles ?? [])"
-          allow-clear
-          aria-label="负责人"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部负责人"
-          show-search
-        />
-      </label>
-      <label class="filter-item">
-        <span>广告组</span>
-        <Input
-          v-model:value="query.adGroupKeyword"
-          allow-clear
-          aria-label="广告组名称"
-          placeholder="输入广告组名称"
-          @press-enter="load(true)"
-        />
-      </label>
-      <label class="filter-item">
-        <span>判断层级</span>
-        <Select
-          v-model:value="query.levels"
-          :options="data?.filters.levels ?? []"
-          allow-clear
-          aria-label="判断层级"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部层级"
-        />
-      </label>
-      <label class="filter-item">
-        <span>建议动作</span>
-        <Select
-          v-model:value="query.actions"
-          :options="data?.filters.actions ?? []"
-          allow-clear
-          aria-label="建议动作"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部动作"
-        />
-      </label>
-      <label class="filter-item">
-        <span>处理状态</span>
-        <Select
-          v-model:value="query.statuses"
-          :options="statusOptions"
-          allow-clear
-          aria-label="处理状态"
-          mode="multiple"
-          popup-class-name="ad-optimization-dropdown"
-          placeholder="全部状态"
-        />
-      </label>
-      <label class="filter-item search-filter">
-        <span>快捷检索</span>
+      <div class="filter-primary-row">
+        <div class="priority-tabs" aria-label="处理优先级">
+          <button
+            class="priority-filter-option is-all"
+            :class="{ active: isPriorityFilterActive() }"
+            type="button"
+            :aria-pressed="isPriorityFilterActive()"
+            @click="setPriorityFilter()"
+            @mouseenter="priorityPreview()"
+            @focus="priorityPreview()"
+          >
+            全部
+            <b>{{ allPendingPriorityCount }}</b>
+          </button>
+          <button
+            class="priority-filter-option is-high"
+            :class="{ active: isPriorityFilterActive('high') }"
+            type="button"
+            :aria-pressed="isPriorityFilterActive('high')"
+            title="高风险或强证据项，建议优先止损或排查"
+            @click="setPriorityFilter('high')"
+            @mouseenter="priorityPreview('high')"
+            @focus="priorityPreview('high')"
+          >
+            <i aria-hidden="true"></i>
+            立即处理
+            <b>{{ data?.summary.bySeverity?.high ?? 0 }}</b>
+          </button>
+          <button
+            class="priority-filter-option is-medium"
+            :class="{ active: isPriorityFilterActive('medium') }"
+            type="button"
+            :aria-pressed="isPriorityFilterActive('medium')"
+            title="近期趋势恶化或效率未达标，建议尽快处理"
+            @click="setPriorityFilter('medium')"
+            @mouseenter="priorityPreview('medium')"
+            @focus="priorityPreview('medium')"
+          >
+            <i aria-hidden="true"></i>
+            尽快处理
+            <b>{{ data?.summary.bySeverity?.medium ?? 0 }}</b>
+          </button>
+          <button
+            class="priority-filter-option is-low"
+            :class="{ active: isPriorityFilterActive('low') }"
+            type="button"
+            :aria-pressed="isPriorityFilterActive('low')"
+            title="风险较低或仍需积累证据，可持续观察并排期跟进"
+            @click="setPriorityFilter('low')"
+            @mouseenter="priorityPreview('low')"
+            @focus="priorityPreview('low')"
+          >
+            <i aria-hidden="true"></i>
+            观察跟进
+            <b>{{ data?.summary.bySeverity?.low ?? 0 }}</b>
+          </button>
+        </div>
+        <label class="filter-item compact-filter">
+          <span>负责人</span>
+          <Select
+            v-model:value="query.responsible"
+            :options="options(data?.filters.responsibles ?? [])"
+            allow-clear
+            aria-label="负责人"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部负责人"
+            show-search
+          />
+        </label>
+        <label class="filter-item compact-filter">
+          <span>站点</span>
+          <Select
+            v-model:value="query.countries"
+            :options="countryOptions"
+            allow-clear
+            aria-label="国家"
+            max-tag-count="responsive"
+            mode="multiple"
+            option-filter-prop="searchLabel"
+            popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
+            placeholder="全部站点"
+            show-search
+          >
+            <template #option="{ label, code }">
+              <div class="scope-option">
+                <span class="scope-option-name">{{ label }}</span>
+                <span class="scope-code">{{ code }}</span>
+              </div>
+            </template>
+          </Select>
+        </label>
         <Input
           v-model:value="query.search"
           allow-clear
           aria-label="搜索广告对象"
-          placeholder="对象、活动 ID、广告组 ID、SPU、父 ASIN"
+          class="primary-search"
+          placeholder="搜索广告活动、广告组、ASIN 或投放对象"
           @press-enter="load(true)"
         />
-      </label>
-      <div class="filter-actions">
-        <Checkbox v-model:checked="query.selectedOnly">只看待采取行动</Checkbox>
-        <Button :disabled="!hasActiveFilters" @click="resetFilters">
-          <RotateCw :size="15" />
-          重置
+        <Button @click="filtersExpanded = !filtersExpanded">
+          {{ filtersExpanded ? '收起筛选' : '更多筛选' }}
         </Button>
         <Button type="primary" @click="load(true)">
           <Search :size="15" />
           查询
         </Button>
       </div>
-    </section>
 
-    <section class="operator-summary-band">
-      <header class="operator-summary-head">
-        <div>
-          <h2>运营优化汇总</h2>
-          <p>{{ operatorSummaryHeadline }}</p>
+      <div v-show="filtersExpanded" class="filter-panel">
+        <label class="filter-item filter-date-range">
+          <span>统计区间</span>
+          <strong class="snapshot-range">{{ snapshotRange }}</strong>
+        </label>
+        <label class="filter-item">
+          <span>店铺</span>
+          <Select
+            v-model:value="query.stores"
+            :options="storeOptions"
+            allow-clear
+            aria-label="店铺"
+            max-tag-count="responsive"
+            mode="multiple"
+            option-filter-prop="searchLabel"
+            popup-class-name="ad-optimization-dropdown ad-optimization-scope-dropdown"
+            placeholder="全部店铺"
+            show-search
+          >
+            <template #option="{ label, site, tone }">
+              <div class="scope-option">
+                <span class="scope-option-name">{{ label }}</span>
+                <span class="scope-site-badge" :class="`is-${tone}`">
+                  {{ site || '其他' }}
+                </span>
+              </div>
+            </template>
+          </Select>
+        </label>
+        <label class="filter-item">
+          <span>广告类型</span>
+          <Select
+            v-model:value="query.sponsoredTypes"
+            :options="
+              labeledOptions(
+                data?.filters.sponsoredTypes ?? [],
+                sponsoredTypeLabels,
+              )
+            "
+            allow-clear
+            aria-label="广告类型"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部广告类型"
+          />
+        </label>
+        <label class="filter-item">
+          <span>投放类型</span>
+          <Select
+            v-model:value="query.targetingTypes"
+            :options="
+              labeledOptions(
+                data?.filters.targetingTypes ?? [],
+                targetingTypeLabels,
+              )
+            "
+            allow-clear
+            aria-label="投放类型"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部投放类型"
+          />
+        </label>
+        <label class="filter-item">
+          <span>广告活动</span>
+          <Input
+            v-model:value="query.campaignKeyword"
+            allow-clear
+            aria-label="广告活动名称"
+            placeholder="输入广告活动名称"
+            @press-enter="load(true)"
+          />
+        </label>
+        <label class="filter-item">
+          <span>成本类型</span>
+          <Select
+            v-model:value="query.costTypes"
+            :options="options(data?.filters.costTypes ?? [], costTypeLabels)"
+            allow-clear
+            aria-label="成本类型"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部成本类型"
+          />
+        </label>
+        <label class="filter-item">
+          <span>广告状态</span>
+          <Select
+            v-model:value="query.entityStates"
+            :options="
+              labeledOptions(data?.filters.entityStates ?? [], stateLabels)
+            "
+            allow-clear
+            aria-label="广告活动状态"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部状态"
+          />
+        </label>
+        <label class="filter-item">
+          <span>服务状态</span>
+          <Select
+            v-model:value="query.serviceStatuses"
+            :options="
+              options(data?.filters.serviceStatuses ?? [], serviceStatusLabels)
+            "
+            allow-clear
+            aria-label="服务状态"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部服务状态"
+            show-search
+          />
+        </label>
+        <label class="filter-item lookup-field">
+          <span>查询维度</span>
+          <Select
+            v-model:value="query.lookupField"
+            :options="lookupOptions"
+            aria-label="查询维度"
+            popup-class-name="ad-optimization-dropdown"
+          />
+        </label>
+        <label class="filter-item lookup-value">
+          <span>查询值</span>
+          <Input
+            v-model:value="query.lookupValue"
+            allow-clear
+            aria-label="按所选维度查询"
+            placeholder="MSKU、ASIN、父 ASIN、SPU 或分类"
+            @press-enter="load(true)"
+          />
+        </label>
+        <label class="filter-item">
+          <span>广告组</span>
+          <Input
+            v-model:value="query.adGroupKeyword"
+            allow-clear
+            aria-label="广告组名称"
+            placeholder="输入广告组名称"
+            @press-enter="load(true)"
+          />
+        </label>
+        <label class="filter-item">
+          <span>判断层级</span>
+          <Select
+            v-model:value="query.levels"
+            :options="data?.filters.levels ?? []"
+            allow-clear
+            aria-label="判断层级"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部层级"
+          />
+        </label>
+        <label class="filter-item">
+          <span>建议动作</span>
+          <Select
+            v-model:value="query.actions"
+            :options="data?.filters.actions ?? []"
+            allow-clear
+            aria-label="建议动作"
+            mode="multiple"
+            popup-class-name="ad-optimization-dropdown"
+            placeholder="全部动作"
+          />
+        </label>
+        <div class="filter-actions">
+          <Checkbox v-model:checked="query.selectedOnly">
+            只看待采取行动
+          </Checkbox>
+          <Button :disabled="!hasActiveFilters" @click="resetFilters">
+            <RotateCw :size="15" />
+            重置
+          </Button>
         </div>
-        <Tooltip
-          :title="[
-            data?.operatorSummary?.methodology.baseline,
-            data?.operatorSummary?.methodology.estimatedSavings,
-            data?.operatorSummary?.methodology.estimatedAcosImprovement,
-            data?.operatorSummary?.methodology.recentTrend,
-            data?.operatorSummary?.methodology.filterScope,
-          ].filter(Boolean).join('；')"
-        >
-          <span class="methodology-help"><Info :size="14" />估算口径</span>
-        </Tooltip>
-      </header>
-      <Table
-        :columns="operatorSummaryColumns"
-        :data-source="operatorSummaryRows"
-        :loading="loading"
-        :pagination="false"
-        :row-class-name="operatorSummaryRowClassName"
-        :row-key="(row) => `${row.department}-${row.responsible}-${row.isTotal ? 'total' : 'operator'}`"
-        :scroll="{ x: 1394, y: 292 }"
-        size="small"
-      >
-        <template #bodyCell="{ column, record }">
-          <strong v-if="column.dataIndex === 'department'">
-            {{ record.department }}
-          </strong>
-          <button
-            v-else-if="column.dataIndex === 'responsible' && !record.isTotal && record.responsible !== '未分配'"
-            class="operator-filter-link"
-            type="button"
-            @click="filterByResponsible(operatorSummaryRecord(record))"
-          >
-            {{ record.responsible }}
-          </button>
-          <strong v-else-if="column.dataIndex === 'responsible'">
-            {{ record.responsible }}
-          </strong>
-          <span
-            v-else-if="['campaignCount', 'adGroupCount'].includes(String(column.dataIndex))"
-            class="count-value"
-          >
-            {{ Number(record[String(column.dataIndex)] || 0).toLocaleString('zh-CN') }}
-          </span>
-          <div
-            v-else-if="column.dataIndex === 'optimizationGroupCount'"
-            class="optimization-count-cell"
-          >
-            <strong>{{ record.optimizationGroupCount.toLocaleString('zh-CN') }} 组</strong>
-            <span>{{ record.actionableSuggestionCount.toLocaleString('zh-CN') }} 条建议</span>
-            <Tag v-if="record.highPriorityCount" color="red">
-              高优先 {{ record.highPriorityCount.toLocaleString('zh-CN') }}
-            </Tag>
-          </div>
-          <strong v-else-if="column.dataIndex === 'spend'" class="money-value">
-            {{ money(record.spend) }}
-          </strong>
-          <div
-            v-else-if="column.dataIndex === 'optimizationSpend'"
-            class="metric-stack"
-          >
-            <strong>{{ money(record.optimizationSpend) }}</strong>
-            <span>覆盖 {{ optimizationCoverage(operatorSummaryRecord(record)) }}</span>
-          </div>
-          <div
-            v-else-if="column.dataIndex === 'estimatedSavings'"
-            class="metric-stack saving-value"
-          >
-            <strong>{{ money(record.estimatedSavings) }}</strong>
-            <span>预计降幅 {{ rate(record.estimatedSpendReductionPct) }}</span>
-          </div>
-          <div
-            v-else-if="column.dataIndex === 'estimatedAcosImprovementPp'"
-            class="acos-improvement-cell"
-          >
-            <strong>{{ rate(record.currentAcos) }} → {{ rate(record.estimatedAcos) }}</strong>
-            <span v-if="record.estimatedAcosImprovementPp !== null">
-              改善 {{ record.estimatedAcosImprovementPp.toFixed(2) }}pp
-            </span>
-            <span v-else>销售额为 0，暂不估算</span>
-          </div>
-          <div v-else-if="column.dataIndex === 'recentTrend'" class="recent-trend-cell">
-            <span>
-              <small>花费</small>
-              <b :class="trendClass(record.spendChangePct, true)">
-                {{ signedChange(record.spendChangePct) }}
-              </b>
-            </span>
-            <span>
-              <small>销售额</small>
-              <b :class="trendClass(record.salesChangePct)">
-                {{ signedChange(record.salesChangePct) }}
-              </b>
-            </span>
-            <span>
-              <small>ACoS</small>
-              <b :class="trendClass(record.acosChangePp, true)">
-                {{ signedChange(record.acosChangePp, 'pp') }}
-              </b>
-            </span>
-            <span>
-              <small>CVR</small>
-              <b :class="trendClass(record.cvrChangePp)">
-                {{ signedChange(record.cvrChangePp, 'pp') }}
-              </b>
-            </span>
-          </div>
-        </template>
-        <template #emptyText>
-          <Empty description="当前范围没有运营汇总数据" />
-        </template>
-      </Table>
-    </section>
-
-    <section class="action-bar">
-      <div class="selection-status">
-        <Checkbox
-          :checked="allCurrentSelected"
-          :indeterminate="someCurrentSelected"
-          @change="toggleCurrent($event.target.checked)"
-        >
-          选择当前页
-        </Checkbox>
-        <span>已选 <b>{{ selectedIds.length }}</b> 条</span>
       </div>
-      <Space class="batch-actions" wrap>
-        <Button
-          :disabled="selectedIds.length === 0"
-          :loading="submitting"
-          @click="decide('dismissed')"
-        >
-          <CircleX :size="15" />
-          忽略
-        </Button>
-        <Button
-          :disabled="selectedIds.length === 0"
-          :loading="submitting"
-          type="primary"
-          @click="decide('approved')"
-        >
-          <Check :size="15" />
-          确认建议
-        </Button>
-        <Button
-          :disabled="selectedIds.length === 0"
-          :loading="submitting"
-          danger
-          @click="executeSelected"
-        >
-          <ExternalLink :size="15" />
-          提交执行
-        </Button>
-      </Space>
     </section>
 
-    <section class="table-band">
-      <Spin :spinning="loading">
+    <section class="overview-grid">
+      <section class="operator-summary-band">
+        <header class="operator-summary-head">
+          <div>
+            <h2>建议广告优化</h2>
+            <p>{{ operatorSummaryHeadline }}</p>
+          </div>
+          <Tooltip
+            :title="
+              [
+                data?.operatorSummary?.methodology.baseline,
+                data?.operatorSummary?.methodology.estimatedSavings,
+                data?.operatorSummary?.methodology.estimatedAcosImprovement,
+                data?.operatorSummary?.methodology.recentTrend,
+                data?.operatorSummary?.methodology.filterScope,
+              ]
+                .filter(Boolean)
+                .join('；')
+            "
+          >
+            <span class="methodology-help"><Info :size="14" />估算口径</span>
+          </Tooltip>
+        </header>
         <Table
-          v-if="data?.rows.length"
-          :columns="columns"
-          :data-source="data.rows"
-          :pagination="pagination"
-          :row-class-name="rowClassName"
-          :row-key="(row) => row.suggestion_id"
-          :scroll="{ x: 2350, y: 'calc(100vh - 440px)' }"
+          :columns="operatorSummaryColumns"
+          :data-source="operatorSummaryRows"
+          :loading="loading"
+          :pagination="false"
+          :row-class-name="operatorSummaryRowClassName"
+          :row-key="
+            (row) =>
+              `${row.department}-${row.responsible}-${row.isTotal ? 'total' : 'operator'}`
+          "
+          :scroll="{ x: 1394, y: 292 }"
           size="small"
-          @change="tableChange"
         >
-          <template #headerCell="{ column }">
-            <span
-              v-if="metricHelp[String(column.dataIndex || '')]"
-              class="metric-heading"
-            >
-              {{ column.title }}
-              <Tooltip :title="metricHelp[String(column.dataIndex || '')]">
-                <Info :size="13" />
-              </Tooltip>
-            </span>
-          </template>
           <template #bodyCell="{ column, record }">
-            <Checkbox
-              v-if="column.key === 'select'"
-              :checked="selectedIds.includes(record.suggestion_id)"
-              @change="toggle(suggestionRecord(record), $event.target.checked)"
-            />
-            <Tag v-else-if="column.dataIndex === 'level'">
-              {{ levelLabel(record) }}
-            </Tag>
-            <div
-              v-else-if="column.dataIndex === 'entity_name'"
-              class="entity-cell"
-            >
-              <strong>{{ record.entity_name || '-' }}</strong>
-            </div>
+            <strong v-if="column.dataIndex === 'department'">
+              {{ record.department }}
+            </strong>
             <button
-              v-else-if="column.dataIndex === 'ad_hierarchy'"
-              class="hierarchy-cell"
+              v-else-if="
+                column.dataIndex === 'responsible' &&
+                !record.isTotal &&
+                record.responsible !== '未分配'
+              "
+              class="operator-filter-link"
               type="button"
-              @click="openCampaignDetail(record)"
+              @click="filterByResponsible(operatorSummaryRecord(record))"
             >
-              <Tooltip
-                :title="`广告活动 ID：${record.campaign_id || '-'}`"
-                placement="topLeft"
-              >
-                <span>
-                  <em>活动</em>
-                  <strong>{{
-                    record.campaign_name || record.campaign_id || '-'
-                  }}</strong>
-                </span>
-              </Tooltip>
-              <Tooltip
-                :title="`广告组 ID：${record.ad_group_id || '-'}`"
-                placement="topLeft"
-              >
-                <span>
-                  <em>广告组</em>
-                  <strong>{{
-                    record.ad_group_name || record.ad_group_id || '-'
-                  }}</strong>
-                </span>
-              </Tooltip>
-              <small>{{ record.campaign_id || '-' }} ·
-                {{ record.ad_group_id || '-' }}</small>
-              <ExternalLink :size="13" />
+              {{ record.responsible }}
             </button>
-            <Tag
-              v-else-if="column.dataIndex === 'action_type'"
-              :color="severityColor(record.severity)"
-            >
-              {{ displayAction(suggestionRecord(record)) }}
-            </Tag>
-            <strong
-              v-else-if="column.dataIndex === 'cvr'"
-              class="metric-value"
-              :class="cvrTone(suggestionRecord(record))"
-            >
-              {{ percent(record.cvr) }}
+            <strong v-else-if="column.dataIndex === 'responsible'">
+              {{ record.responsible }}
             </strong>
             <span
               v-else-if="
-                ['natural_cvr', 'target_cvr'].includes(String(column.dataIndex))
+                ['campaignCount', 'adGroupCount'].includes(
+                  String(column.dataIndex),
+                )
               "
-              class="metric-value metric-neutral"
+              class="count-value"
             >
-              {{ percent(metricValue(record, column.dataIndex)) }}
+              {{
+                Number(record[String(column.dataIndex)] || 0).toLocaleString(
+                  'zh-CN',
+                )
+              }}
             </span>
+            <div
+              v-else-if="column.dataIndex === 'optimizationGroupCount'"
+              class="optimization-count-cell"
+            >
+              <strong>{{
+                  record.optimizationGroupCount.toLocaleString('zh-CN')
+                }}
+                组</strong>
+              <span>{{
+                  record.actionableSuggestionCount.toLocaleString('zh-CN')
+                }}
+                条建议</span>
+              <Tag v-if="record.highPriorityCount" color="red">
+                高优先 {{ record.highPriorityCount.toLocaleString('zh-CN') }}
+              </Tag>
+            </div>
             <strong
               v-else-if="column.dataIndex === 'spend'"
               class="money-value"
-              >{{ money(record.spend) }}</strong>
-            <Tag
-              v-else-if="column.dataIndex === 'relevance_label'"
-              :color="
-                record.relevance_label === '低相关'
-                  ? 'orange'
-                  : record.relevance_label === '待确认'
-                    ? 'default'
-                    : 'green'
-              "
             >
-              {{ record.relevance_label || '-' }}
-            </Tag>
-            <Tag
-              v-else-if="column.dataIndex === 'decision_status'"
-              :color="
-                record.decision_status === 'approved'
-                  ? 'green'
-                  : record.decision_status === 'dismissed'
-                    ? 'default'
-                    : 'blue'
-              "
+              {{ money(record.spend) }}
+            </strong>
+            <div
+              v-else-if="column.dataIndex === 'optimizationSpend'"
+              class="metric-stack"
             >
-              {{
-                statusLabels[record.decision_status] || record.decision_status
-              }}
-            </Tag>
-            <Tooltip
-              v-else-if="column.key === 'operation'"
-              title="查看建议明细"
+              <strong>{{ money(record.optimizationSpend) }}</strong>
+              <span>覆盖
+                {{ optimizationCoverage(operatorSummaryRecord(record)) }}</span>
+            </div>
+            <div
+              v-else-if="column.dataIndex === 'estimatedSavings'"
+              class="metric-stack saving-value"
             >
-              <Button
-                aria-label="查看建议明细"
-                shape="circle"
-                size="small"
-                type="text"
-                @click="openDetail(record)"
-              >
-                <Eye :size="15" />
-              </Button>
-            </Tooltip>
+              <strong>{{ money(record.estimatedSavings) }}</strong>
+              <span>预计降幅 {{ rate(record.estimatedSpendReductionPct) }}</span>
+            </div>
+            <div
+              v-else-if="column.dataIndex === 'estimatedAcosImprovementPp'"
+              class="acos-improvement-cell"
+            >
+              <strong>{{ rate(record.currentAcos) }} →
+                {{ rate(record.estimatedAcos) }}</strong>
+              <span v-if="record.estimatedAcosImprovementPp !== null">
+                改善 {{ record.estimatedAcosImprovementPp.toFixed(2) }}pp
+              </span>
+              <span v-else>销售额为 0，暂不估算</span>
+            </div>
+            <div
+              v-else-if="column.dataIndex === 'recentTrend'"
+              class="recent-trend-cell"
+            >
+              <span>
+                <small>花费</small>
+                <b :class="trendClass(record.spendChangePct, true)">
+                  {{ signedChange(record.spendChangePct) }}
+                </b>
+              </span>
+              <span>
+                <small>销售额</small>
+                <b :class="trendClass(record.salesChangePct)">
+                  {{ signedChange(record.salesChangePct) }}
+                </b>
+              </span>
+              <span>
+                <small>ACoS</small>
+                <b :class="trendClass(record.acosChangePp, true)">
+                  {{ signedChange(record.acosChangePp, 'pp') }}
+                </b>
+              </span>
+              <span>
+                <small>CVR</small>
+                <b :class="trendClass(record.cvrChangePp)">
+                  {{ signedChange(record.cvrChangePp, 'pp') }}
+                </b>
+              </span>
+            </div>
+          </template>
+          <template #emptyText>
+            <Empty description="当前范围没有运营汇总数据" />
           </template>
         </Table>
-        <Empty v-else description="当前筛选没有优化建议">
-          <Button v-if="hasActiveFilters" @click="resetFilters">
-            清除筛选
-          </Button>
-        </Empty>
-      </Spin>
+      </section>
+
+      <aside class="priority-queue">
+        <header class="queue-head">
+          <div>
+            <h2>今日处置顺序</h2>
+            <p>按优先级与当前样本证据排序</p>
+          </div>
+        </header>
+        <div v-if="priorityQueue.length > 0" class="queue-list">
+          <button
+            v-for="(record, index) in priorityQueue"
+            :key="record.suggestion_id"
+            class="queue-item"
+            type="button"
+            @click="openDetail(record)"
+          >
+            <span class="queue-rank">{{ index + 1 }}</span>
+            <span class="queue-content">
+              <strong>{{
+                record.entity_name || record.campaign_name || '-'
+              }}</strong>
+              <small>
+                {{ Number(record.clicks || 0).toLocaleString('zh-CN') }} 点击 ·
+                {{ displayAction(record) }}
+              </small>
+            </span>
+            <span class="queue-impact">{{ queueImpact(record) }}</span>
+          </button>
+        </div>
+        <Empty
+          v-else
+          :image="Empty.PRESENTED_IMAGE_SIMPLE"
+          description="暂无待处置建议"
+        />
+      </aside>
     </section>
+
+    <section class="recommendation-card">
+      <header class="recommendation-head">
+        <div>
+          <h2>低CVR建议清单</h2>
+          <p>
+            {{ data?.pagination.total ?? 0 }} 条建议 ·
+            点击行可查看完整诊断证据与执行影响
+          </p>
+        </div>
+        <Tooltip
+          title="广告 CVR 低于合理 CVR，且达到有效点击门槛后进入建议清单。"
+        >
+          <span class="methodology-help"><Info :size="14" />判定口径</span>
+        </Tooltip>
+      </header>
+      <div class="action-bar">
+        <div class="selection-status">
+          <Checkbox
+            :checked="allCurrentSelected"
+            :disabled="selectableCurrentRows.length === 0"
+            :indeterminate="someCurrentSelected"
+            @change="toggleCurrent($event.target.checked)"
+          >
+            选择当前页
+          </Checkbox>
+          <span>已选 <b>{{ selectedIds.length }}</b> 条</span>
+        </div>
+        <Space class="batch-actions" wrap>
+          <Button
+            :disabled="selectedIds.length === 0"
+            :loading="submitting"
+            @click="decide('dismissed')"
+          >
+            <CircleX :size="15" />
+            忽略
+          </Button>
+          <Button
+            :disabled="selectedIds.length === 0"
+            :loading="submitting"
+            type="primary"
+            @click="decide('approved')"
+          >
+            <Check :size="15" />
+            确认建议
+          </Button>
+          <Button
+            :disabled="selectedIds.length === 0 || adCvrExecutionInProgress"
+            :loading="adCvrExecutionInProgress"
+            danger
+            @click="executeSelected"
+          >
+            <ExternalLink :size="15" />
+            {{ adCvrExecutionInProgress ? '执行中' : '提交执行' }}
+          </Button>
+        </Space>
+      </div>
+
+      <div class="table-band">
+        <Spin :spinning="loading">
+          <Table
+            v-if="data?.rows.length"
+            :columns="columns"
+            :data-source="data.rows"
+            :pagination="pagination"
+            :row-class-name="rowClassName"
+            :row-key="(row) => row.suggestion_id"
+            :scroll="{ x: 2410, y: 'calc(100vh - 440px)' }"
+            size="small"
+            @change="tableChange"
+          >
+            <template #headerCell="{ column }">
+              <span
+                v-if="metricHelp[String(column.dataIndex || '')]"
+                class="metric-heading"
+              >
+                {{ column.title }}
+                <Tooltip :title="metricHelp[String(column.dataIndex || '')]">
+                  <Info :size="13" />
+                </Tooltip>
+              </span>
+            </template>
+            <template #bodyCell="{ column, record }">
+              <Tooltip
+                v-if="column.key === 'select'"
+                :title="
+                  isSuggestionExecuted(suggestionRecord(record))
+                    ? '已执行成功，不可重复选择'
+                    : undefined
+                "
+              >
+                <span class="row-selection-control">
+                  <Checkbox
+                    :aria-label="
+                      isSuggestionExecuted(suggestionRecord(record))
+                        ? '该建议已执行成功，不可选择'
+                        : '选择该建议'
+                    "
+                    :checked="selectedIds.includes(record.suggestion_id)"
+                    :disabled="
+                      !isSuggestionSelectable(suggestionRecord(record))
+                    "
+                    @change="
+                      toggle(suggestionRecord(record), $event.target.checked)
+                    "
+                  />
+                </span>
+              </Tooltip>
+              <Tag
+                v-else-if="column.dataIndex === 'priority'"
+                :color="severityColor(record.severity)"
+              >
+                {{ priorityLabel(suggestionRecord(record)) }}
+              </Tag>
+              <Tag v-else-if="column.dataIndex === 'level'">
+                {{ levelLabel(record) }}
+              </Tag>
+              <div
+                v-else-if="column.dataIndex === 'entity_name'"
+                class="entity-cell"
+              >
+                <strong>{{ record.entity_name || '-' }}</strong>
+              </div>
+              <div
+                v-else-if="column.dataIndex === 'ad_hierarchy'"
+                class="hierarchy-cell"
+              >
+                <div class="hierarchy-line">
+                  <em>活动</em>
+                  <Tooltip
+                    :title="`广告活动 ID：${record.campaign_id || '-'}`"
+                    placement="topLeft"
+                  >
+                    <button
+                      class="hierarchy-link"
+                      type="button"
+                      @click="openCampaignDetail(record)"
+                    >
+                      <strong>{{
+                        record.campaign_name || record.campaign_id || '-'
+                      }}</strong>
+                      <ExternalLink :size="12" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="复制广告活动名称">
+                    <Button
+                      aria-label="复制广告活动名称"
+                      shape="circle"
+                      size="small"
+                      type="text"
+                      @click="copyName(record.campaign_name, '广告活动名称')"
+                    >
+                      <Copy :size="13" />
+                    </Button>
+                  </Tooltip>
+                </div>
+                <div class="hierarchy-line">
+                  <em>广告组</em>
+                  <Tooltip
+                    :title="`广告组 ID：${record.ad_group_id || '-'}`"
+                    placement="topLeft"
+                  >
+                    <button
+                      class="hierarchy-link"
+                      type="button"
+                      @click="openCampaignDetail(record)"
+                    >
+                      <strong>{{
+                        record.ad_group_name || record.ad_group_id || '-'
+                      }}</strong>
+                      <ExternalLink :size="12" />
+                    </button>
+                  </Tooltip>
+                  <Tooltip title="复制广告组名称">
+                    <Button
+                      aria-label="复制广告组名称"
+                      :disabled="!record.ad_group_name"
+                      shape="circle"
+                      size="small"
+                      type="text"
+                      @click="copyName(record.ad_group_name, '广告组名称')"
+                    >
+                      <Copy :size="13" />
+                    </Button>
+                  </Tooltip>
+                </div>
+                <small>{{ record.campaign_id || '-' }} ·
+                  {{ record.ad_group_id || '-' }}</small>
+              </div>
+              <Tag
+                v-else-if="column.dataIndex === 'action_type'"
+                :color="severityColor(record.severity)"
+              >
+                {{ displayAction(suggestionRecord(record)) }}
+              </Tag>
+              <strong
+                v-else-if="column.dataIndex === 'cvr'"
+                class="metric-value"
+                :class="cvrTone(suggestionRecord(record))"
+              >
+                {{ percent(record.cvr) }}
+              </strong>
+              <span
+                v-else-if="
+                  ['natural_cvr', 'target_cvr'].includes(
+                    String(column.dataIndex),
+                  )
+                "
+                class="metric-value metric-neutral"
+              >
+                {{ percent(metricValue(record, column.dataIndex)) }}
+              </span>
+              <strong
+                v-else-if="column.dataIndex === 'spend'"
+                class="money-value"
+                >{{ money(record.spend) }}</strong>
+              <Tag
+                v-else-if="column.dataIndex === 'relevance_label'"
+                :color="
+                  record.relevance_label === '低相关'
+                    ? 'orange'
+                    : record.relevance_label === '待确认'
+                      ? 'default'
+                      : 'green'
+                "
+              >
+                {{ record.relevance_label || '-' }}
+              </Tag>
+              <Tag
+                v-else-if="column.dataIndex === 'decision_status'"
+                :color="
+                  record.decision_status === 'approved'
+                    ? 'green'
+                    : record.decision_status === 'dismissed'
+                      ? 'default'
+                      : 'blue'
+                "
+              >
+                {{
+                  statusLabels[record.decision_status] || record.decision_status
+                }}
+              </Tag>
+              <Space v-else-if="column.key === 'operation'" :size="0">
+                <Tooltip title="修改领星广告设置">
+                  <Button
+                    aria-label="修改领星广告设置"
+                    shape="circle"
+                    size="small"
+                    type="text"
+                    @click="openOperation(record)"
+                  >
+                    <Settings :size="15" />
+                  </Button>
+                </Tooltip>
+                <Tooltip title="查看建议明细">
+                  <Button
+                    aria-label="查看建议明细"
+                    shape="circle"
+                    size="small"
+                    type="text"
+                    @click="openDetail(record)"
+                  >
+                    <Eye :size="15" />
+                  </Button>
+                </Tooltip>
+              </Space>
+            </template>
+          </Table>
+          <Empty v-else description="当前筛选没有优化建议">
+            <Button v-if="hasActiveFilters" @click="resetFilters">
+              清除筛选
+            </Button>
+          </Empty>
+        </Spin>
+      </div>
+    </section>
+
+    <Modal
+      :footer="null"
+      :open="operationOpen"
+      destroy-on-close
+      title="修改领星广告设置"
+      width="720px"
+      @cancel="closeOperation"
+    >
+      <Spin :spinning="operationLoading">
+        <Alert
+          class="operation-alert"
+          message="当前值来自当天优化快照；保存前会重新读取领星实时值并校验，确认后立即写入广告账户。"
+          show-icon
+          type="warning"
+        />
+        <template v-if="operationContext">
+          <div class="operation-meta">
+            <span>{{ operationContext.storeName || '-' }}</span>
+            <Tag color="blue">{{ operationContext.adType.toUpperCase() }}</Tag>
+            <span>活动 ID {{ operationContext.campaignId }}</span>
+            <span v-if="operationContext.adGroupId">
+              广告组 ID {{ operationContext.adGroupId }}
+            </span>
+          </div>
+
+          <div class="operation-form">
+            <div class="operation-row">
+              <label for="campaign-name-input">
+                <strong>广告活动名称</strong>
+                <span>对应领星活动列表中的修改名称</span>
+              </label>
+              <Input
+                id="campaign-name-input"
+                v-model:value="campaignNameDraft"
+                :maxlength="255"
+                show-count
+              />
+              <Button
+                :loading="operationSaving === 'campaign'"
+                type="primary"
+                @click="saveCampaignName"
+              >
+                保存名称
+              </Button>
+            </div>
+
+            <div class="operation-row">
+              <label for="daily-budget-input">
+                <strong>广告活动日预算</strong>
+                <span>快照预算 {{ operationContext.dailyBudget ?? '-' }}</span>
+              </label>
+              <InputNumber
+                id="daily-budget-input"
+                v-model:value="dailyBudgetDraft"
+                :disabled="!operationContext.budgetEditable"
+                :min="0.01"
+                :precision="2"
+                :step="1"
+                class="operation-number"
+              />
+              <Button
+                :disabled="!operationContext.budgetEditable"
+                :loading="operationSaving === 'budget'"
+                type="primary"
+                @click="saveDailyBudget"
+              >
+                保存预算
+              </Button>
+              <Alert
+                v-if="operationContext.budgetBlockedReason"
+                :message="operationContext.budgetBlockedReason"
+                class="operation-row-message"
+                show-icon
+                type="info"
+              />
+            </div>
+
+            <div v-if="operationContext.adGroupId" class="operation-row">
+              <label for="ad-group-name-input">
+                <strong>广告组名称</strong>
+                <span>只修改当前广告组，不影响活动名称</span>
+              </label>
+              <Input
+                id="ad-group-name-input"
+                v-model:value="adGroupNameDraft"
+                :disabled="!operationContext.adGroupAvailable"
+                :maxlength="255"
+                show-count
+              />
+              <Button
+                :disabled="!operationContext.adGroupAvailable"
+                :loading="operationSaving === 'group'"
+                type="primary"
+                @click="saveAdGroupName"
+              >
+                保存名称
+              </Button>
+              <Alert
+                v-if="operationContext.adGroupError"
+                :message="`广告组实时设置读取失败：${operationContext.adGroupError}`"
+                class="operation-row-message"
+                show-icon
+                type="error"
+              />
+            </div>
+          </div>
+        </template>
+        <Empty
+          v-else-if="!operationLoading"
+          description="未能读取领星当前设置"
+        />
+      </Spin>
+    </Modal>
+
+    <Modal
+      :confirm-loading="adCvrExecutionInProgress"
+      :open="executionOpen"
+      :width="760"
+      cancel-text="返回检查"
+      ok-text="确认写入领星"
+      title="确认执行广告优化"
+      @cancel="closeExecution"
+      @ok="submitExecution"
+    >
+      <Alert
+        class="execution-alert"
+        message="将直接修改领星广告账户。关闭类操作会暂停投放；预算类操作按提交时领星实时日预算计算，避免使用过期快照。"
+        show-icon
+        type="warning"
+      />
+      <div v-if="selectedDirectRows.length > 0" class="execution-section">
+        <strong>直接执行</strong>
+        <div class="execution-list">
+          <div
+            v-for="row in selectedDirectRows"
+            :key="row.suggestion_id"
+            class="execution-item"
+          >
+            <div>
+              <b>{{ displayAction(row) }}</b>
+              <span>{{ row.entity_name }} ·
+                {{ row.campaign_name || row.campaign_id }}</span>
+            </div>
+            <Tag color="red">暂停投放</Tag>
+          </div>
+        </div>
+      </div>
+      <div v-if="selectedBudgetRows.length > 0" class="execution-section">
+        <strong>预算调整比例</strong>
+        <p>请输入百分比；系统会在写入前读取领星实时日预算，再按该比例增减。</p>
+        <div class="execution-list">
+          <div
+            v-for="row in selectedBudgetRows"
+            :key="row.suggestion_id"
+            class="execution-item execution-budget-item"
+          >
+            <div class="execution-budget-copy">
+              <b>{{ displayAction(row) }}：{{ row.entity_name }}</b>
+              <span>
+                快照日预算 {{ snapshotBudget(row) ?? '未提供' }}； 预估调整后
+                {{ projectedBudget(row) ?? '等待输入比例' }}
+              </span>
+            </div>
+            <span class="execution-percent-control">
+              <InputNumber
+                v-model:value="budgetAdjustmentDrafts[row.suggestion_id]"
+                :max="100"
+                :min="0.01"
+                :precision="2"
+                :status="
+                  budgetAdjustmentDrafts[row.suggestion_id]
+                    ? undefined
+                    : 'error'
+                "
+                class="execution-percent-input"
+                placeholder="例如 10"
+              />
+              <em>%</em>
+            </span>
+          </div>
+        </div>
+      </div>
+    </Modal>
 
     <Drawer
       :open="Boolean(detail)"
@@ -1383,8 +2294,8 @@ onMounted(() => load());
           <span>SPU / 父ASIN</span><b>{{ detail.spu || '-' }} / {{ detail.parent_asin || '-' }}</b>
           <span>订单 / 点击</span><b>{{ detail.orders }} / {{ detail.clicks }}</b> <span>合格点击</span><b>{{ detail.qualified_clicks ?? '-' }}</b> <span>花费 / 销售额</span><b>{{ money(detail.spend) }} / {{ money(detail.sales) }}</b>
           <span>库存（可售 / 可用 / 总）</span><b>{{ inventoryText(detail) }}</b> <span>库存快照</span><b>{{ inventorySourceText(detail) }}</b> <span>投放内容</span><b>{{ detail.targeting_text || '-' }}</b> <span>搜索词</span><b>{{ detail.search_term || '-' }}</b> <span>相关度</span><b>{{ detail.relevance_label || '-' }}</b> <span>执行方式</span><b>{{
-            rpaExecutableActions.has(detail.action_type)
-              ? '确认后可提交 RPA'
+            directExecutableActions.has(detail.action_type)
+              ? '确认后可直接写入领星'
               : '人工处理'
           }}</b>
         </div>
@@ -1404,8 +2315,10 @@ onMounted(() => load());
   --opt-subtle: hsl(var(--muted));
   --opt-text: hsl(var(--foreground));
 
+  max-width: 1680px;
   min-height: 100%;
-  padding: 16px;
+  padding: 24px;
+  margin: 0 auto;
   color: var(--opt-text);
   background: var(--opt-page);
 }
@@ -1421,21 +2334,23 @@ onMounted(() => load());
 }
 
 .page-head {
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 18px;
 }
 
 .page-head h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   color: var(--opt-text);
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
 }
 
 .page-head p {
   margin: 4px 0 0;
-  font-size: 12px;
+  margin-top: 7px;
+  font-size: 13px;
   color: var(--opt-muted);
 }
 
@@ -1444,8 +2359,11 @@ onMounted(() => load());
 }
 
 .page-head-actions :deep(.ant-tag) {
+  padding: 5px 10px;
   margin: 0;
   font-weight: 700;
+  border: 0;
+  border-radius: 999px;
 }
 
 .spinning {
@@ -1460,18 +2378,24 @@ onMounted(() => load());
 
 .summary-strip {
   display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  overflow: hidden;
-  background: var(--opt-panel);
-  border: 1px solid var(--opt-border);
-  border-radius: 6px;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 12px;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .summary-item {
   position: relative;
-  min-height: 88px;
-  padding: 15px 16px 13px;
+  min-height: 116px;
+  padding: 16px 17px 15px;
+  overflow: hidden;
+  background: var(--opt-panel);
+  border: 1px solid var(--opt-border);
   border-right: 1px solid var(--opt-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 2%);
 }
 
 .summary-item:last-child {
@@ -1480,14 +2404,14 @@ onMounted(() => load());
 
 .summary-item::after {
   position: absolute;
-  right: 16px;
-  bottom: 12px;
-  left: 16px;
-  height: 2px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
   content: '';
   background: #98a2b3;
   border-radius: 2px;
-  opacity: 0.65;
+  opacity: 1;
 }
 
 .summary-item span,
@@ -1499,17 +2423,6 @@ onMounted(() => load());
   font-size: 12px;
   font-weight: 650;
   color: var(--opt-muted);
-}
-
-.summary-item strong {
-  margin-top: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 24px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.15;
-  color: var(--opt-text);
-  white-space: nowrap;
 }
 
 .summary-item.tone-primary::after {
@@ -1550,14 +2463,14 @@ onMounted(() => load());
 
 .filter-band {
   position: relative;
-  display: grid;
+  display: block;
   grid-template-columns: repeat(6, minmax(148px, 1fr));
   gap: 10px;
-  padding: 14px;
-  margin-top: 12px;
+  padding: 12px;
+  margin-top: 14px;
   background: var(--opt-panel);
   border: 1px solid var(--opt-border);
-  border-radius: 6px;
+  border-radius: 14px;
   box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
 }
 
@@ -1834,7 +2747,9 @@ onMounted(() => load());
 :global(.ad-optimization-dropdown .ant-select-item) {
   min-height: 32px;
   padding: 5px 9px;
-  margin: 1px 0;
+
+  /* Keep the virtual-list item height in sync so the last option is not clipped. */
+  margin: 0;
   color: #344054;
   border-radius: 3px;
   transition:
@@ -1896,7 +2811,7 @@ onMounted(() => load());
 }
 
 .operator-summary-band {
-  margin-top: 12px;
+  margin-top: 0;
   overflow: hidden;
   background: var(--opt-panel);
   border: 1px solid var(--opt-border);
@@ -1957,11 +2872,13 @@ onMounted(() => load());
   border-color: var(--opt-border);
 }
 
-.operator-summary-band :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
+.operator-summary-band
+  :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
   background: #fbfdff;
 }
 
-.operator-summary-band :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
+.operator-summary-band
+  :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
   background: #f0f7ff;
 }
 
@@ -2072,12 +2989,13 @@ onMounted(() => load());
   gap: 16px;
   justify-content: space-between;
   min-height: 54px;
-  padding: 9px 12px;
+  padding: 9px 16px;
+  margin: 0;
   margin-top: 12px;
-  background: var(--opt-panel);
-  border: 1px solid var(--opt-border);
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--opt-border);
+  border-radius: 0;
 }
 
 .selection-status {
@@ -2102,9 +3020,9 @@ onMounted(() => load());
   min-height: 240px;
   padding: 0 12px 12px;
   overflow: hidden;
-  background: var(--opt-panel);
-  border: 1px solid var(--opt-border);
-  border-radius: 0 0 6px 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .table-band :deep(.ant-table) {
@@ -2117,7 +3035,7 @@ onMounted(() => load());
   font-size: 12px;
   font-weight: 800;
   color: var(--opt-text);
-  background: var(--opt-subtle);
+  background: hsl(var(--muted) / 58%);
   border-bottom-color: var(--opt-border);
 }
 
@@ -2125,6 +3043,12 @@ onMounted(() => load());
   padding: 9px 8px !important;
   font-size: 13px;
   border-bottom-color: var(--opt-border);
+}
+
+.row-selection-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .table-band :deep(.ant-table-tbody > tr:nth-child(even) > td) {
@@ -2182,23 +3106,19 @@ onMounted(() => load());
 
 .hierarchy-cell {
   width: 100%;
-  padding: 0;
   color: inherit;
   text-align: left;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
 }
 
-.hierarchy-cell > span {
+.hierarchy-line {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: 46px minmax(0, 1fr) 26px;
+  gap: 4px;
   align-items: center;
   min-width: 0;
 }
 
-.hierarchy-cell > span + span {
+.hierarchy-line + .hierarchy-line {
   margin-top: 4px;
 }
 
@@ -2208,26 +3128,172 @@ onMounted(() => load());
   color: var(--opt-muted);
 }
 
-.hierarchy-cell strong,
 .hierarchy-cell small {
   display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  color: var(--opt-muted);
+  white-space: nowrap;
+}
+
+.hierarchy-link {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  color: #175cd3;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.hierarchy-link strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.hierarchy-cell strong {
-  color: #175cd3;
-}
-
-.hierarchy-cell small {
-  margin-top: 4px;
-  font-size: 10px;
-  color: var(--opt-muted);
-}
-
-.hierarchy-cell:hover strong {
+.hierarchy-link:hover strong {
   text-decoration: underline;
+}
+
+.operation-alert {
+  margin-bottom: 16px;
+}
+
+.operation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  padding: 0 0 14px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.operation-form {
+  display: grid;
+}
+
+.operation-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 96px;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 0;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.operation-row:last-child {
+  border-bottom: 0;
+}
+
+.operation-row label strong,
+.operation-row label span {
+  display: block;
+}
+
+.operation-row label span {
+  margin-top: 4px;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.operation-number {
+  width: 100%;
+}
+
+.operation-row-message {
+  grid-column: 2 / 4;
+}
+
+.execution-alert {
+  margin-bottom: 16px;
+}
+
+.execution-section + .execution-section {
+  margin-top: 20px;
+}
+
+.execution-section > strong {
+  display: block;
+  font-size: 14px;
+  color: #1d2939;
+}
+
+.execution-section > p {
+  margin: 5px 0 10px;
+  font-size: 12px;
+  color: #667085;
+}
+
+.execution-list {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.execution-item {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 12px 14px;
+  background: hsl(var(--card));
+}
+
+.execution-item + .execution-item {
+  border-top: 1px solid hsl(var(--border));
+}
+
+.execution-item > div,
+.execution-budget-copy {
+  min-width: 0;
+}
+
+.execution-item b,
+.execution-item span {
+  display: block;
+}
+
+.execution-item b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: #1d2939;
+  white-space: nowrap;
+}
+
+.execution-item span {
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #667085;
+  white-space: nowrap;
+}
+
+.execution-percent-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.execution-percent-input {
+  width: 124px;
+}
+
+.execution-percent-control em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  color: #475467;
 }
 
 .metric-value,
@@ -2322,6 +3388,364 @@ onMounted(() => load());
   background: hsl(var(--primary));
 }
 
+.priority-alert {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  margin-bottom: 14px;
+  background: #fff7f7;
+  border: 1px solid #ffd6d9;
+  border-radius: 12px;
+}
+
+.priority-alert-main {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+}
+
+.priority-alert-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #d92d20;
+  background: #fff0f1;
+  border-radius: 8px;
+}
+
+.priority-alert strong,
+.priority-alert p {
+  display: block;
+}
+
+.priority-alert strong {
+  color: #7a1d27;
+}
+
+.priority-alert p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #9b5360;
+}
+
+.priority-alert :deep(.ant-btn) {
+  flex: 0 0 auto;
+  height: 34px;
+  padding-inline: 15px;
+  font-weight: 700;
+  border-radius: 8px;
+}
+
+.summary-item:not(:last-child) {
+  border-right: 1px solid var(--opt-border);
+}
+
+.summary-item strong {
+  margin: 10px 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 27px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: var(--opt-text);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+.summary-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: var(--opt-muted);
+  white-space: nowrap;
+}
+
+.filter-primary-row {
+  display: grid;
+  grid-template-columns:
+    auto minmax(142px, 0.6fr) minmax(132px, 0.55fr) minmax(260px, 1fr)
+    auto auto;
+  gap: 9px;
+  align-items: end;
+}
+
+.priority-tabs {
+  display: inline-flex;
+  gap: 2px;
+  align-self: end;
+  min-height: 34px;
+  padding: 3px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  background: var(--opt-subtle);
+  border-radius: 9px;
+}
+
+.priority-filter-option {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: #475467;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.priority-filter-option:hover {
+  color: #175cd3;
+  background: #f5f9ff;
+}
+
+.priority-filter-option:focus-visible {
+  outline: 2px solid #84adff;
+  outline-offset: 2px;
+}
+
+.priority-filter-option i {
+  width: 7px;
+  height: 7px;
+  background: #98a2b3;
+  border-radius: 50%;
+}
+
+.priority-filter-option b {
+  min-width: 18px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: inherit;
+  text-align: center;
+  background: rgb(255 255 255 / 72%);
+  border-radius: 5px;
+}
+
+.priority-filter-option.is-all.active {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #b2ddff;
+}
+
+.priority-filter-option.is-high i {
+  background: #d92d20;
+}
+
+.priority-filter-option.is-high.active {
+  color: #b42318;
+  background: #fef3f2;
+  border-color: #fecdca;
+}
+
+.priority-filter-option.is-medium i {
+  background: #f79009;
+}
+
+.priority-filter-option.is-medium.active {
+  color: #b54708;
+  background: #fffaeb;
+  border-color: #fedf89;
+}
+
+.priority-filter-option.is-low i {
+  background: #667085;
+}
+
+.priority-filter-option.is-low.active {
+  color: #344054;
+  background: #f2f4f7;
+  border-color: #d0d5dd;
+}
+
+.compact-filter {
+  gap: 4px;
+}
+
+.compact-filter > span {
+  min-height: 14px;
+  font-size: 11px;
+}
+
+.primary-search {
+  align-self: end;
+  min-width: 0;
+}
+
+.primary-search :deep(.ant-input) {
+  font-size: 13px;
+}
+
+.filter-primary-row > :deep(.ant-btn) {
+  height: 34px;
+  padding-inline: 13px;
+  font-weight: 650;
+  border-radius: 8px;
+}
+
+.filter-panel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  gap: 12px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid var(--opt-border);
+}
+
+.filter-panel .filter-actions {
+  grid-column: span 2;
+  justify-content: flex-end;
+  padding-top: 20px;
+  margin: 0;
+  border: 0;
+}
+
+.filter-panel .filter-actions :deep(.ant-checkbox-wrapper) {
+  margin-right: auto;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(310px, 0.75fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.operator-summary-band,
+.priority-queue,
+.recommendation-card {
+  overflow: hidden;
+  background: var(--opt-panel);
+  border: 1px solid var(--opt-border);
+  border-radius: 14px;
+}
+
+.operator-summary-head,
+.queue-head,
+.recommendation-head {
+  padding: 16px 17px 13px;
+}
+
+.operator-summary-head h2,
+.queue-head h2,
+.recommendation-head h2 {
+  font-size: 16px;
+}
+
+.operator-summary-head p,
+.queue-head p,
+.recommendation-head p {
+  margin-top: 4px;
+}
+
+.priority-queue {
+  min-width: 0;
+}
+
+.queue-head {
+  border-bottom: 1px solid var(--opt-border);
+}
+
+.queue-list {
+  padding: 8px 13px 12px;
+}
+
+.queue-item {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 11px 5px;
+  color: var(--opt-text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--opt-border);
+}
+
+.queue-item:last-child {
+  border-bottom: 0;
+}
+
+.queue-item:hover {
+  background: hsl(var(--primary) / 5%);
+}
+
+.queue-item:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: -2px;
+}
+
+.queue-rank {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #d92d20;
+  background: #fff0f1;
+  border-radius: 8px;
+}
+
+.queue-content {
+  min-width: 0;
+}
+
+.queue-content strong,
+.queue-content small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-content strong {
+  font-size: 13px;
+}
+
+.queue-content small {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--opt-muted);
+}
+
+.queue-impact {
+  font-size: 12px;
+  font-weight: 750;
+  color: #d92d20;
+  white-space: nowrap;
+}
+
+.recommendation-card {
+  margin-top: 14px;
+}
+
+.recommendation-head {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--opt-border);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -2358,6 +3782,16 @@ onMounted(() => load());
 
   .operator-summary-head {
     align-items: flex-start;
+  }
+
+  .execution-budget-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .execution-percent-control,
+  .execution-percent-input {
+    width: 100%;
   }
 
   .summary-strip,
@@ -2453,6 +3887,149 @@ onMounted(() => load());
   }
 }
 
+@media (max-width: 1400px) {
+  .summary-strip {
+    grid-template-columns: repeat(5, minmax(150px, 1fr));
+  }
+
+  .summary-item,
+  .summary-item:nth-child(3) {
+    border-bottom: 1px solid var(--opt-border);
+  }
+
+  .filter-primary-row {
+    grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) auto;
+  }
+
+  .primary-search {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 1000px) {
+  .summary-strip {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .summary-item:nth-child(3) {
+    border-right: 1px solid var(--opt-border);
+  }
+
+  .summary-item:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--opt-border);
+  }
+
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .optimization-page {
+    padding: 14px;
+  }
+
+  .priority-alert {
+    align-items: flex-start;
+  }
+
+  .filter-primary-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .priority-tabs,
+  .primary-search {
+    grid-column: 1 / -1;
+  }
+
+  .filter-primary-row > :deep(.ant-btn) {
+    width: 100%;
+  }
+
+  .filter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-panel .filter-actions {
+    grid-column: 1 / -1;
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .page-head,
+  .priority-alert,
+  .recommendation-head {
+    flex-direction: column;
+  }
+
+  .page-head-actions,
+  .priority-alert :deep(.ant-btn) {
+    align-self: stretch;
+  }
+
+  .summary-strip,
+  .filter-primary-row,
+  .filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item,
+  .summary-item:nth-child(3),
+  .summary-item:nth-child(even) {
+    border-right: 1px solid var(--opt-border);
+  }
+
+  .summary-item:last-child {
+    border-bottom: 0;
+  }
+
+  .compact-filter,
+  .priority-tabs,
+  .primary-search {
+    grid-column: 1;
+  }
+
+  .priority-tabs {
+    width: 100%;
+  }
+
+  .filter-panel .filter-actions {
+    grid-column: 1;
+  }
+
+  .queue-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .queue-impact {
+    grid-column: 2;
+  }
+}
+
+:global(.dark) .priority-alert {
+  background: #351b22;
+  border-color: #7a313d;
+}
+
+:global(.dark) .priority-alert strong {
+  color: #fecdd3;
+}
+
+:global(.dark) .priority-alert p {
+  color: #fda4af;
+}
+
+:global(.dark) .priority-alert-icon,
+:global(.dark) .queue-rank {
+  color: #fda4af;
+  background: #54212d;
+}
+
+:global(.dark) .queue-impact {
+  color: #fda4af;
+}
+
 :global(.dark) .summary-item.tone-danger strong,
 :global(.dark) .metric-danger {
   color: #f97066 !important;
@@ -2497,21 +4074,60 @@ onMounted(() => load());
   background: #182230;
 }
 
-:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
+:global(.dark)
+  .operator-summary-band
+  :deep(.ant-table-tbody > tr:nth-child(even):not(.operator-total-row) > td) {
   background: #101828;
 }
 
-:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
+:global(.dark)
+  .operator-summary-band
+  :deep(.ant-table-tbody > tr:hover:not(.operator-total-row) > td) {
   background: #1d2939;
 }
 
-:global(.dark) .operator-summary-band :deep(.ant-table-tbody > tr.operator-total-row > td) {
+:global(.dark)
+  .operator-summary-band
+  :deep(.ant-table-tbody > tr.operator-total-row > td) {
   background: #25304a;
   border-top-color: #475467;
 }
 
 :global(.dark) .filter-item :deep(.ant-select-selection-item) {
   color: #b2ccff;
+}
+
+:global(.dark) .priority-filter-option {
+  color: #cbd5e1;
+}
+
+:global(.dark) .priority-filter-option:hover,
+:global(.dark) .priority-filter-option.is-all.active {
+  color: #b2ccff;
+  background: #203451;
+  border-color: #315b9d;
+}
+
+:global(.dark) .priority-filter-option.is-high.active {
+  color: #fda29b;
+  background: #4a1f24;
+  border-color: #7a313d;
+}
+
+:global(.dark) .priority-filter-option.is-medium.active {
+  color: #fec84b;
+  background: #3b2614;
+  border-color: #854a0e;
+}
+
+:global(.dark) .priority-filter-option.is-low.active {
+  color: #e2e8f0;
+  background: #273548;
+  border-color: #475467;
+}
+
+:global(.dark) .priority-filter-option b {
+  background: rgb(16 24 40 / 56%);
 }
 
 :global(.dark)

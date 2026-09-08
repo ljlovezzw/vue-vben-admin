@@ -5,11 +5,11 @@ import type {
   AdMonitorFilters,
   AdMonitorOverview,
   AdMonitorTrend,
-  BeerDressCalendarOverview,
   AnalyticsOverview,
   AnalyticsReportOverview,
   Asin360Overview,
   Asin360StoreOptions,
+  BeerDressCalendarOverview,
   CategoryConfigRow,
   ConfigOverview,
   ConfigUserAuthPayload,
@@ -26,7 +26,9 @@ import type {
   KeywordReversePayload,
   KeywordReverseResult,
   LoginLogRow,
+  NetProfitDashboardData,
   NetProfitDetails,
+  NetProfitGroupsResult,
   NetProfitOverview,
   OperationGroupPayload,
   OperationGroupRow,
@@ -169,6 +171,8 @@ export interface NetProfitOverviewParams {
   pivotRow?: string;
   productTypes?: string[];
   suppliers?: string[];
+  pathDimensions?: string[];
+  pathValues?: string[];
 }
 
 export interface NetProfitDetailsParams extends NetProfitOverviewParams {
@@ -417,6 +421,18 @@ export async function fetchNetProfitDetails(
   params: NetProfitDetailsParams = {},
 ): Promise<NetProfitDetails> {
   return requestClient.get('/kanban/net-profit/details', { params });
+}
+
+export async function fetchNetProfitDashboard(
+  params: NetProfitOverviewParams = {},
+): Promise<NetProfitDashboardData> {
+  return requestClient.get('/kanban/net-profit/dashboard', { params });
+}
+
+export async function fetchNetProfitGroups(
+  params: NetProfitOverviewParams = {},
+): Promise<NetProfitGroupsResult> {
+  return requestClient.get('/kanban/net-profit/groups', { params });
 }
 
 export async function fetchKanbanProductDetail(

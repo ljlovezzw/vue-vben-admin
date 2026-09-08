@@ -435,13 +435,17 @@ function statusLabel(value?: string, header = false) {
 function sponsoredTypeLabel(value?: string) {
   const type = String(value || '').toUpperCase();
   return (
-    {
-      SB: 'SB广告',
-      SBV: 'SBV广告',
-      SD: 'SD广告',
-      SP: 'SP广告',
-    } as Record<string, string>
-  )[type] || value || '-';
+    (
+      {
+        SB: 'SB广告',
+        SBV: 'SBV广告',
+        SD: 'SD广告',
+        SP: 'SP广告',
+      } as Record<string, string>
+    )[type] ||
+    value ||
+    '-'
+  );
 }
 
 function metricCell(record: AdCampaignDetailMetricRow, key: string) {
@@ -811,7 +815,9 @@ onBeforeUnmount(() => {
           <div class="title-block">
             <div class="title-row">
               <h1>{{ meta?.campaignName || campaignId }}</h1>
-              <Tag color="blue">{{ sponsoredTypeLabel(meta?.sponsoredType) }}</Tag>
+              <Tag color="blue">
+                {{ sponsoredTypeLabel(meta?.sponsoredType) }}
+              </Tag>
               <Tag :color="statusColor(meta?.status)">
                 {{ statusLabel(meta?.status, true) }}
               </Tag>
