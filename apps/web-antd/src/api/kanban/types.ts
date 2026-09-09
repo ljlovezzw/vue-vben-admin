@@ -1289,6 +1289,7 @@ export interface AdCvrOptimizationSuggestion {
 }
 
 export interface AdCvrOptimizationOperationContext {
+  currentBid?: null | number;
   adGroupAvailable: boolean;
   adGroupError: string;
   adGroupId: string;
@@ -1304,6 +1305,11 @@ export interface AdCvrOptimizationOperationContext {
   settingsSource: 'snapshot';
   storeName: string;
   suggestionId: string;
+  keywordText?: string;
+  originalMatchType?: string;
+  matchTypeOptions?: string[];
+  matchTypeEditable?: boolean;
+  matchTypeBlockedReason?: string;
 }
 
 export interface AdCvrOptimizationOperationResult {
@@ -1322,6 +1328,11 @@ export interface AdCvrOptimizationExecutionItem {
   message: string;
   status: 'failed' | 'succeeded' | 'unchanged';
   suggestionId: string;
+  adGroupId?: string;
+  adGroupName?: string;
+  keywordText?: string;
+  matchType?: string;
+  cpc?: number;
 }
 
 export interface AdCvrOptimizationExecutionResult {
@@ -1372,6 +1383,7 @@ export interface AdCvrOptimizationOperatorSummaryRow {
 }
 
 export interface AdCvrOptimizationOverview {
+  availableSnapshotDates: string[];
   dashboard: {
     highPriorityGroupChange: null | number;
     highPriorityGroupCount: number;

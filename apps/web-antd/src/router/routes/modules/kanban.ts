@@ -32,6 +32,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'KanbanDailyAdOptimization',
+        path: 'daily-ad-optimization',
+        component: () => import('#/views/kanban/ad-cvr-optimization/index.vue'),
+        meta: {
+          authority: ['kanban:ads'],
+          icon: 'lucide:calendar-check-2',
+          keepAlive: true,
+          title: '今日广告优化',
+        },
+      },
+      {
         name: 'KanbanAdCvrOptimization',
         path: 'ad-cvr-optimization',
         alias: 'ads/cvr-optimization',

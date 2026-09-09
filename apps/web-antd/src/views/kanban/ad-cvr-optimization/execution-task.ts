@@ -1,3 +1,4 @@
+import type { AdCvrOptimizationScope } from '#/api/kanban/ad-cvr-optimization';
 import type { AdCvrOptimizationExecutionResult } from '#/api/kanban/types';
 
 import { computed, readonly, ref } from 'vue';
@@ -36,6 +37,12 @@ function showExecuting(count: number) {
 export async function runAdCvrExecutionTask(
   suggestionIds: string[],
   budgetAdjustments: Record<string, number>,
+  scope: AdCvrOptimizationScope = 'legacy',
+  bidAdjustments: Record<string, number> = {},
+  matchTypeAdjustments: Record<
+    string,
+    { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
+  > = {},
 ): Promise<AdCvrOptimizationExecutionResult> {
   if (executionPhase.value !== 'idle') {
     throw new Error('已有广告优化任务正在执行，请等待当前任务完成');
@@ -57,6 +64,9 @@ export async function runAdCvrExecutionTask(
     const result = await executeAdCvrOptimizationSuggestions(
       suggestionIds,
       budgetAdjustments,
+      scope,
+      bidAdjustments,
+      matchTypeAdjustments,
     );
     globalThis.clearTimeout(executingTimer);
     if (executionPhase.value === 'submitting') showExecuting(count);

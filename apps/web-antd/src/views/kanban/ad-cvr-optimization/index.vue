@@ -12,7 +12,6 @@ import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
-  Check,
   CircleX,
   Copy,
   ExternalLink,
@@ -61,6 +60,10 @@ const loading = ref(false);
 const filtersExpanded = ref(false);
 const router = useRouter();
 const route = useRoute();
+const apiScope = computed<'daily' | 'legacy'>(() =>
+  route.name === 'KanbanDailyAdOptimization' ? 'daily' : 'legacy',
+);
+const isDailyOptimization = computed(() => apiScope.value === 'daily');
 const submitting = ref(false);
 const loadError = ref('');
 const data = ref<AdCvrOptimizationOverview | null>(null);
@@ -76,6 +79,14 @@ const adGroupNameDraft = ref('');
 const dailyBudgetDraft = ref<number | undefined>();
 const executionOpen = ref(false);
 const budgetAdjustmentDrafts = ref<Record<string, number | undefined>>({});
+const bidAdjustmentDrafts = ref<Record<string, number | undefined>>({});
+const currentBids = ref<Record<string, number>>({});
+const matchTypeDrafts = ref<Record<string, 'broad' | 'exact' | 'phrase' | undefined>>({});
+const matchGroupNameDrafts = ref<Record<string, string>>({});
+const matchCpcDrafts = ref<Record<string, number | undefined>>({});
+const matchContexts = ref<Record<string, AdCvrOptimizationOperationContext>>({});
+const bidLoading = ref(false);
+const bidLoadError = ref('');
 let operationLoadToken = 0;
 let loadRequestSequence = 0;
 let overviewCacheGeneration = 0;
@@ -101,6 +112,7 @@ const query = reactive({
   responsible: '',
   search: '',
   selectedOnly: true,
+  snapshotDate: '',
   serviceStatuses: [] as string[],
   severities: [] as string[],
   statuses: ['pending'] as string[],
@@ -108,6 +120,7 @@ const query = reactive({
   sponsoredTypes: [] as string[],
   targetingTypes: [] as string[],
 });
+const activeAction = ref('');
 
 const actionLabels: Record<string, string> = {
   adjust_bidding_strategy: '调整竞价策略与广告位',
@@ -141,14 +154,46 @@ function displayAction(row: AdCvrOptimizationSuggestion) {
     row.action_type
   );
 }
+
+const actionTabs = computed(() =>
+  [
+    {
+      label: '全部动作',
+      value: '',
+      count: data.value?.summary.byAction
+        ? Object.values(data.value.summary.byAction).reduce(
+            (sum, count) => sum + Number(count || 0),
+            0,
+          )
+        : (data.value?.pagination.total ?? 0),
+    },
+    ...(data.value?.filters.actions ?? []).map((action) => ({
+      label: action.label,
+      value: action.value,
+      count: Number(data.value?.summary.byAction?.[action.value] ?? 0),
+    })),
+  ].filter((tab) => !tab.value || tab.count > 0),
+);
+
+function setActionFilter(value: string) {
+  if (activeAction.value === value) return;
+  activeAction.value = value;
+  query.actions = value ? [value] : [];
+  selectedIds.value = [];
+  void load(true);
+}
 const directExecutableActions = new Set([
+  'adjust_match_type',
   'close_ad_group',
   'close_campaign',
   'close_color',
   'decrease_budget',
+  'increase_bid',
   'increase_budget',
+  'lower_bid',
 ]);
 const budgetExecutableActions = new Set(['decrease_budget', 'increase_budget']);
+const bidExecutableActions = new Set(['increase_bid', 'lower_bid']);
 const maxDirectExecutionBatch = 20;
 const completedExecutionStatuses = new Set(['succeeded']);
 const levelLabels: Record<string, string> = {
@@ -337,6 +382,7 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
     width: 88,
   },
   { dataIndex: 'spend', key: 'spend', title: '花费', width: 92 },
+  { dataIndex: 'cpcReference', key: 'cpcReference', title: 'CPC', width: 92 },
   {
     dataIndex: 'relevance_label',
     key: 'relevance_label',
@@ -397,9 +443,34 @@ const selectedBudgetRows = computed(() =>
 );
 const selectedDirectRows = computed(() =>
   selectedRows.value.filter(
-    (row) => !budgetExecutableActions.has(row.action_type),
+    (row) =>
+      !budgetExecutableActions.has(row.action_type) &&
+      !bidExecutableActions.has(row.action_type) &&
+      row.action_type !== 'adjust_match_type',
   ),
 );
+const selectedBidRows = computed(() =>
+  selectedRows.value.filter((row) => bidExecutableActions.has(row.action_type)),
+);
+const selectedMatchRows = computed(() =>
+  selectedRows.value.filter((row) => row.action_type === 'adjust_match_type'),
+);
+
+function referenceCpc(row: { clicks?: unknown; spend?: unknown }) {
+  const clicks = Number(row.clicks);
+  const spend = Number(row.spend);
+  return clicks > 0 && Number.isFinite(spend) ? money(spend / clicks) : '-';
+}
+
+function projectedBid(row: AdCvrOptimizationSuggestion) {
+  const current = currentBids.value[row.suggestion_id];
+  const ratio = bidAdjustmentDrafts.value[row.suggestion_id];
+  if (!current || !ratio) return '等待输入比例';
+  return (
+    current *
+    (1 + (row.action_type === 'increase_bid' ? ratio : -ratio) / 100)
+  ).toFixed(2);
+}
 const someCurrentSelected = computed(() => {
   const current = selectableCurrentRows.value;
   const selectedCount = current.filter((row) =>
@@ -433,6 +504,12 @@ const snapshotRange = computed(() => {
   if (!snapshot?.range_start || !snapshot?.range_end) return '等待快照数据';
   return `${snapshot.range_start} 至 ${snapshot.range_end}`;
 });
+const snapshotDateOptions = computed(() =>
+  (data.value?.availableSnapshotDates ?? []).map((value) => ({
+    label: value,
+    value,
+  })),
+);
 function normalizeCountry(value: unknown) {
   return String(value || '')
     .trim()
@@ -678,10 +755,14 @@ function inventorySourceText(record: AdCvrOptimizationSuggestion) {
 }
 
 function severityColor(value: string) {
-  return value === 'high' ? 'red' : (value === 'medium' ? 'orange' : 'default');
+  if (value === 'high') return 'red';
+  if (value === 'medium') return 'orange';
+  return 'default';
 }
 
 function isPriorityFilterActive(severity?: string) {
+  if (query.statuses.length !== 1 || query.statuses[0] !== 'pending')
+    return false;
   if (!severity) return query.severities.length === 0;
   return query.severities.length === 1 && query.severities[0] === severity;
 }
@@ -693,10 +774,19 @@ const allPendingPriorityCount = computed(() => {
 });
 
 function setPriorityFilter(severity?: string) {
+  selectedIds.value = [];
   query.statuses = ['pending'];
   query.severities = severity ? [severity] : [];
   query.selectedOnly = true;
   void load(true, true);
+}
+
+function showApprovedSuggestions() {
+  selectedIds.value = [];
+  query.statuses = ['approved'];
+  query.severities = [];
+  query.selectedOnly = false;
+  void load(true);
 }
 
 function priorityPreview(severity?: string) {
@@ -724,16 +814,18 @@ async function cachedOverview(params: typeof query) {
   const existing = overviewRequests.get(key);
   if (existing) return existing;
   const generation = overviewCacheGeneration;
-  const request = fetchAdCvrOptimizationOverview(params).then((value) => {
-    if (generation === overviewCacheGeneration) {
-      if (overviewCache.size >= 8) overviewCache.clear();
-      overviewCache.set(key, {
-        expires: Date.now() + 30_000,
-        value: structuredClone(value),
-      });
-    }
-    return value;
-  });
+  const request = fetchAdCvrOptimizationOverview(params, apiScope.value).then(
+    (value) => {
+      if (generation === overviewCacheGeneration) {
+        if (overviewCache.size >= 8) overviewCache.clear();
+        overviewCache.set(key, {
+          expires: Date.now() + 30_000,
+          value: structuredClone(value),
+        });
+      }
+      return value;
+    },
+  );
   overviewRequests.set(key, request);
   try {
     return await request;
@@ -882,6 +974,7 @@ async function openOperation(record: Record<string, any>) {
   try {
     const context = await fetchAdCvrOptimizationOperationContext(
       row.suggestion_id,
+      apiScope.value,
     );
     if (token !== operationLoadToken) return;
     operationContext.value = context;
@@ -956,6 +1049,7 @@ function saveCampaignName() {
           campaignName: newName,
           expectedCampaignName: context.campaignName,
         },
+        apiScope.value,
       );
       context.campaignName = result.campaignName || newName;
       campaignNameDraft.value = context.campaignName;
@@ -997,6 +1091,7 @@ function saveDailyBudget() {
       const result = await updateAdCvrOptimizationCampaign(
         target.suggestion_id,
         payload,
+        apiScope.value,
       );
       context.dailyBudget = result.dailyBudget ?? budget;
       dailyBudgetDraft.value = context.dailyBudget ?? undefined;
@@ -1029,6 +1124,7 @@ function saveAdGroupName() {
           adGroupName: newName,
           expectedAdGroupName: context.adGroupName,
         },
+        apiScope.value,
       );
       context.adGroupName = result.adGroupName || newName;
       adGroupNameDraft.value = context.adGroupName;
@@ -1050,6 +1146,13 @@ async function load(reset = false, reuseCache = false) {
     const result = await cachedOverview(structuredClone(toRaw(query)));
     if (requestId !== loadRequestSequence) return;
     data.value = result;
+    if (
+      isDailyOptimization.value &&
+      !query.snapshotDate &&
+      result.snapshot?.snapshot_date
+    ) {
+      query.snapshotDate = String(result.snapshot.snapshot_date);
+    }
     selectedIds.value = selectedIds.value.filter((id) =>
       data.value?.rows.some(
         (row) => row.suggestion_id === id && isSuggestionSelectable(row),
@@ -1065,6 +1168,7 @@ async function load(reset = false, reuseCache = false) {
 }
 
 function resetFilters() {
+  activeAction.value = '';
   query.actions = [];
   query.adGroupKeyword = '';
   query.campaignKeyword = '';
@@ -1104,21 +1208,23 @@ function toggleCurrent(checked: boolean) {
     : selectedIds.value.filter((id) => !currentPageIds.includes(id));
 }
 
-async function decide(status: 'approved' | 'dismissed' | 'pending') {
+async function decide(status: 'dismissed' | 'pending') {
   if (selectedIds.value.length === 0) {
     message.warning('请先选择建议');
     return;
   }
   submitting.value = true;
   try {
-    await updateAdCvrOptimizationDecisions(selectedIds.value, status);
-    message.success(
-      status === 'approved'
-        ? '已确认所选建议'
-        : (status === 'dismissed'
-          ? '已忽略所选建议'
-          : '已恢复为待判断'),
+    await updateAdCvrOptimizationDecisions(
+      selectedIds.value,
+      status,
+      apiScope.value,
     );
+    let successText = '已恢复为待判断';
+    if (status === 'dismissed') {
+      successText = '已忽略所选建议';
+    }
+    message.success(successText);
     selectedIds.value = [];
     await load();
   } catch (error) {
@@ -1151,13 +1257,14 @@ function closeExecution() {
   executionOpen.value = false;
 }
 
-function executeSelected() {
+async function executeSelected() {
+  if (bidLoading.value) return;
   if (adCvrExecutionInProgress.value) {
     message.info('已有广告优化任务正在执行，可继续使用其他页面');
     return;
   }
   if (selectedIds.value.length === 0) {
-    message.warning('请先选择已确认建议');
+    message.warning('请先勾选要执行的建议');
     return;
   }
   if (selectedRows.value.length !== selectedIds.value.length) {
@@ -1171,11 +1278,11 @@ function executeSelected() {
     );
     return;
   }
-  const unapproved = selectedRows.value.filter(
-    (row) => row.decision_status !== 'approved',
+  const dismissed = selectedRows.value.filter(
+    (row) => row.decision_status === 'dismissed',
   );
-  if (unapproved.length > 0) {
-    message.warning('只能提交已确认的建议，请先确认所选建议');
+  if (dismissed.length > 0) {
+    message.warning('已忽略的建议请先恢复后再提交执行');
     return;
   }
   const unsupported = selectedRows.value.filter(
@@ -1188,15 +1295,87 @@ function executeSelected() {
     );
     return;
   }
+  if (
+    selectedBidRows.value.some(
+      (row) =>
+        row.level !== 'ad_group' || row.sponsored_type.toLowerCase() !== 'sp',
+    )
+  ) {
+    message.warning(
+      '竞价调整目前仅支持 SP 广告组默认竞价，请排除颜色和投放内容等其他层级',
+    );
+    return;
+  }
+  bidAdjustmentDrafts.value = {};
+  currentBids.value = {};
+  bidLoadError.value = '';
   budgetAdjustmentDrafts.value = Object.fromEntries(
     selectedRows.value
       .filter((row) => budgetExecutableActions.has(row.action_type))
       .map((row) => [row.suggestion_id, undefined]),
   );
+  matchTypeDrafts.value = {};
+  matchGroupNameDrafts.value = {};
+  matchCpcDrafts.value = {};
+  matchContexts.value = {};
   executionOpen.value = true;
+  bidLoading.value = true;
+  try {
+    for (const row of selectedBidRows.value) {
+      const context = await fetchAdCvrOptimizationOperationContext(
+        row.suggestion_id,
+        apiScope.value,
+      );
+      if (!context.currentBid || context.currentBid <= 0)
+        throw new Error('领星未返回有效当前竞价');
+      currentBids.value[row.suggestion_id] = context.currentBid;
+    }
+    for (const row of selectedMatchRows.value) {
+      const context = await fetchAdCvrOptimizationOperationContext(
+        row.suggestion_id,
+        apiScope.value,
+      );
+      if (!context.matchTypeEditable) {
+        throw new Error(context.matchTypeBlockedReason || '当前建议无法创建匹配方式广告组');
+      }
+      matchContexts.value[row.suggestion_id] = context;
+      matchGroupNameDrafts.value[row.suggestion_id] = `${context.adGroupName || '广告组'}-${context.keywordText || row.targeting_text}`;
+      matchCpcDrafts.value[row.suggestion_id] = context.currentBid || undefined;
+      let defaultMatchType: 'broad' | 'exact' | 'phrase' = 'broad';
+      if (context.originalMatchType === 'broad') {
+        defaultMatchType = 'phrase';
+      } else if (context.originalMatchType === 'phrase') {
+        defaultMatchType = 'exact';
+      }
+      matchTypeDrafts.value[row.suggestion_id] = defaultMatchType;
+    }
+  } catch (error) {
+    bidLoadError.value = `读取当前竞价失败，请关闭弹窗重试：${String(error)}`;
+  } finally {
+    bidLoading.value = false;
+  }
 }
 
 async function submitExecution() {
+  if (bidLoading.value || bidLoadError.value) return;
+  const bidAdjustments: Record<string, number> = {};
+  for (const row of selectedBidRows.value) {
+    const ratio = Number(bidAdjustmentDrafts.value[row.suggestion_id]);
+    if (
+      !currentBids.value[row.suggestion_id] ||
+      !Number.isFinite(ratio) ||
+      ratio <= 0 ||
+      ratio > 100 ||
+      (row.action_type === 'lower_bid' && ratio >= 100) ||
+      Number(projectedBid(row)) <= 0
+    ) {
+      message.warning(
+        '请填写有效竞价比例：大于 0 且不超过 100%，降低须小于 100%，调整后竞价须大于 0',
+      );
+      return;
+    }
+    bidAdjustments[row.suggestion_id] = ratio;
+  }
   if (selectedRows.value.length !== selectedIds.value.length) {
     executionOpen.value = false;
     selectedIds.value = selectedRows.value.map((row) => row.suggestion_id);
@@ -1217,10 +1396,34 @@ async function submitExecution() {
     }
     budgetAdjustments[row.suggestion_id] = percent;
   }
+  const matchTypeAdjustments: Record<string, { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }> = {};
+  for (const row of selectedMatchRows.value) {
+    const groupName = String(matchGroupNameDrafts.value[row.suggestion_id] || '').trim();
+    const cpc = Number(matchCpcDrafts.value[row.suggestion_id]);
+    const matchType = matchTypeDrafts.value[row.suggestion_id];
+    if (
+      !groupName ||
+      groupName.length > 255 ||
+      !matchType ||
+      !Number.isFinite(cpc) ||
+      cpc <= 0 ||
+      (matchContexts.value[row.suggestion_id]?.originalMatchType === matchType)
+    ) {
+      message.warning(`请完整填写“${row.targeting_text || row.entity_name}”的新广告组名称、匹配方式和 CPC`);
+      return;
+    }
+    matchTypeAdjustments[row.suggestion_id] = { groupName, cpc, matchType };
+  }
   const suggestionIds = selectedRows.value.map((row) => row.suggestion_id);
   executionOpen.value = false;
   try {
-    await runAdCvrExecutionTask(suggestionIds, budgetAdjustments);
+    await runAdCvrExecutionTask(
+      suggestionIds,
+      budgetAdjustments,
+      apiScope.value,
+      bidAdjustments,
+      matchTypeAdjustments,
+    );
   } catch {
     // The persistent notification owns execution errors and recovery guidance.
   }
@@ -1259,7 +1462,18 @@ onMounted(() => {
       ? projectTags.map(String)
       : [String(projectTags)];
   }
+  if (isDailyOptimization.value && route.query.snapshotDate) {
+    query.snapshotDate = String(route.query.snapshotDate);
+  }
   void load();
+});
+
+watch(apiScope, () => {
+  query.snapshotDate = '';
+  selectedIds.value = [];
+  data.value = null;
+  clearOverviewCache();
+  void load(true);
 });
 </script>
 
@@ -1267,7 +1481,9 @@ onMounted(() => {
   <div class="optimization-page">
     <header class="page-head">
       <div>
-        <h1>广告低CVR智能优化台</h1>
+        <h1>
+          {{ isDailyOptimization ? '今日广告优化' : '广告低CVR智能优化台' }}
+        </h1>
         <p v-if="data?.snapshot">
           统计区间：{{ data.snapshot.range_start }} 至
           {{ data.snapshot.range_end }} · 深层广告组
@@ -1278,6 +1494,15 @@ onMounted(() => {
         </p>
       </div>
       <div class="page-head-actions">
+        <Select
+          v-if="isDailyOptimization"
+          v-model:value="query.snapshotDate"
+          :options="snapshotDateOptions"
+          aria-label="选择广告优化快照日期"
+          class="snapshot-date-select"
+          placeholder="选择快照日期"
+          @change="load(true)"
+        />
         <Tooltip title="刷新当前数据">
           <Button aria-label="刷新当前数据" shape="circle" @click="load()">
             <RotateCw :class="{ spinning: loading }" :size="16" />
@@ -1385,6 +1610,21 @@ onMounted(() => {
             <i aria-hidden="true"></i>
             观察跟进
             <b>{{ data?.summary.bySeverity?.low ?? 0 }}</b>
+          </button>
+          <button
+            class="priority-filter-option is-all"
+            :class="{
+              active:
+                query.statuses.length === 1 && query.statuses[0] === 'approved',
+            }"
+            type="button"
+            :aria-pressed="
+              query.statuses.length === 1 && query.statuses[0] === 'approved'
+            "
+            title="查看历史已确认建议，可直接勾选提交执行"
+            @click="showApprovedSuggestions()"
+          >
+            历史已确认
           </button>
         </div>
         <label class="filter-item compact-filter">
@@ -1591,18 +1831,6 @@ onMounted(() => {
             mode="multiple"
             popup-class-name="ad-optimization-dropdown"
             placeholder="全部层级"
-          />
-        </label>
-        <label class="filter-item">
-          <span>建议动作</span>
-          <Select
-            v-model:value="query.actions"
-            :options="data?.filters.actions ?? []"
-            allow-clear
-            aria-label="建议动作"
-            mode="multiple"
-            popup-class-name="ad-optimization-dropdown"
-            placeholder="全部动作"
           />
         </label>
         <div class="filter-actions">
@@ -1821,6 +2049,20 @@ onMounted(() => {
           <span class="methodology-help"><Info :size="14" />判定口径</span>
         </Tooltip>
       </header>
+      <div class="action-tabs" role="tablist" aria-label="建议动作">
+        <button
+          v-for="tab in actionTabs"
+          :key="tab.value || 'all'"
+          class="action-tab"
+          :class="{ active: activeAction === tab.value }"
+          type="button"
+          role="tab"
+          :aria-selected="activeAction === tab.value"
+          @click="setActionFilter(tab.value)"
+        >
+          {{ tab.label }} <b>{{ tab.count.toLocaleString('zh-CN') }}</b>
+        </button>
+      </div>
       <div class="action-bar">
         <div class="selection-status">
           <Checkbox
@@ -1843,18 +2085,10 @@ onMounted(() => {
             忽略
           </Button>
           <Button
-            :disabled="selectedIds.length === 0"
-            :loading="submitting"
-            type="primary"
-            @click="decide('approved')"
-          >
-            <Check :size="15" />
-            确认建议
-          </Button>
-          <Button
             :disabled="selectedIds.length === 0 || adCvrExecutionInProgress"
             :loading="adCvrExecutionInProgress"
             danger
+            type="primary"
             @click="executeSelected"
           >
             <ExternalLink :size="15" />
@@ -2017,6 +2251,9 @@ onMounted(() => {
               >
                 {{ percent(metricValue(record, column.dataIndex)) }}
               </span>
+              <strong v-else-if="column.dataIndex === 'cpcReference'">{{
+                referenceCpc(record)
+              }}</strong>
               <strong
                 v-else-if="column.dataIndex === 'spend'"
                 class="money-value"
@@ -2203,12 +2440,13 @@ onMounted(() => {
       cancel-text="返回检查"
       ok-text="确认写入领星"
       title="确认执行广告优化"
+      :ok-button-props="{ disabled: bidLoading || Boolean(bidLoadError) }"
       @cancel="closeExecution"
       @ok="submitExecution"
     >
       <Alert
         class="execution-alert"
-        message="将直接修改领星广告账户。关闭类操作会暂停投放；预算类操作按提交时领星实时日预算计算，避免使用过期快照。"
+        message="将直接修改领星广告账户。关闭类操作会暂停投放；预算和竞价按写入时领星实时值计算。CPC 仅作参考，不是竞价基数。"
         show-icon
         type="warning"
       />
@@ -2226,6 +2464,84 @@ onMounted(() => {
                 {{ row.campaign_name || row.campaign_id }}</span>
             </div>
             <Tag color="red">暂停投放</Tag>
+          </div>
+        </div>
+      </div>
+      <div v-if="selectedBidRows.length > 0" class="execution-section">
+        <strong>广告组竞价调整</strong>
+        <p v-if="bidLoading">正在读取领星当前竞价…</p>
+        <Alert
+          v-if="bidLoadError"
+          :message="bidLoadError"
+          type="error"
+          show-icon
+        />
+        <div
+          v-for="row in selectedBidRows"
+          :key="row.suggestion_id"
+          class="execution-item execution-budget-item"
+        >
+          <div class="execution-budget-copy">
+            <b>{{ displayAction(row) }}：{{ row.entity_name }}</b>
+            <span>当前竞价 {{ currentBids[row.suggestion_id] ?? '读取中' }} · CPC
+              {{ referenceCpc(row) }} · 调整后 {{ projectedBid(row) }}</span>
+          </div>
+          <span class="execution-percent-control">
+            <InputNumber
+              v-model:value="bidAdjustmentDrafts[row.suggestion_id]"
+              :min="0.01"
+              :max="row.action_type === 'lower_bid' ? 99.99 : 100"
+              :precision="2"
+              placeholder="例如 10"
+              :aria-label="`${displayAction(row)}比例`"
+            />
+            <em>%</em>
+          </span>
+        </div>
+        <p>
+          当前值来自领星，提交时会再次读取；期间竞价变化时，以写入前的实时值为准。
+        </p>
+      </div>
+      <div v-if="selectedMatchRows.length > 0" class="execution-section">
+        <strong>调整匹配方式</strong>
+        <p>将在当前广告活动下新建广告组，不修改原广告组；复制原广告组有效商品广告，并添加当前同词关键词。</p>
+        <div
+          v-for="row in selectedMatchRows"
+          :key="row.suggestion_id"
+          class="execution-item execution-budget-item"
+        >
+          <div class="execution-budget-copy">
+            <b>{{ row.targeting_text || row.entity_name }}</b>
+            <span>
+              原广告组 {{ row.ad_group_name || row.ad_group_id }} · 原匹配
+              {{ matchContexts[row.suggestion_id]?.originalMatchType || '未知' }}
+            </span>
+            <Input
+              v-model:value="matchGroupNameDrafts[row.suggestion_id]"
+              :maxlength="255"
+              placeholder="新广告组名称"
+              aria-label="新广告组名称"
+            />
+          </div>
+          <div class="execution-match-controls">
+            <Select
+              v-model:value="matchTypeDrafts[row.suggestion_id]"
+              :options="[
+                { label: '广泛匹配', value: 'broad' },
+                { label: '词组匹配', value: 'phrase' },
+                { label: '精确匹配', value: 'exact' },
+              ]"
+              aria-label="新匹配方式"
+              placeholder="新匹配方式"
+            />
+            <InputNumber
+              v-model:value="matchCpcDrafts[row.suggestion_id]"
+              :min="0.01"
+              :precision="2"
+              placeholder="CPC"
+              aria-label="CPC"
+            />
+            <span>CPC</span>
           </div>
         </div>
       </div>
@@ -2356,6 +2672,10 @@ onMounted(() => {
 
 .page-head-actions {
   gap: 10px;
+}
+
+.snapshot-date-select {
+  width: 142px;
 }
 
 .page-head-actions :deep(.ant-tag) {
@@ -2986,6 +3306,7 @@ onMounted(() => {
 }
 
 .action-bar {
+  display: flex;
   gap: 16px;
   justify-content: space-between;
   min-height: 54px;
@@ -2996,6 +3317,55 @@ onMounted(() => {
   border: 0;
   border-bottom: 1px solid var(--opt-border);
   border-radius: 0;
+}
+
+.action-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.action-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--opt-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+}
+
+.action-tab:hover {
+  color: #175cd3;
+  background: #f5f9ff;
+}
+
+.action-tab.active {
+  color: #175cd3;
+  background: #eff8ff;
+  border-color: #b2ddff;
+}
+
+.action-tab b {
+  min-width: 18px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: inherit;
+  text-align: center;
+  background: rgb(255 255 255 / 72%);
+  border-radius: 5px;
 }
 
 .selection-status {
@@ -3966,6 +4336,12 @@ onMounted(() => {
   .page-head-actions,
   .priority-alert :deep(.ant-btn) {
     align-self: stretch;
+  }
+
+  .snapshot-date-select {
+    flex: 1;
+    width: auto;
+    min-width: 0;
   }
 
   .summary-strip,

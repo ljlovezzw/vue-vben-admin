@@ -11,17 +11,27 @@ import type {
 
 import { requestClient } from '#/api/request';
 
+export type AdCvrOptimizationScope = 'daily' | 'legacy';
+
+function optimizationBase(scope: AdCvrOptimizationScope) {
+  return scope === 'daily'
+    ? '/kanban/ads/daily-optimization'
+    : '/kanban/ads/cvr-optimization';
+}
+
 export async function fetchAdCvrOptimizationOverview(
   params: Record<string, any>,
+  scope: AdCvrOptimizationScope = 'legacy',
 ): Promise<AdCvrOptimizationOverview> {
-  return requestClient.get('/kanban/ads/cvr-optimization/overview', { params });
+  return requestClient.get(`${optimizationBase(scope)}/overview`, { params });
 }
 
 export async function updateAdCvrOptimizationDecisions(
   suggestionIds: string[],
   status: 'approved' | 'dismissed' | 'pending',
+  scope: AdCvrOptimizationScope = 'legacy',
 ): Promise<{ status: string; updated: number }> {
-  return requestClient.post('/kanban/ads/cvr-optimization/decisions', {
+  return requestClient.post(`${optimizationBase(scope)}/decisions`, {
     status,
     suggestionIds,
   });
@@ -30,11 +40,19 @@ export async function updateAdCvrOptimizationDecisions(
 export async function executeAdCvrOptimizationSuggestions(
   suggestionIds: string[],
   budgetAdjustments: Record<string, number> = {},
+  scope: AdCvrOptimizationScope = 'legacy',
+  bidAdjustments: Record<string, number> = {},
+  matchTypeAdjustments: Record<
+    string,
+    { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
+  > = {},
 ): Promise<AdCvrOptimizationExecutionResult> {
   return requestClient.post(
-    '/kanban/ads/cvr-optimization/execute',
+    `${optimizationBase(scope)}/execute`,
     {
       budgetAdjustments,
+      bidAdjustments,
+      matchTypeAdjustments,
       suggestionIds,
     },
     { timeout: 300_000 },
@@ -43,9 +61,10 @@ export async function executeAdCvrOptimizationSuggestions(
 
 export async function fetchAdCvrOptimizationOperationContext(
   suggestionId: string,
+  scope: AdCvrOptimizationScope = 'legacy',
 ): Promise<AdCvrOptimizationOperationContext> {
   return requestClient.get(
-    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/operation-context`,
+    `${optimizationBase(scope)}/suggestions/${encodeURIComponent(suggestionId)}/operation-context`,
     { timeout: 300_000 },
   );
 }
@@ -58,9 +77,10 @@ export async function updateAdCvrOptimizationCampaign(
     expectedCampaignName?: string;
     expectedDailyBudget?: number;
   },
+  scope: AdCvrOptimizationScope = 'legacy',
 ): Promise<AdCvrOptimizationOperationResult> {
   return requestClient.put(
-    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/campaign`,
+    `${optimizationBase(scope)}/suggestions/${encodeURIComponent(suggestionId)}/campaign`,
     payload,
     { timeout: 300_000 },
   );
@@ -69,9 +89,10 @@ export async function updateAdCvrOptimizationCampaign(
 export async function updateAdCvrOptimizationAdGroup(
   suggestionId: string,
   payload: { adGroupName: string; expectedAdGroupName?: string },
+  scope: AdCvrOptimizationScope = 'legacy',
 ): Promise<AdCvrOptimizationOperationResult> {
   return requestClient.put(
-    `/kanban/ads/cvr-optimization/suggestions/${encodeURIComponent(suggestionId)}/ad-group`,
+    `${optimizationBase(scope)}/suggestions/${encodeURIComponent(suggestionId)}/ad-group`,
     payload,
     { timeout: 300_000 },
   );
