@@ -42,6 +42,27 @@ function result(
 }
 
 describe('runAdCvrExecutionTask', () => {
+  it('keeps uncertain writes visible without suggesting another submission', async () => {
+    mocks.execute.mockResolvedValue(
+      result({ needsReview: 1, succeeded: 0, status: 'partial_failed' }),
+    );
+    await runAdCvrExecutionTask(['one'], {});
+    expect(mocks.notification.warning).toHaveBeenCalledWith(
+      expect.objectContaining({ message: '执行结果待核对', duration: 0 }),
+    );
+    expect(mocks.notification.success).not.toHaveBeenCalled();
+  });
+
+  it('does not describe a lost response as a safely retryable failure', async () => {
+    mocks.execute.mockRejectedValue(new Error('timeout'));
+    await expect(runAdCvrExecutionTask(['one'], {})).rejects.toThrow('timeout');
+    expect(mocks.notification.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '未收到完整执行结果',
+        description: expect.stringContaining('勿直接重复提交'),
+      }),
+    );
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();

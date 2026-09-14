@@ -26,6 +26,22 @@ export async function fetchAdCvrOptimizationOverview(
   return requestClient.get(`${optimizationBase(scope)}/overview`, { params });
 }
 
+export interface AdCvrHierarchyNode {
+  key: string;
+  title: string;
+  children?: AdCvrHierarchyNode[];
+  isLeaf?: boolean;
+}
+
+export function fetchAdCvrOptimizationHierarchy(
+  params: Record<string, any>,
+  scope: AdCvrOptimizationScope = 'legacy',
+): Promise<{ hierarchy: AdCvrHierarchyNode[] }> {
+  return requestClient.get(`${optimizationBase(scope)}/overview`, {
+    params: { ...params, hierarchyOnly: true, hierarchyPaths: [] },
+  });
+}
+
 export async function updateAdCvrOptimizationDecisions(
   suggestionIds: string[],
   status: 'approved' | 'dismissed' | 'pending',
@@ -46,6 +62,13 @@ export async function executeAdCvrOptimizationSuggestions(
     string,
     { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
   > = {},
+  negativeAdjustments: Record<
+    string,
+    {
+      matchType?: 'negativeExact' | 'negativePhrase';
+      scope: 'ad_group' | 'campaign';
+    }
+  > = {},
 ): Promise<AdCvrOptimizationExecutionResult> {
   return requestClient.post(
     `${optimizationBase(scope)}/execute`,
@@ -53,8 +76,28 @@ export async function executeAdCvrOptimizationSuggestions(
       budgetAdjustments,
       bidAdjustments,
       matchTypeAdjustments,
+      negativeAdjustments,
       suggestionIds,
     },
+    { timeout: 300_000 },
+  );
+}
+
+export function reconcileAdCvrExecution(
+  suggestionId: string,
+  scope: AdCvrOptimizationScope = 'legacy',
+): Promise<{
+  batchId?: string;
+  currentBid?: string;
+  error?: string;
+  message: string;
+  operation?: string;
+  status: string;
+  targetBid?: string;
+}> {
+  return requestClient.post(
+    `${optimizationBase(scope)}/suggestions/${encodeURIComponent(suggestionId)}/reconcile`,
+    {},
     { timeout: 300_000 },
   );
 }

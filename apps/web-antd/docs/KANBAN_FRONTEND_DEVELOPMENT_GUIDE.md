@@ -1,6 +1,37 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-09-05
+更新时间：2026-09-14
+
+## 2026-09-14 广告优化分段加载（已发布）
+
+- overview 使用 `responsePart=rows` 先获取准确分页和明细，再按实际快照日期请求 `responsePart=summary`；默认 full 兼容旧调用方。
+- `overview-loader.ts` 区分 legacy/daily、快照及筛选缓存，summary 排除分页/排序参数；20 秒短缓存与同请求合并。刷新或业务修改失效，失效前的在途响应不能重新填缓存。
+- 页面分别控制明细/统计加载状态；统计中显示占位，失败保留明细和执行操作，单独重试。旧请求序号检查保留，汇总不能替换当前页，快照运行编号不一致拒绝合并。
+- 保留原有布局、层级/SPU 树、横向滚动和直接批量执行。本轮模块与请求客户端 8 个文件 / 47 项测试、typecheck、定向 Oxlint / ESLint / Stylelint、生产构建通过；本地浏览器已验证汇总失败及恢复、桌面/390px 视口。修复非空断言等 Git 钩子报错，未跳过钩子、未改变暂存区。
+- 2026-09-14 09:39 前后端已发布，前端 green 槽，入口 `/jse/index-index-BNJjlO2x.js`，广告模块 `/js/ad-cvr-optimization-wTsW2mwR.js`；公网资源与本地构建一致，blue 槽保留回退。未修改真实广告，未执行 Git 提交。发布详情见后端 `docs/audits/RELEASE_AUDIT_2026-09-14_AD_CVR_PERFORMANCE.md`。
+- 服务层性能与缓存降级边界见后端 `docs/audits/AD_CVR_FILTER_PERFORMANCE_2026-09-14.md`，不可将服务层或缓存命中时间当成浏览器首屏耗时。
+
+## 2026-09-11 公共请求与测试审计
+
+- `RequestClient.request` 抛出完整错误对象，保留 `response.status`、`response.data`、请求配置和取消标记；后端字符串 `detail/error/message` 优先作为错误消息。不要再依赖“直接抛出响应 body”的旧行为。422 等结构化校验详情保留在 `response.data`，不强行转换成字符串。
+- 发货工作区的 409 冲突分支、纯利页面的 404 提示可以读取到真实 HTTP 状态；广告等页面使用 `Error.message` 时能显示后端说明。
+- 开启 token 续期时，同批请求只发起一次续期；成功后每个请求使用新 token，设置重试标记；失败或空 token 时拒绝排队请求，不再以空 token 重发。此处是看板登录会话机制，不是领星广告会话刷新逻辑。
+- 广告优化页面清理嵌套三元表达式及模板 lint 错误，保持关闭→否定→调整匹配方式的动作顺序和现有列宽拖动功能。
+- `vitest.config.ts` 排除 `apps/web-antd/scripts/*.test.cjs`：这些脚本使用 `node:test`，必须单独运行；不能以排除配置代替测试执行。
+
+验证命令（前端仓库根目录）：
+
+```powershell
+pnpm exec vitest run
+node --test apps/web-antd/scripts/upload-recovery.test.cjs
+pnpm exec eslint apps/web-antd/src apps/web-antd/vite.config.ts packages/effects/request/src vitest.config.ts
+pnpm --filter @vben/web-antd run typecheck
+pnpm --filter @vben/web-antd run build
+```
+
+本轮本地结果：Vitest 38 文件 / 320 测试通过；上传恢复 10 测试通过；上述业务范围 ESLint、类型检查及生产构建通过。未发布、未执行真实广告修改，也未以单元测试替代浏览器端到端验收。详细审计见后端 `docs/audits/CODE_AUDIT_2026-09-11.md`。
+
+注意：根目录 `pnpm exec eslint . --quiet` 仍有 25 项既有问题（未使用 catalog 项 16 个、Node 上传测试脚本风格 9 项），不等于全仓 lint 已通过。
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
@@ -579,7 +610,7 @@ public\tools\upload-tool.html
 - 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
 - 图片上传工具任务日志失败记录会按任务表“错误日志链接”关联错误日志表，并展示日志表中的 `errorReason` 和“查看错误日志”链接；前端仅允许打开 HTTP(S) 地址。
 - ZIP 生成后前端计算 SHA-256，并按当前登录 token、任务组合和 ZIP 内容生成会话缓存键。相同内容在 30 分钟内重复点击“上传到飞书任务”时直接复用原任务结果，不再次上传附件；页面会显示“已复用”及原 `recordIds`。服务端仍使用 Redis 幂等缓存作为跨页面、跨 Worker 的最终防线，前端缓存不可代替后端去重。
-- 原 `multipart/form-data -> /api/feishu/image-upload-tasks`、后端 `image-upload-sessions` 分片和 `taskId` 轮询代码只作为服务端降级接口保留，不是当前页面默认链路。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260727-gallery-no-ai-flags`。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks` 仅作为服务端降级接口保留。含 `galleryZip + sidMsku` 的领星橱窗图自动更新必须让后端读取 ZIP，因此使用 `image-upload-sessions`：前端按 512KB 分片，每片 45 秒超时并最多重试 3 次；复用会话时读取后端已持久化分片序号，仅补传缺失部分。提交前同时核对全部已选 MSKU 颜色是否具有对应主图，缺色时直接显示颜色并阻止传输。其它附件仍默认走 Worker 边缘直传。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260911-resumable-upload-v5`。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
@@ -628,7 +659,7 @@ src\views\kanban\config\index.vue
 
 ### 6.9 正式环境静态部署与性能
 
-- Cloudflare Web Analytics 的 2026-07 性能分析见 `docs/CLOUDFLARE_WEB_ANALYTICS_2026-07.md`。
+- 2026-07 的一次性 Cloudflare 性能报告已清理；部署与回滚以本文当前流程和 `deploy/deploy-production.ps1` 为准，历史采样不代表当前性能。
 - 正式环境不再使用 `vite preview` 提供静态资源。Nginx 监听 `5668`，Cloudflare Tunnel 的 `hub.junlee.top` 应指向 `http://127.0.0.1:5668`。
 - 发布必须执行 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚。脚本先尝试直接 reload；权限不足或新槽位未生效时，自动启动 `Kanban Nginx Frontend` SYSTEM 计划任务，并逐项核对入口哈希和 `tools/upload-tool.html` 内容。新槽位超时未生效会恢复旧配置并再次调用 SYSTEM 任务，命令以失败退出。
 - `js/jse/css` 文件名包含内容哈希，可长期缓存；`index.html`、`_app.config.js` 和 SPA 路由响应禁止缓存，避免 HTML 引用已经下线的旧资源。

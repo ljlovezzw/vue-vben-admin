@@ -1241,6 +1241,11 @@ export interface AnalyticsReportColumn {
 }
 
 export interface AdCvrOptimizationSuggestion {
+  responsible_source?: string;
+  responsible_note?: string;
+  lifecycle_tags?: string[];
+  project_tags?: string[];
+  slow_tags?: string[];
   action?: string;
   action_label?: string;
   actionLabel?: string;
@@ -1260,6 +1265,9 @@ export interface AdCvrOptimizationSuggestion {
   diagnosis_label?: string;
   entity_name: string;
   entity_type: string;
+  execution_batch_id?: string;
+  execution_error?: string;
+  execution_has_write?: boolean | number;
   execution_status: string;
   level: string;
   metrics: Record<string, any>;
@@ -1326,7 +1334,7 @@ export interface AdCvrOptimizationExecutionItem {
   actionType: string;
   batchId?: string;
   message: string;
-  status: 'failed' | 'succeeded' | 'unchanged';
+  status: 'failed' | 'needs_review' | 'succeeded' | 'unchanged';
   suggestionId: string;
   adGroupId?: string;
   adGroupName?: string;
@@ -1337,6 +1345,7 @@ export interface AdCvrOptimizationExecutionItem {
 
 export interface AdCvrOptimizationExecutionResult {
   failed: number;
+  needsReview?: number;
   message: string;
   results: AdCvrOptimizationExecutionItem[];
   status: 'partial_failed' | 'succeeded';
@@ -1345,6 +1354,9 @@ export interface AdCvrOptimizationExecutionResult {
 }
 
 export interface AdCvrOptimizationOperatorSummaryRow {
+  optimizationObjectCount?: number;
+  highPriorityPendingObjectCount?: number;
+  lowConfidencePendingObjectCount?: number;
   acosChangePp: null | number;
   actionableSuggestionCount: number;
   adGroupCount: number;
@@ -1387,7 +1399,9 @@ export interface AdCvrOptimizationOverview {
   dashboard: {
     highPriorityGroupChange: null | number;
     highPriorityGroupCount: number;
+    highPriorityObjectCount?: number;
     lowConfidenceGroupCount: number;
+    lowConfidenceObjectCount?: number;
     previousSnapshotDate: null | string;
     qualifiedSuggestionClicks: number;
     qualifiedSuggestionCount: number;
@@ -1398,9 +1412,20 @@ export interface AdCvrOptimizationOverview {
     countries: string[];
     entityStates: string[];
     levels: Array<{ label: string; value: string }>;
+    lifecycleTags?: string[];
+    organizationTree?: Array<{
+      children: Array<{ key: string; title: string; value: string; }>;
+      key: string;
+      title: string;
+      value: string;
+    }>;
+    products?: Array<{ parentAsin: string; spu: string; }>;
+    projectTags?: string[];
     responsibles: string[];
     serviceStatuses: string[];
+    slowTags?: string[];
     sponsoredTypes: string[];
+    spuCount?: number;
     statuses: string[];
     stores: string[];
     targetingTypes: string[];

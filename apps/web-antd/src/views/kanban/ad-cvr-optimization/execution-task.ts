@@ -26,7 +26,7 @@ function errorText(error: unknown) {
 function showExecuting(count: number) {
   executionPhase.value = 'executing';
   notification.info({
-    description: `领星正在逐条处理 ${count} 条建议。任务会在后台继续，可正常使用其他页面。`,
+    description: `领星正在逐条处理 ${count} 条建议。可切换其他页面，请勿关闭或刷新浏览器；中断后先核对结果。`,
     duration: 0,
     key: executionNotificationKey,
     message: '执行中',
@@ -42,6 +42,13 @@ export async function runAdCvrExecutionTask(
   matchTypeAdjustments: Record<
     string,
     { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
+  > = {},
+  negativeAdjustments: Record<
+    string,
+    {
+      matchType?: 'negativeExact' | 'negativePhrase';
+      scope: 'ad_group' | 'campaign';
+    }
   > = {},
 ): Promise<AdCvrOptimizationExecutionResult> {
   if (executionPhase.value !== 'idle') {
@@ -67,16 +74,22 @@ export async function runAdCvrExecutionTask(
       scope,
       bidAdjustments,
       matchTypeAdjustments,
+      negativeAdjustments,
     );
     globalThis.clearTimeout(executingTimer);
     if (executionPhase.value === 'submitting') showExecuting(count);
 
-    if (result.failed > 0) {
+    if (result.failed > 0 || (result.needsReview || 0) > 0) {
       notification.warning({
-        description: result.message || '部分建议执行失败，请检查结果后重试。',
+        description:
+          result.message ||
+          '部分建议未完成，请查看执行状态；待核对的建议不可重复提交。',
         duration: 0,
         key: executionNotificationKey,
-        message: '执行完成，部分失败',
+        message:
+          (result.needsReview || 0) > 0
+            ? '执行结果待核对'
+            : '执行完成，部分失败',
         placement: 'topRight',
       });
     } else {
@@ -92,10 +105,10 @@ export async function runAdCvrExecutionTask(
   } catch (error) {
     globalThis.clearTimeout(executingTimer);
     notification.error({
-      description: `${errorText(error)}。请检查网络或登录状态后重试。`,
+      description: `${errorText(error)}。未收到完整结果不代表未执行，请刷新清单并核对领星结果，勿直接重复提交。`,
       duration: 0,
       key: executionNotificationKey,
-      message: '执行失败',
+      message: '未收到完整执行结果',
       placement: 'topRight',
     });
     throw error;

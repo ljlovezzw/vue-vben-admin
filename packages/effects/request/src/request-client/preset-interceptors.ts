@@ -72,11 +72,18 @@ export const authenticateResponseInterceptor = ({
       }
       // 如果正在刷新 token，则将请求加入队列，等待刷新完成
       if (client.isRefreshing) {
-        return new Promise((resolve) => {
-          client.refreshTokenQueue.push((newToken: string) => {
-            config.headers.Authorization = formatToken(newToken);
-            resolve(client.request(config.url, { ...config }));
-          });
+        return new Promise((resolve, reject) => {
+          client.refreshTokenQueue.push(
+            (newToken: string, refreshError?: unknown) => {
+              if (refreshError !== undefined || !newToken) {
+                reject(refreshError ?? error);
+                return;
+              }
+              config.__isRetryRequest = true;
+              config.headers.Authorization = formatToken(newToken);
+              resolve(client.request(config.url, { ...config }));
+            },
+          );
         });
       }
 
@@ -87,6 +94,8 @@ export const authenticateResponseInterceptor = ({
 
       try {
         const newToken = await doRefreshToken();
+        if (!newToken) throw new Error('Refresh token returned an empty token');
+        config.headers.Authorization = formatToken(newToken);
 
         // 处理队列中的请求
         client.refreshTokenQueue.forEach((callback) => callback(newToken));
@@ -96,7 +105,9 @@ export const authenticateResponseInterceptor = ({
         return client.request(error.config.url, { ...error.config });
       } catch (refreshError) {
         // 如果刷新 token 失败，处理错误（如强制登出或跳转登录页面）
-        client.refreshTokenQueue.forEach((callback) => callback(''));
+        client.refreshTokenQueue.forEach((callback) =>
+          callback('', refreshError),
+        );
         client.refreshTokenQueue = [];
         console.error('Refresh token failed, please login again.');
         await doReAuthenticate();

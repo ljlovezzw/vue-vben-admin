@@ -47,7 +47,7 @@ class RequestClient {
   public isRefreshing = false;
   public postSSE: SSE['postSSE'];
   // 刷新token队列
-  public refreshTokenQueue: ((token: string) => void)[] = [];
+  public refreshTokenQueue: ((token: string, error?: unknown) => void)[] = [];
   public requestSSE: SSE['requestSSE'];
   public upload: FileUploader['upload'];
 
@@ -156,7 +156,21 @@ class RequestClient {
       });
       return response as T;
     } catch (error: any) {
-      throw error.response ? error.response.data : error;
+      // Keep HTTP status/config/cancellation metadata for callers (e.g. 409
+      // workspace conflicts). Throwing only response.data loses that context.
+      const data = error?.response?.data;
+      const detail = [data?.detail, data?.error, data?.message].find(
+        (value) => typeof value === 'string' && value.trim(),
+      );
+      if (error?.response) {
+        const requestError =
+          error instanceof Error
+            ? error
+            : Object.assign(new Error('Request failed'), error);
+        if (detail) requestError.message = detail;
+        throw requestError;
+      }
+      throw error;
     }
   }
 }

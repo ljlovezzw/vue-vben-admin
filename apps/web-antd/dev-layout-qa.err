@@ -1,0 +1,17 @@
+09:41:38 [vite] http proxy error: /user/info
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1142:49)
+    at afterConnectMultiple (node:net:1723:7)
+09:41:38 [vite] (client) [console.warn] [Vue Router warn]: uncaught error during route navigation:
+09:41:38 [vite] (client) [console.error] 
+09:41:38 [vite] (client) [console.warn] [Vue Router warn]: Unexpected error when starting the router: 
+09:42:06 [vite] http proxy error: /user/info
+AggregateError [ECONNREFUSED]: 
+    at internalConnectMultiple (node:net:1142:49)
+    at afterConnectMultiple (node:net:1723:7)
+09:42:06 [vite] (client) [console.warn] [Vue Router warn]: uncaught error during route navigation:
+09:42:06 [vite] (client) [console.error] 
+09:42:06 [vite] (client) [console.warn] [Vue Router warn]: Unexpected error when starting the router: 
+09:56:55 [vite] (client) [Unhandled error] Error: ResizeObserver loop completed with undelivered notifications.
+ > ../../../../@vite/client:516:55
+

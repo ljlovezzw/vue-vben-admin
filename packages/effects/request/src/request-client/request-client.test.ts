@@ -59,6 +59,23 @@ describe('requestClient', () => {
     }
   });
 
+  it('preserves HTTP status and backend detail on failures', async () => {
+    mock.onPut('/workspace').reply(409, { detail: '共享工作区已更新' });
+    await expect(requestClient.put('/workspace')).rejects.toMatchObject({
+      isAxiosError: true,
+      message: '共享工作区已更新',
+      response: { status: 409, data: { detail: '共享工作区已更新' } },
+    });
+  });
+
+  it('preserves validation arrays and falls back to the HTTP error message', async () => {
+    mock.onGet('/validation').reply(422, { detail: [{ msg: 'required' }] });
+    await expect(requestClient.get('/validation')).rejects.toMatchObject({
+      message: 'Request failed with status code 422',
+      response: { status: 422, data: { detail: [{ msg: 'required' }] } },
+    });
+  });
+
   it('should handle timeout', async () => {
     mock.onGet('/test/timeout').timeout();
     try {

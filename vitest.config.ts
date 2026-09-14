@@ -21,6 +21,8 @@ export default defineConfig({
       '**/dist/**',
       '**/.{idea,git,cache,output,temp}/**',
       '**/node_modules/**',
+      // These recovery checks use node:test and run separately with node --test.
+      'apps/web-antd/scripts/*.test.cjs',
       '**/{stylelint,eslint}.config.*',
       '**/{oxfmt,oxlint}.config.*',
     ],

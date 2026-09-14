@@ -3263,8 +3263,13 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     const APLUS_CAROUSEL_IMAGE_COUNT = 6;
     const APLUS_MAX_COMPONENTS = 7;
-    const BACKEND_UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
+    // Keep payloads small for slow office uplinks. The request timeout still
+    // needs to cover the public tunnel's delayed response on congested links.
+    const BACKEND_UPLOAD_CHUNK_SIZE = 512 * 1024;
     const BACKEND_UPLOAD_RETRY_LIMIT = 3;
+    const BACKEND_UPLOAD_REQUEST_TIMEOUT_MS = 120 * 1000;
+    const BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS = 20 * 1000;
+    const BACKEND_UPLOAD_PROTOCOL_VERSION = "chunks-512k-stable-v4";
     const FEISHU_SMALL_UPLOAD_LIMIT = 20 * 1024 * 1024;
     const FEISHU_TASK_CACHE_TTL_MS = 30 * 60 * 1000;
     const FEISHU_TASK_CACHE_PREFIX = "kanban:feishu-image-task:v1:";
@@ -4681,6 +4686,38 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         .map((group) => `颜色 ${group.color} 缺少无括号的主图 / Swatch 文件`);
     }
 
+    function mskuColorCode(msku) {
+      const parts = String(msku || "")
+        .split(/[_-]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (parts.length < 3) return "";
+      return parts.slice(1, -1).join("_").toUpperCase();
+    }
+
+    function galleryCoverageValidationErrors(metadataList, galleryFiles) {
+      if (!galleryFiles.length) return [];
+      const requiredColors = new Set(
+        metadataList
+          .flatMap((metadata) => metadata.sidMsku || [])
+          .map((item) => mskuColorCode(item?.msku || item?.MSKU))
+          .filter(Boolean),
+      );
+      if (!requiredColors.size) return [];
+      const availableColors = new Set(
+        state.gallery
+          .filter((group) => group.items.some((item) => item.file && item.order === null))
+          .map((group) => String(group.color || "").trim().toUpperCase())
+          .filter(Boolean),
+      );
+      const missingColors = [...requiredColors]
+        .filter((color) => !availableColors.has(color))
+        .sort((left, right) => left.localeCompare(right, "en"));
+      return missingColors.length
+        ? [`已选 Listing 仍缺少这些 MSKU 颜色图片：${missingColors.join("、")}`]
+        : [];
+    }
+
     function renderGalleryNamingExample() {
       if (!els.galleryNamingExample) return;
       const spu = String(els.spu?.value || "").trim().toUpperCase() || "LLW000423";
@@ -4748,8 +4785,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const manifest = {
         version: 1,
         root,
-        generatedAt: new Date().toISOString(),
-        images: entries.filter((entry) => entry.isImage).map(imageFlagRecord),
+        images: entries.filter((entry) => entry.isImage).map(imageFlagRecord)
+          .sort((left, right) => left.path.localeCompare(right.path, "en")),
       };
       return [
         ...entries,
@@ -5035,7 +5072,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       // ZIP timestamps are fixed so identical source files produce identical archives.
       const now = dosDateTime(new Date(1980, 0, 1, 0, 0, 0));
 
-      for (const entry of entries) {
+      for (const entry of [...entries].sort((left, right) => left.path.localeCompare(right.path, "en"))) {
         const nameBytes = encoder.encode(entry.path.replace(/\\/g, "/"));
         const data = new Uint8Array(await entry.file.arrayBuffer());
         const crc = crc32(data);
@@ -5226,7 +5263,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return `adler32:${adler32(sourceBytes)}:${sourceBytes.length}`;
     }
 
-    async function submissionCacheKey(metadataList, zipFiles, token) {
+    async function submissionCacheKey(metadataList, zipFiles) {
       const normalizedMetadata = metadataList
         .map((item) => ({
           asins: [...item.asins].sort(),
@@ -5255,8 +5292,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         );
       const normalizedFiles = zipFiles
         .map((item) => ({
-          sourceFingerprint:
-            item.sourceFingerprint || item.contentFingerprint,
+          // Resume is safe only when the actual archive bytes are identical.
+          sourceFingerprint: item.contentFingerprint || item.sourceFingerprint,
           filename: item.filename,
           key: item.key,
         }))
@@ -5264,9 +5301,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const source = JSON.stringify({
         metadataList: normalizedMetadata,
         files: normalizedFiles,
-        token,
       });
       const bytes = new TextEncoder().encode(source);
+      if (globalThis.crypto?.subtle) {
+        const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+        return bytesToHex(new Uint8Array(digest));
+      }
+      return `${adler32(bytes)}:${bytes.length}`;
+    }
+
+    async function taskResultCacheKey(submissionKey, token) {
+      const bytes = new TextEncoder().encode(`${submissionKey}:${token}`);
       if (globalThis.crypto?.subtle) {
         const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
         return bytesToHex(new Uint8Array(digest));
@@ -5352,6 +5397,26 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       );
       if (!uploadId) return baseUrl;
       return `${baseUrl}/${encodeURIComponent(uploadId)}${action ? `/${action}` : ""}`;
+    }
+
+    async function confirmBackendChunkProgress(uploadId, fileKey, chunkIndex, token) {
+      const progressPayload = await fetchJsonWithRetry(
+        feishuUploadSessionApiUrl(uploadId),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        "确认服务器上传进度",
+        {
+          retryLimit: 2,
+          timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS,
+        },
+      );
+      const indexes = progressPayload?.data?.files?.[fileKey]?.uploaded;
+      if (!Array.isArray(indexes)) throw new Error("服务器未返回有效上传进度");
+      const uploaded = new Set(indexes);
+      return uploaded.has(chunkIndex) ? progressPayload : null;
     }
 
     function feishuTaskStatusApiUrl(taskId) {
@@ -5514,20 +5579,56 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return payload;
     }
 
-    async function fetchJsonWithRetry(url, options, label) {
+    async function fetchJsonWithRetry(
+      url,
+      options,
+      label,
+      {
+        confirmCompletion = null,
+        retryLimit = BACKEND_UPLOAD_RETRY_LIMIT,
+        timeoutMs = BACKEND_UPLOAD_REQUEST_TIMEOUT_MS,
+      } = {},
+    ) {
       let lastError;
-      for (let attempt = 1; attempt <= BACKEND_UPLOAD_RETRY_LIMIT; attempt += 1) {
+      for (let attempt = 1; attempt <= retryLimit; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          timeoutMs,
+        );
         try {
-          return await readJsonResponse(await fetch(url, options));
+          return await readJsonResponse(await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          }));
         } catch (error) {
-          lastError = error;
+          clearTimeout(timeoutId);
+          lastError = error?.name === "AbortError"
+            ? new Error(`${label}超过 ${timeoutMs / 1000} 秒未完成`)
+            : error;
           const status = Number(error?.status || 0);
           const canRetry = !status || status >= 500;
-          if (!canRetry || attempt === BACKEND_UPLOAD_RETRY_LIMIT) throw error;
+          if (canRetry && typeof confirmCompletion === "function") {
+            try {
+              const confirmedPayload = await confirmCompletion({
+                attempt,
+                error: lastError,
+              });
+              if (confirmedPayload) return confirmedPayload;
+            } catch (confirmationError) {
+              const pending = new Error("暂时无法确认上传进度，已保留会话；网络恢复后可重新提交续传");
+              pending.uploadPending = true;
+              pending.cause = confirmationError;
+              throw pending;
+            }
+          }
+          if (!canRetry || attempt === retryLimit) throw lastError;
           setFeishuTaskStatus(
-            `${label}失败，正在重试（${attempt}/${BACKEND_UPLOAD_RETRY_LIMIT - 1}）...`,
+            `${label}失败，正在重试（${attempt}/${retryLimit - 1}）...`,
           );
           await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
+        } finally {
+          clearTimeout(timeoutId);
         }
       }
       throw lastError || new Error(`${label}失败`);
@@ -5636,7 +5737,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         brandZip ? { ...brandZip, key: "brandZip" } : null,
         gpsrImage ? { ...gpsrImage, key: "gpsrImage" } : null,
       ].filter(Boolean).map(prepareUploadZipFile));
-      const cacheKey = await submissionCacheKey(metadataList, zipFiles, token);
+      const submissionKey = await submissionCacheKey(metadataList, zipFiles);
+      const cacheKey = await taskResultCacheKey(submissionKey, token);
       const cached = readFeishuTaskCache(cacheKey);
       if (cached) {
         setFeishuTaskStatus("检测到相同内容已创建任务，正在复用原任务结果...");
@@ -5677,6 +5779,48 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       );
     }
 
+    async function pollBackendUploadTask(taskId, cacheKey, token) {
+      const pendingKey = `pending:${cacheKey}`;
+      writeFeishuTaskCache(pendingKey, { taskId });
+      let consecutiveErrors = 0;
+      for (let attempt = 0; attempt < 240; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
+        let statusPayload;
+        try {
+          statusPayload = await fetchJsonWithRetry(
+            feishuTaskStatusApiUrl(taskId),
+            { headers: { Authorization: `Bearer ${token}` } },
+            "查询后台任务状态",
+            { retryLimit: 1, timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS },
+          );
+          if (!["queued", "running", "succeeded", "failed"].includes(statusPayload?.data?.status)) {
+            throw new Error("服务器未返回有效任务状态");
+          }
+          consecutiveErrors = 0;
+        } catch (error) {
+          consecutiveErrors += 1;
+          setFeishuTaskStatus("任务已提交，暂时无法查询结果，正在重试查询...");
+          if (consecutiveErrors >= 5 || [401, 403, 404].includes(Number(error.status))) break;
+          continue;
+        }
+        const task = statusPayload.data;
+        if (task.status === "succeeded" || task.status === "failed") {
+          // Storage can be blocked; in that case the server session still holds the task ID.
+          try { sessionStorage.removeItem(`${FEISHU_TASK_CACHE_PREFIX}${pendingKey}`); } catch {}
+        }
+        if (task.status === "succeeded") {
+          const finalPayload = { ...statusPayload, data: task.result || {} };
+          writeFeishuTaskCache(cacheKey, finalPayload);
+          return finalPayload;
+        }
+        if (task.status === "failed") throw new Error(task.error || "后台上传任务执行失败");
+        setFeishuTaskStatus("任务已提交，后台正在处理，请稍候...");
+      }
+      const pending = new Error("任务已提交，暂未取得执行结果；稍后重新提交相同内容将继续查询原任务，也可查看任务日志");
+      pending.uploadPending = true;
+      throw pending;
+    }
+
     async function uploadFeishuTaskViaBackend(
       metadataList,
       galleryZip,
@@ -5691,7 +5835,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         brandZip ? { ...brandZip, key: "brandZip" } : null,
         gpsrImage ? { ...gpsrImage, key: "gpsrImage" } : null,
       ].filter(Boolean).map(prepareUploadZipFile));
-      const cacheKey = await submissionCacheKey(metadataList, zipFiles, token);
+      const submissionKey = await submissionCacheKey(metadataList, zipFiles);
+      const cacheKey = await taskResultCacheKey(submissionKey, token);
       const cached = readFeishuTaskCache(cacheKey);
       if (cached) {
         setFeishuTaskStatus("检测到相同内容已创建任务，正在复用原任务结果...");
@@ -5703,6 +5848,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             deduplicated: true,
           },
         };
+      }
+
+      const pendingTask = readFeishuTaskCache(`pending:${cacheKey}`);
+      if (pendingTask?.taskId) {
+        return pollBackendUploadTask(pendingTask.taskId, cacheKey, token);
       }
 
       const sessionFiles = zipFiles.map((item) => ({
@@ -5722,7 +5872,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
-            "X-Idempotency-Key": cacheKey,
+            "X-Idempotency-Key": submissionKey,
+            "X-Upload-Protocol-Version": BACKEND_UPLOAD_PROTOCOL_VERSION,
           },
           body: JSON.stringify({
             metadata: {
@@ -5739,11 +5890,19 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
       const uploadId = sessionPayload?.data?.uploadId;
       if (!uploadId) throw new Error("后端未返回上传会话 ID");
+      const existingTaskId = sessionPayload?.data?.finishedResult?.taskId;
+      if (existingTaskId) return pollBackendUploadTask(existingTaskId, cacheKey, token);
 
-      let uploadedChunks = 0;
+      const serverFiles = sessionPayload?.data?.files || {};
+      let uploadedChunks = Object.values(serverFiles).reduce(
+        (total, file) => total + new Set(file?.uploaded || []).size,
+        0,
+      );
       for (const item of zipFiles) {
         const chunkCount = Math.ceil(item.blob.size / BACKEND_UPLOAD_CHUNK_SIZE);
+        const uploadedIndexes = new Set(serverFiles[item.key]?.uploaded || []);
         for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+          if (uploadedIndexes.has(chunkIndex)) continue;
           const start = chunkIndex * BACKEND_UPLOAD_CHUNK_SIZE;
           const end = Math.min(item.blob.size, start + BACKEND_UPLOAD_CHUNK_SIZE);
           const formData = new FormData();
@@ -5767,6 +5926,25 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
               body: formData,
             },
             `${item.filename} 第 ${chunkIndex + 1} 片上传`,
+            {
+              confirmCompletion: async () => {
+                setFeishuTaskStatus(
+                  `${item.filename} 第 ${chunkIndex + 1} 片响应较慢，正在确认服务器进度...`,
+                );
+                const confirmed = await confirmBackendChunkProgress(
+                  uploadId,
+                  item.key,
+                  chunkIndex,
+                  token,
+                );
+                if (confirmed) {
+                  setFeishuTaskStatus(
+                    `服务器已收到 ${item.filename} 第 ${chunkIndex + 1} 片，继续上传...`,
+                  );
+                }
+                return confirmed;
+              },
+            },
           );
           uploadedChunks += 1;
         }
@@ -5782,6 +5960,18 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           },
         },
         "完成分片上传",
+        {
+          confirmCompletion: async () => {
+            const progress = await fetchJsonWithRetry(
+              feishuUploadSessionApiUrl(uploadId),
+              { headers: { Authorization: `Bearer ${token}` } },
+              "确认后台提交结果",
+              { retryLimit: 2, timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS },
+            );
+            if (typeof progress?.data?.finished !== "boolean") throw new Error("提交状态未知");
+            return progress.data.finished ? { data: progress.data.finishedResult } : null;
+          },
+        },
       );
       const taskId = queuedPayload?.data?.taskId;
       if (!taskId) {
@@ -5789,28 +5979,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         return queuedPayload;
       }
 
-      for (let attempt = 0; attempt < 240; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
-        const statusPayload = await readJsonResponse(await fetch(feishuTaskStatusApiUrl(taskId), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }));
-        const task = statusPayload?.data || {};
-        if (task.status === "succeeded") {
-          const finalPayload = {
-            ...statusPayload,
-            data: task.result || {},
-          };
-          writeFeishuTaskCache(cacheKey, finalPayload);
-          return finalPayload;
-        }
-        if (task.status === "failed") {
-          throw new Error(task.error || "后端橱窗图直传任务失败");
-        }
-        setFeishuTaskStatus(`后端正在上传橱窗图到领星...（${attempt + 1}）`);
-      }
-      throw new Error("后端橱窗图直传任务超时，请稍后查看任务状态");
+      return pollBackendUploadTask(taskId, cacheKey, token);
     }
 
     async function uploadFeishuTask() {
@@ -5869,6 +6038,18 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       if (galleryValidationErrors.length) {
         setFeishuTaskStatus(
           `橱窗图校验未通过：${galleryValidationErrors.join("；")}`,
+          "warn",
+        );
+        setFeishuTaskInFlight(false);
+        return;
+      }
+      const galleryCoverageErrors = galleryCoverageValidationErrors(
+        metadataList,
+        galleryFiles,
+      );
+      if (galleryCoverageErrors.length) {
+        setFeishuTaskStatus(
+          `橱窗图校验未通过：${galleryCoverageErrors.join("；")}`,
           "warn",
         );
         setFeishuTaskInFlight(false);
@@ -5950,7 +6131,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         }
         loadTaskLog({ silent: true });
       } catch (error) {
-        setFeishuTaskStatus(`上传失败：${error.message}`, "warn");
+        setFeishuTaskStatus(error.uploadPending ? error.message : `上传失败：${error.message}`, "warn");
       } finally {
         setFeishuTaskInFlight(false);
       }

@@ -1,14 +1,23 @@
 <script setup lang="ts">
-import type { TableColumnsType, TablePaginationConfig } from 'ant-design-vue';
+import type { TableColumnsType, TableProps } from 'ant-design-vue';
+
+import type { OverviewState } from './overview-loader';
 
 import type {
   AdCvrOptimizationOperationContext,
   AdCvrOptimizationOperatorSummaryRow,
-  AdCvrOptimizationOverview,
   AdCvrOptimizationSuggestion,
 } from '#/api/kanban/types';
 
-import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue';
+import {
+  computed,
+  onMounted,
+  reactive,
+  ref,
+  shallowReactive,
+  toRaw,
+  watch,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import {
@@ -38,11 +47,13 @@ import {
   Table,
   Tag,
   Tooltip,
+  TreeSelect,
 } from 'ant-design-vue';
 
 import {
   fetchAdCvrOptimizationOperationContext,
   fetchAdCvrOptimizationOverview,
+  reconcileAdCvrExecution,
   updateAdCvrOptimizationAdGroup,
   updateAdCvrOptimizationCampaign,
   updateAdCvrOptimizationDecisions,
@@ -53,10 +64,14 @@ import {
   adCvrExecutionRevision,
   runAdCvrExecutionTask,
 } from './execution-task';
+import HierarchyPicker from './HierarchyPicker.vue';
+import { createOverviewLoader, mergeOverviewSummary } from './overview-loader';
 
 defineOptions({ name: 'KanbanAdCvrOptimization' });
 
 const loading = ref(false);
+const summaryLoading = ref(false);
+const summaryError = ref('');
 const filtersExpanded = ref(false);
 const router = useRouter();
 const route = useRoute();
@@ -66,9 +81,11 @@ const apiScope = computed<'daily' | 'legacy'>(() =>
 const isDailyOptimization = computed(() => apiScope.value === 'daily');
 const submitting = ref(false);
 const loadError = ref('');
-const data = ref<AdCvrOptimizationOverview | null>(null);
+const data = ref<null | OverviewState>(null);
 const selectedIds = ref<string[]>([]);
 const detail = ref<AdCvrOptimizationSuggestion | null>(null);
+const reviewLoading = ref(false);
+const reviewMessage = ref('');
 const operationOpen = ref(false);
 const operationLoading = ref(false);
 const operationSaving = ref<'' | 'budget' | 'campaign' | 'group'>('');
@@ -81,20 +98,28 @@ const executionOpen = ref(false);
 const budgetAdjustmentDrafts = ref<Record<string, number | undefined>>({});
 const bidAdjustmentDrafts = ref<Record<string, number | undefined>>({});
 const currentBids = ref<Record<string, number>>({});
-const matchTypeDrafts = ref<Record<string, 'broad' | 'exact' | 'phrase' | undefined>>({});
+const matchTypeDrafts = ref<
+  Record<string, 'broad' | 'exact' | 'phrase' | undefined>
+>({});
 const matchGroupNameDrafts = ref<Record<string, string>>({});
 const matchCpcDrafts = ref<Record<string, number | undefined>>({});
-const matchContexts = ref<Record<string, AdCvrOptimizationOperationContext>>({});
+const matchContexts = ref<Record<string, AdCvrOptimizationOperationContext>>(
+  {},
+);
+const negativeDrafts = ref<
+  Record<
+    string,
+    {
+      matchType?: 'negativeExact' | 'negativePhrase';
+      scope?: 'ad_group' | 'campaign';
+    }
+  >
+>({});
 const bidLoading = ref(false);
 const bidLoadError = ref('');
 let operationLoadToken = 0;
 let loadRequestSequence = 0;
-let overviewCacheGeneration = 0;
-const overviewCache = new Map<
-  string,
-  { expires: number; value: AdCvrOptimizationOverview }
->();
-const overviewRequests = new Map<string, Promise<AdCvrOptimizationOverview>>();
+const overviewLoader = createOverviewLoader(fetchAdCvrOptimizationOverview);
 const query = reactive({
   actions: [] as string[],
   adGroupKeyword: '',
@@ -110,6 +135,14 @@ const query = reactive({
   pageSize: 50,
   projectTags: [] as string[],
   responsible: '',
+  responsibles: [] as string[],
+  spus: [] as string[],
+  hierarchyPaths: [] as string[],
+  parentAsins: [] as string[],
+  lifecycleTags: [] as string[],
+  slowTags: [] as string[],
+  sortField: '',
+  sortOrder: '',
   search: '',
   selectedOnly: true,
   snapshotDate: '',
@@ -121,6 +154,34 @@ const query = reactive({
   targetingTypes: [] as string[],
 });
 const activeAction = ref('');
+const responsibleSelection = computed({
+  get: () =>
+    [
+      ...new Set([
+        ...query.responsibles,
+        ...(query.responsible ? [query.responsible] : []),
+      ]),
+    ].map((name) => `user:${name}`),
+  set: (values: string[]) => {
+    query.responsible = '';
+    query.responsibles = values
+      .filter((value) => value.startsWith('user:'))
+      .map((value) => value.slice(5));
+  },
+});
+const spuOptions = computed(() =>
+  options((data.value?.filters?.products ?? []).map((item) => item.spu)),
+);
+const parentOptions = computed(() =>
+  options(
+    (data.value?.filters?.products ?? [])
+      .filter(
+        (item) => query.spus.length === 0 || query.spus.includes(item.spu),
+      )
+      .map((item) => item.parentAsin)
+      .filter(Boolean),
+  ),
+);
 
 const actionLabels: Record<string, string> = {
   adjust_bidding_strategy: '调整竞价策略与广告位',
@@ -160,17 +221,17 @@ const actionTabs = computed(() =>
     {
       label: '全部动作',
       value: '',
-      count: data.value?.summary.byAction
-        ? Object.values(data.value.summary.byAction).reduce(
+      count: data.value?.summary?.byAction
+        ? Object.values(data.value.summary?.byAction).reduce(
             (sum, count) => sum + Number(count || 0),
             0,
           )
         : (data.value?.pagination.total ?? 0),
     },
-    ...(data.value?.filters.actions ?? []).map((action) => ({
+    ...(data.value?.filters?.actions ?? []).map((action) => ({
       label: action.label,
       value: action.value,
-      count: Number(data.value?.summary.byAction?.[action.value] ?? 0),
+      count: Number(data.value?.summary?.byAction?.[action.value] ?? 0),
     })),
   ].filter((tab) => !tab.value || tab.count > 0),
 );
@@ -182,15 +243,41 @@ function setActionFilter(value: string) {
   selectedIds.value = [];
   void load(true);
 }
+
+const levelTabs = [
+  { label: '全部层级', value: '' },
+  { label: '广告活动层级', value: 'campaign' },
+  { label: '广告组层级', value: 'ad_group' },
+  { label: '投放商品', value: 'product_target' },
+  { label: '广告组投放词', value: 'keyword_target' },
+  { label: '搜索词层级', value: 'search_term' },
+];
+const activeLevel = computed(() => query.levels[0] ?? '');
+
+function setLevelFilter(value: string) {
+  if (activeLevel.value === value) return;
+  query.levels = value ? [value] : [];
+  selectedIds.value = [];
+  void load(true);
+}
+
+function setHierarchyFilter(paths: string[]) {
+  query.hierarchyPaths = paths;
+  selectedIds.value = [];
+  void load(true);
+}
 const directExecutableActions = new Set([
   'adjust_match_type',
   'close_ad_group',
   'close_campaign',
   'close_color',
+  'close_target',
   'decrease_budget',
   'increase_bid',
   'increase_budget',
   'lower_bid',
+  'negative_asin',
+  'negative_keyword',
 ]);
 const budgetExecutableActions = new Set(['decrease_budget', 'increase_budget']);
 const bidExecutableActions = new Set(['increase_bid', 'lower_bid']);
@@ -352,7 +439,7 @@ const operatorSummaryColumns: TableColumnsType<OperatorSummaryDisplayRow> = [
   },
 ];
 
-const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
+const columns = shallowReactive<TableColumnsType<AdCvrOptimizationSuggestion>>([
   { key: 'select', fixed: 'left', title: '', width: 46 },
   { dataIndex: 'priority', key: 'priority', title: '优先级', width: 92 },
   { dataIndex: 'level', key: 'level', title: '层级', width: 92 },
@@ -362,6 +449,11 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
     title: '优化对象',
     width: 80,
   },
+  { dataIndex: 'cvr', key: 'cvr', title: '广告CVR', width: 92 },
+  { dataIndex: 'natural_cvr', key: 'natural_cvr', title: '自然CVR', width: 92 },
+  { dataIndex: 'target_cvr', key: 'target_cvr', title: '合理CVR', width: 92 },
+  { dataIndex: 'clicks', key: 'clicks', title: '点击', width: 76 },
+  { dataIndex: 'spend', key: 'spend', title: '花费', width: 92 },
   {
     dataIndex: 'ad_hierarchy',
     key: 'ad_hierarchy',
@@ -370,18 +462,26 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
   },
   { dataIndex: 'store_name', key: 'store_name', title: '店铺', width: 130 },
   { dataIndex: 'responsible', key: 'responsible', title: '负责人', width: 90 },
+  { dataIndex: 'spu', key: 'spu', title: 'SPU', width: 120 },
+  {
+    dataIndex: 'parent_asin',
+    key: 'parent_asin',
+    title: '父 ASIN',
+    width: 128,
+  },
+  {
+    dataIndex: 'product_tags',
+    key: 'product_tags',
+    title: '商品标签',
+    width: 160,
+  },
   { dataIndex: 'action_type', key: 'action_type', title: '建议', width: 130 },
-  { dataIndex: 'cvr', key: 'cvr', title: '广告CVR', width: 92 },
-  { dataIndex: 'natural_cvr', key: 'natural_cvr', title: '自然CVR', width: 92 },
-  { dataIndex: 'target_cvr', key: 'target_cvr', title: '合理CVR', width: 92 },
-  { dataIndex: 'clicks', key: 'clicks', title: '点击', width: 76 },
   {
     dataIndex: 'qualified_clicks',
     key: 'qualified_clicks',
     title: '合格点击',
     width: 88,
   },
-  { dataIndex: 'spend', key: 'spend', title: '花费', width: 92 },
   { dataIndex: 'cpcReference', key: 'cpcReference', title: 'CPC', width: 92 },
   {
     dataIndex: 'relevance_label',
@@ -397,7 +497,63 @@ const columns: TableColumnsType<AdCvrOptimizationSuggestion> = [
     width: 90,
   },
   { key: 'operation', fixed: 'right', title: '', width: 82 },
-];
+]);
+const sortableColumns = new Set([
+  'clicks',
+  'cvr',
+  'natural_cvr',
+  'parent_asin',
+  'priority',
+  'qualified_clicks',
+  'spend',
+  'spu',
+  'target_cvr',
+]);
+for (const column of columns) {
+  if (!['operation', 'select'].includes(String(column.key)))
+    column.resizable = true;
+  if (sortableColumns.has(String(column.key))) column.sorter = true;
+}
+function resizeColumn(width: number, column: { key?: number | string }) {
+  const index = columns.findIndex((item) => item.key === column.key);
+  const target = columns[index];
+  if (target)
+    columns.splice(index, 1, {
+      ...target,
+      width: Math.max(72, Math.round(width)),
+    });
+}
+const tableWidth = computed(() =>
+  columns.reduce((sum, column) => sum + Number(column.width || 100), 0),
+);
+const tableBand = ref<HTMLElement>();
+const horizontalPosition = ref(0);
+
+function scrollTableHorizontally(event: Event) {
+  horizontalPosition.value = Number((event.target as HTMLInputElement).value);
+  const body = tableBand.value?.querySelector<HTMLElement>('.ant-table-body');
+  if (body)
+    body.scrollLeft =
+      (horizontalPosition.value / 1000) * (body.scrollWidth - body.clientWidth);
+}
+
+function syncTableScrollbar(event: Event) {
+  const source = event.target as HTMLElement;
+  if (!source.matches('.ant-table-body')) return;
+  const range = source.scrollWidth - source.clientWidth;
+  horizontalPosition.value =
+    range > 0 ? Math.round((source.scrollLeft / range) * 1000) : 0;
+}
+
+watch(
+  () => data.value?.rows,
+  () => {
+    const body = tableBand.value?.querySelector<HTMLElement>('.ant-table-body');
+    if (body) body.scrollLeft = 0;
+    horizontalPosition.value = 0;
+  },
+  { flush: 'post' },
+);
 
 const pagination = computed(() => ({
   current: data.value?.pagination.page ?? query.page,
@@ -414,8 +570,22 @@ function isSuggestionExecuted(row: AdCvrOptimizationSuggestion) {
   );
 }
 
+function needsExecutionReview(row: {
+  execution_has_write?: boolean | number;
+  execution_status?: string;
+}) {
+  return (
+    ['needs_review', 'running'].includes(row.execution_status || '') ||
+    (row.execution_status === 'failed' && Boolean(row.execution_has_write))
+  );
+}
+
 function isSuggestionSelectable(row: AdCvrOptimizationSuggestion) {
-  return !isSuggestionExecuted(row);
+  return (
+    !isSuggestionExecuted(row) &&
+    !needsExecutionReview(row) &&
+    !['queued', 'submitted'].includes(row.execution_status)
+  );
 }
 
 const selectableCurrentRows = computed(
@@ -446,6 +616,7 @@ const selectedDirectRows = computed(() =>
     (row) =>
       !budgetExecutableActions.has(row.action_type) &&
       !bidExecutableActions.has(row.action_type) &&
+      !['negative_asin', 'negative_keyword'].includes(row.action_type) &&
       row.action_type !== 'adjust_match_type',
   ),
 );
@@ -454,6 +625,11 @@ const selectedBidRows = computed(() =>
 );
 const selectedMatchRows = computed(() =>
   selectedRows.value.filter((row) => row.action_type === 'adjust_match_type'),
+);
+const selectedNegativeRows = computed(() =>
+  selectedRows.value.filter((row) =>
+    ['negative_asin', 'negative_keyword'].includes(row.action_type),
+  ),
 );
 
 function referenceCpc(row: { clicks?: unknown; spend?: unknown }) {
@@ -481,6 +657,15 @@ const someCurrentSelected = computed(() => {
 const hasActiveFilters = computed(
   () =>
     Boolean(query.search || query.responsible) ||
+    [
+      query.responsibles,
+      query.spus,
+      query.hierarchyPaths,
+      query.parentAsins,
+      query.lifecycleTags,
+      query.slowTags,
+      query.projectTags,
+    ].some((values) => values.length > 0) ||
     Boolean(
       query.adGroupKeyword || query.campaignKeyword || query.lookupValue,
     ) ||
@@ -532,7 +717,7 @@ const storeOptions = computed(() => {
   const selectedCountries = new Set(
     query.countries.map((country) => normalizeCountry(country)),
   );
-  const stores = data.value?.filters.stores ?? [];
+  const stores = data.value?.filters?.stores ?? [];
   const visibleStores =
     selectedCountries.size > 0
       ? stores.filter((store) => selectedCountries.has(storeCountry(store)))
@@ -548,7 +733,7 @@ const storeOptions = computed(() => {
 });
 
 const countryOptions = computed(() =>
-  (data.value?.filters.countries ?? []).map((value) => ({
+  (data.value?.filters?.countries ?? []).map((value) => ({
     code: String(value).toUpperCase(),
     label: countryName(value),
     searchLabel: `${String(value)} ${countryName(value)}`,
@@ -592,11 +777,11 @@ const summaryItems = computed(() => [
     label: '高优先级待处理',
     note: highPriorityGroupNote(),
     tone: 'danger',
-    value: `${integer(data.value?.dashboard?.highPriorityGroupCount)} 组`,
+    value: `${integer(data.value?.dashboard?.highPriorityObjectCount ?? data.value?.dashboard?.highPriorityGroupCount)} 项`,
   },
   {
     label: '低CVR异常花费',
-    note: '近30天，按广告组去重',
+    note: '近30天，筛选对象跨层级去重',
     tone: 'warning',
     value: money(data.value?.operatorSummary?.total.optimizationSpend ?? 0),
   },
@@ -616,18 +801,27 @@ const summaryItems = computed(() => [
     label: '待人工复核',
     note: '置信度不足，系统不自动执行',
     tone: 'neutral',
-    value: `${integer(data.value?.dashboard?.lowConfidenceGroupCount)} 组`,
+    value: `${integer(data.value?.dashboard?.lowConfidenceObjectCount ?? data.value?.dashboard?.lowConfidenceGroupCount)} 项`,
   },
 ]);
 
 const highPriorityCount = computed(
-  () => data.value?.dashboard?.highPriorityGroupCount ?? 0,
+  () =>
+    data.value?.dashboard?.highPriorityObjectCount ??
+    data.value?.dashboard?.highPriorityGroupCount ??
+    0,
 );
 
 const priorityQueue = computed(() =>
   [...(data.value?.rows ?? [])]
     .filter((row) => row.decision_status === 'pending')
-    .toSorted((left, right) => Number(right.priority) - Number(left.priority))
+    .toSorted(
+      (left, right) =>
+        ['high', 'medium', 'low'].indexOf(left.severity) -
+          ['high', 'medium', 'low'].indexOf(right.severity) ||
+        Number(right.priority) - Number(left.priority) ||
+        Number(right.spend) - Number(left.spend),
+    )
     .slice(0, 3),
 );
 
@@ -640,7 +834,7 @@ const operatorSummaryRows = computed<OperatorSummaryDisplayRow[]>(() => {
 const operatorSummaryHeadline = computed(() => {
   const total = data.value?.operatorSummary?.total;
   if (!total) return '等待汇总数据';
-  return `${total.campaignCount.toLocaleString('zh-CN')} 个广告活动 · ${total.adGroupCount.toLocaleString('zh-CN')} 个广告组 · ${total.optimizationGroupCount.toLocaleString('zh-CN')} 组需要优化`;
+  return `${total.campaignCount.toLocaleString('zh-CN')} 个广告活动 · ${total.adGroupCount.toLocaleString('zh-CN')} 个广告组 · ${(total.optimizationObjectCount ?? total.optimizationGroupCount).toLocaleString('zh-CN')} 个活动/组需要优化`;
 });
 
 function options(values: string[], labels: Record<string, string> = {}) {
@@ -708,6 +902,7 @@ function optimizationCoverage(row: AdCvrOptimizationOperatorSummaryRow) {
 function filterByResponsible(row: OperatorSummaryDisplayRow) {
   if (row.isTotal || row.responsible === '未分配') return;
   query.responsible = row.responsible;
+  query.responsibles = [];
   void load(true);
 }
 
@@ -768,8 +963,8 @@ function isPriorityFilterActive(severity?: string) {
 }
 
 const allPendingPriorityCount = computed(() => {
-  const counts = data.value?.summary.bySeverity;
-  if (!counts) return data.value?.summary.pending ?? 0;
+  const counts = data.value?.summary?.bySeverity;
+  if (!counts) return data.value?.summary?.pending ?? 0;
   return counts.high + counts.medium + counts.low;
 });
 
@@ -791,47 +986,23 @@ function showApprovedSuggestions() {
 
 function priorityPreview(severity?: string) {
   if (loading.value || adCvrExecutionInProgress.value) return;
-  void cachedOverview({
-    ...structuredClone(toRaw(query)),
-    page: 1,
-    statuses: ['pending'],
-    selectedOnly: true,
-    severities: severity ? [severity] : [],
-  }).catch(() => {});
+  void overviewLoader
+    .get(
+      {
+        ...structuredClone(toRaw(query)),
+        page: 1,
+        statuses: ['pending'],
+        selectedOnly: true,
+        severities: severity ? [severity] : [],
+      },
+      apiScope.value,
+      'rows',
+    )
+    .catch(() => {});
 }
 
 function clearOverviewCache() {
-  overviewCacheGeneration += 1;
-  overviewCache.clear();
-  overviewRequests.clear();
-}
-
-async function cachedOverview(params: typeof query) {
-  const key = JSON.stringify(params);
-  const cached = overviewCache.get(key);
-  if (cached && cached.expires > Date.now())
-    return structuredClone(cached.value);
-  const existing = overviewRequests.get(key);
-  if (existing) return existing;
-  const generation = overviewCacheGeneration;
-  const request = fetchAdCvrOptimizationOverview(params, apiScope.value).then(
-    (value) => {
-      if (generation === overviewCacheGeneration) {
-        if (overviewCache.size >= 8) overviewCache.clear();
-        overviewCache.set(key, {
-          expires: Date.now() + 30_000,
-          value: structuredClone(value),
-        });
-      }
-      return value;
-    },
-  );
-  overviewRequests.set(key, request);
-  try {
-    return await request;
-  } finally {
-    if (overviewRequests.get(key) === request) overviewRequests.delete(key);
-  }
+  overviewLoader.clear();
 }
 
 function focusPending() {
@@ -891,7 +1062,29 @@ function metricValue(record: Record<string, any>, key: unknown) {
 }
 
 function openDetail(record: Record<string, any>) {
+  reviewMessage.value = '';
   detail.value = suggestionRecord(record);
+}
+
+async function reviewExecution() {
+  if (!detail.value || reviewLoading.value) return;
+  const row = detail.value;
+  reviewLoading.value = true;
+  try {
+    const result = await reconcileAdCvrExecution(
+      row.suggestion_id,
+      apiScope.value,
+    );
+    if (detail.value?.suggestion_id === row.suggestion_id) {
+      detail.value.execution_status = result.status;
+      reviewMessage.value = `${result.message}${result.currentBid ? ` 当前竞价 ${result.currentBid}，目标 ${result.targetBid}。` : ''}`;
+    }
+    await load();
+  } catch (error) {
+    reviewMessage.value = `核对失败，未再次修改广告：${String(error)}`;
+  } finally {
+    reviewLoading.value = false;
+  }
 }
 
 function openCampaignDetail(record: Record<string, any>) {
@@ -1134,18 +1327,24 @@ function saveAdGroupName() {
   );
 }
 
-async function load(reset = false, reuseCache = false) {
+// Filter changes have independent keys; refresh and mutation reloads invalidate.
+async function load(reset = false, reuseCache = reset) {
   if (reset) query.page = 1;
   if (!reuseCache) {
     clearOverviewCache();
   }
   const requestId = ++loadRequestSequence;
   loading.value = true;
+  summaryLoading.value = true;
+  summaryError.value = '';
   loadError.value = '';
+  const params = structuredClone(toRaw(query));
+  const scope = apiScope.value;
   try {
-    const result = await cachedOverview(structuredClone(toRaw(query)));
+    const result = await overviewLoader.get(params, scope, 'rows');
     if (requestId !== loadRequestSequence) return;
-    data.value = result;
+    data.value = { ...result, filters: data.value?.filters };
+    loading.value = false;
     if (
       isDailyOptimization.value &&
       !query.snapshotDate &&
@@ -1158,12 +1357,32 @@ async function load(reset = false, reuseCache = false) {
         (row) => row.suggestion_id === id && isSuggestionSelectable(row),
       ),
     );
+    try {
+      const summary = await overviewLoader.get(
+        {
+          ...params,
+          snapshotDate: result.snapshot?.snapshot_date || params.snapshotDate,
+        },
+        scope,
+        'summary',
+      );
+      if (requestId !== loadRequestSequence) return;
+      data.value = mergeOverviewSummary(result, summary);
+    } catch (error) {
+      if (requestId !== loadRequestSequence) return;
+      summaryError.value =
+        error instanceof Error ? error.message : String(error);
+    }
   } catch (error) {
     if (requestId !== loadRequestSequence) return;
     loadError.value = error instanceof Error ? error.message : String(error);
+    summaryError.value = '明细加载失败，统计未更新，请刷新重试';
     message.error(`加载广告优化建议失败：${loadError.value}`);
   } finally {
-    if (requestId === loadRequestSequence) loading.value = false;
+    if (requestId === loadRequestSequence) {
+      loading.value = false;
+      summaryLoading.value = false;
+    }
   }
 }
 
@@ -1180,6 +1399,15 @@ function resetFilters() {
   query.lookupField = 'spu';
   query.lookupValue = '';
   query.responsible = '';
+  query.responsibles = [];
+  query.spus = [];
+  query.hierarchyPaths = [];
+  query.parentAsins = [];
+  query.lifecycleTags = [];
+  query.slowTags = [];
+  query.projectTags = [];
+  query.sortField = '';
+  query.sortOrder = '';
   query.search = '';
   query.selectedOnly = true;
   query.serviceStatuses = [];
@@ -1298,11 +1526,12 @@ async function executeSelected() {
   if (
     selectedBidRows.value.some(
       (row) =>
-        row.level !== 'ad_group' || row.sponsored_type.toLowerCase() !== 'sp',
+        !['ad_group', 'target'].includes(row.level) ||
+        row.sponsored_type.toLowerCase() !== 'sp',
     )
   ) {
     message.warning(
-      '竞价调整目前仅支持 SP 广告组默认竞价，请排除颜色和投放内容等其他层级',
+      '竞价调整仅支持 SP 广告组默认竞价或独立投放对象；颜色没有独立竞价',
     );
     return;
   }
@@ -1318,6 +1547,9 @@ async function executeSelected() {
   matchGroupNameDrafts.value = {};
   matchCpcDrafts.value = {};
   matchContexts.value = {};
+  negativeDrafts.value = Object.fromEntries(
+    selectedNegativeRows.value.map((row) => [row.suggestion_id, {}]),
+  );
   executionOpen.value = true;
   bidLoading.value = true;
   try {
@@ -1336,10 +1568,13 @@ async function executeSelected() {
         apiScope.value,
       );
       if (!context.matchTypeEditable) {
-        throw new Error(context.matchTypeBlockedReason || '当前建议无法创建匹配方式广告组');
+        throw new Error(
+          context.matchTypeBlockedReason || '当前建议无法创建匹配方式广告组',
+        );
       }
       matchContexts.value[row.suggestion_id] = context;
-      matchGroupNameDrafts.value[row.suggestion_id] = `${context.adGroupName || '广告组'}-${context.keywordText || row.targeting_text}`;
+      matchGroupNameDrafts.value[row.suggestion_id] =
+        `${context.adGroupName || '广告组'}-${context.keywordText || row.targeting_text}`;
       matchCpcDrafts.value[row.suggestion_id] = context.currentBid || undefined;
       let defaultMatchType: 'broad' | 'exact' | 'phrase' = 'broad';
       if (context.originalMatchType === 'broad') {
@@ -1358,6 +1593,31 @@ async function executeSelected() {
 
 async function submitExecution() {
   if (bidLoading.value || bidLoadError.value) return;
+  const negativeAdjustments: Record<
+    string,
+    {
+      matchType?: 'negativeExact' | 'negativePhrase';
+      scope: 'ad_group' | 'campaign';
+    }
+  > = {};
+  for (const row of selectedNegativeRows.value) {
+    const draft = negativeDrafts.value[row.suggestion_id];
+    if (
+      !draft?.scope ||
+      (row.action_type === 'negative_keyword' && !draft.matchType)
+    ) {
+      message.warning(
+        '请为每条搜索词选择否定层级；关键词还需选择精准或词组否定',
+      );
+      return;
+    }
+    negativeAdjustments[row.suggestion_id] = {
+      scope: draft.scope,
+      ...(row.action_type === 'negative_keyword'
+        ? { matchType: draft.matchType }
+        : {}),
+    };
+  }
   const bidAdjustments: Record<string, number> = {};
   for (const row of selectedBidRows.value) {
     const ratio = Number(bidAdjustmentDrafts.value[row.suggestion_id]);
@@ -1396,9 +1656,14 @@ async function submitExecution() {
     }
     budgetAdjustments[row.suggestion_id] = percent;
   }
-  const matchTypeAdjustments: Record<string, { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }> = {};
+  const matchTypeAdjustments: Record<
+    string,
+    { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
+  > = {};
   for (const row of selectedMatchRows.value) {
-    const groupName = String(matchGroupNameDrafts.value[row.suggestion_id] || '').trim();
+    const groupName = String(
+      matchGroupNameDrafts.value[row.suggestion_id] || '',
+    ).trim();
     const cpc = Number(matchCpcDrafts.value[row.suggestion_id]);
     const matchType = matchTypeDrafts.value[row.suggestion_id];
     if (
@@ -1407,9 +1672,11 @@ async function submitExecution() {
       !matchType ||
       !Number.isFinite(cpc) ||
       cpc <= 0 ||
-      (matchContexts.value[row.suggestion_id]?.originalMatchType === matchType)
+      matchContexts.value[row.suggestion_id]?.originalMatchType === matchType
     ) {
-      message.warning(`请完整填写“${row.targeting_text || row.entity_name}”的新广告组名称、匹配方式和 CPC`);
+      message.warning(
+        `请完整填写“${row.targeting_text || row.entity_name}”的新广告组名称、匹配方式和 CPC`,
+      );
       return;
     }
     matchTypeAdjustments[row.suggestion_id] = { groupName, cpc, matchType };
@@ -1423,17 +1690,26 @@ async function submitExecution() {
       apiScope.value,
       bidAdjustments,
       matchTypeAdjustments,
+      negativeAdjustments,
     );
   } catch {
     // The persistent notification owns execution errors and recovery guidance.
   }
 }
 
-function tableChange(value: TablePaginationConfig) {
+const tableChange: NonNullable<
+  TableProps<AdCvrOptimizationSuggestion>['onChange']
+> = (value, _filters, sorter, extra) => {
   query.page = Number(value.current || 1);
   query.pageSize = Number(value.pageSize || 50);
-  void load();
-}
+  const selectedSorter = Array.isArray(sorter) ? sorter[0] : sorter;
+  query.sortField = selectedSorter?.order
+    ? String(selectedSorter.columnKey || '')
+    : '';
+  query.sortOrder = selectedSorter?.order || '';
+  if (extra.action === 'sort') query.page = 1;
+  void load(false, true);
+};
 
 function rowClassName(record: AdCvrOptimizationSuggestion) {
   return selectedIds.value.includes(record.suggestion_id)
@@ -1512,7 +1788,7 @@ watch(apiScope, () => {
           :color="data?.snapshot?.status === 'succeeded' ? 'green' : 'orange'"
         >
           {{
-            data?.snapshot?.status === 'succeeded' ? '数据完整' : '持续补齐中'
+            data?.snapshot?.status === 'succeeded' ? '快照已生成' : '快照不完整'
           }}
         </Tag>
       </div>
@@ -1522,7 +1798,10 @@ watch(apiScope, () => {
       <div class="priority-alert-main">
         <span class="priority-alert-icon"><Info :size="16" /></span>
         <div>
-          <strong>今日有 {{ highPriorityCount }} 组高优先级问题</strong>
+          <strong v-if="!summaryLoading && !summaryError">当前筛选有 {{ highPriorityCount }} 项高优先级问题</strong>
+          <strong v-else>{{
+            summaryLoading ? '当前筛选统计中…' : '当前筛选统计未完成'
+          }}</strong>
           <p>建议先处理高点击、低转化的广告对象；系统建议默认不会自动执行。</p>
         </div>
       </div>
@@ -1549,8 +1828,14 @@ watch(apiScope, () => {
         :class="`tone-${item.tone}`"
       >
         <span>{{ item.label }}</span>
-        <strong>{{ item.value }}</strong>
-        <small>{{ item.note }}</small>
+        <strong>{{ summaryLoading || summaryError ? '—' : item.value }}</strong>
+        <small>{{
+          summaryLoading
+            ? '统计中…'
+            : summaryError
+              ? '统计失败，请重试'
+              : item.note
+        }}</small>
       </div>
     </section>
 
@@ -1567,7 +1852,9 @@ watch(apiScope, () => {
             @focus="priorityPreview()"
           >
             全部
-            <b>{{ allPendingPriorityCount }}</b>
+            <b>{{
+              summaryLoading || summaryError ? '—' : allPendingPriorityCount
+            }}</b>
           </button>
           <button
             class="priority-filter-option is-high"
@@ -1581,7 +1868,11 @@ watch(apiScope, () => {
           >
             <i aria-hidden="true"></i>
             立即处理
-            <b>{{ data?.summary.bySeverity?.high ?? 0 }}</b>
+            <b>{{
+              summaryLoading || summaryError
+                ? '—'
+                : (data?.summary?.bySeverity?.high ?? 0)
+            }}</b>
           </button>
           <button
             class="priority-filter-option is-medium"
@@ -1595,7 +1886,11 @@ watch(apiScope, () => {
           >
             <i aria-hidden="true"></i>
             尽快处理
-            <b>{{ data?.summary.bySeverity?.medium ?? 0 }}</b>
+            <b>{{
+              summaryLoading || summaryError
+                ? '—'
+                : (data?.summary?.bySeverity?.medium ?? 0)
+            }}</b>
           </button>
           <button
             class="priority-filter-option is-low"
@@ -1609,7 +1904,11 @@ watch(apiScope, () => {
           >
             <i aria-hidden="true"></i>
             观察跟进
-            <b>{{ data?.summary.bySeverity?.low ?? 0 }}</b>
+            <b>{{
+              summaryLoading || summaryError
+                ? '—'
+                : (data?.summary?.bySeverity?.low ?? 0)
+            }}</b>
           </button>
           <button
             class="priority-filter-option is-all"
@@ -1629,9 +1928,13 @@ watch(apiScope, () => {
         </div>
         <label class="filter-item compact-filter">
           <span>负责人</span>
-          <Select
-            v-model:value="query.responsible"
-            :options="options(data?.filters.responsibles ?? [])"
+          <TreeSelect
+            v-model:value="responsibleSelection"
+            :tree-data="data?.filters?.organizationTree ?? []"
+            :show-checked-strategy="TreeSelect.SHOW_CHILD"
+            tree-checkable
+            tree-node-filter-prop="title"
+            :max-tag-count="1"
             allow-clear
             aria-label="负责人"
             popup-class-name="ad-optimization-dropdown"
@@ -1679,6 +1982,69 @@ watch(apiScope, () => {
       </div>
 
       <div v-show="filtersExpanded" class="filter-panel">
+        <label class="filter-item">
+          <span>SPU（当前范围 {{ data?.filters?.spuCount ?? 0 }} 个）</span>
+          <Select
+            v-model:value="query.spus"
+            :options="spuOptions"
+            aria-label="SPU"
+            mode="multiple"
+            show-search
+            allow-clear
+            max-tag-count="responsive"
+            placeholder="选择 SPU"
+            @change="query.parentAsins = []"
+          />
+        </label>
+        <label class="filter-item">
+          <span>父 ASIN</span>
+          <Select
+            v-model:value="query.parentAsins"
+            :options="parentOptions"
+            aria-label="父 ASIN"
+            mode="multiple"
+            show-search
+            allow-clear
+            max-tag-count="responsive"
+            placeholder="全部父 ASIN"
+          />
+        </label>
+        <label class="filter-item">
+          <span>生命周期</span>
+          <Select
+            v-model:value="query.lifecycleTags"
+            :options="options(data?.filters?.lifecycleTags ?? [])"
+            aria-label="生命周期"
+            mode="multiple"
+            show-search
+            allow-clear
+            placeholder="全部生命周期"
+          />
+        </label>
+        <label class="filter-item">
+          <span>项目标签</span>
+          <Select
+            v-model:value="query.projectTags"
+            :options="options(data?.filters?.projectTags ?? [])"
+            aria-label="项目标签"
+            mode="multiple"
+            show-search
+            allow-clear
+            placeholder="全部项目"
+          />
+        </label>
+        <label class="filter-item">
+          <span>滞销标签</span>
+          <Select
+            v-model:value="query.slowTags"
+            :options="options(data?.filters?.slowTags ?? [])"
+            aria-label="滞销标签"
+            mode="multiple"
+            show-search
+            allow-clear
+            placeholder="全部滞销标签"
+          />
+        </label>
         <label class="filter-item filter-date-range">
           <span>统计区间</span>
           <strong class="snapshot-range">{{ snapshotRange }}</strong>
@@ -1713,7 +2079,7 @@ watch(apiScope, () => {
             v-model:value="query.sponsoredTypes"
             :options="
               labeledOptions(
-                data?.filters.sponsoredTypes ?? [],
+                data?.filters?.sponsoredTypes ?? [],
                 sponsoredTypeLabels,
               )
             "
@@ -1730,7 +2096,7 @@ watch(apiScope, () => {
             v-model:value="query.targetingTypes"
             :options="
               labeledOptions(
-                data?.filters.targetingTypes ?? [],
+                data?.filters?.targetingTypes ?? [],
                 targetingTypeLabels,
               )
             "
@@ -1755,7 +2121,7 @@ watch(apiScope, () => {
           <span>成本类型</span>
           <Select
             v-model:value="query.costTypes"
-            :options="options(data?.filters.costTypes ?? [], costTypeLabels)"
+            :options="options(data?.filters?.costTypes ?? [], costTypeLabels)"
             allow-clear
             aria-label="成本类型"
             mode="multiple"
@@ -1768,7 +2134,7 @@ watch(apiScope, () => {
           <Select
             v-model:value="query.entityStates"
             :options="
-              labeledOptions(data?.filters.entityStates ?? [], stateLabels)
+              labeledOptions(data?.filters?.entityStates ?? [], stateLabels)
             "
             allow-clear
             aria-label="广告活动状态"
@@ -1782,7 +2148,7 @@ watch(apiScope, () => {
           <Select
             v-model:value="query.serviceStatuses"
             :options="
-              options(data?.filters.serviceStatuses ?? [], serviceStatusLabels)
+              options(data?.filters?.serviceStatuses ?? [], serviceStatusLabels)
             "
             allow-clear
             aria-label="服务状态"
@@ -1821,18 +2187,6 @@ watch(apiScope, () => {
             @press-enter="load(true)"
           />
         </label>
-        <label class="filter-item">
-          <span>判断层级</span>
-          <Select
-            v-model:value="query.levels"
-            :options="data?.filters.levels ?? []"
-            allow-clear
-            aria-label="判断层级"
-            mode="multiple"
-            popup-class-name="ad-optimization-dropdown"
-            placeholder="全部层级"
-          />
-        </label>
         <div class="filter-actions">
           <Checkbox v-model:checked="query.selectedOnly">
             只看待采取行动
@@ -1845,12 +2199,31 @@ watch(apiScope, () => {
       </div>
     </section>
 
+    <Alert
+      v-if="summaryError"
+      :message="`汇总加载失败：${summaryError}`"
+      show-icon
+      type="warning"
+    >
+      <template #action>
+        <Button size="small" @click="load(false, true)"> 重试统计 </Button>
+      </template>
+    </Alert>
+
     <section class="overview-grid">
       <section class="operator-summary-band">
         <header class="operator-summary-head">
           <div>
             <h2>建议广告优化</h2>
-            <p>{{ operatorSummaryHeadline }}</p>
+            <p role="status">
+              {{
+                summaryLoading
+                  ? '正在统计当前筛选范围，明细可先行操作'
+                  : summaryError
+                    ? '统计失败，明细仍可使用'
+                    : operatorSummaryHeadline
+              }}
+            </p>
           </div>
           <Tooltip
             :title="
@@ -1871,7 +2244,7 @@ watch(apiScope, () => {
         <Table
           :columns="operatorSummaryColumns"
           :data-source="operatorSummaryRows"
-          :loading="loading"
+          :loading="summaryLoading"
           :pagination="false"
           :row-class-name="operatorSummaryRowClassName"
           :row-key="
@@ -1919,9 +2292,12 @@ watch(apiScope, () => {
               class="optimization-count-cell"
             >
               <strong>{{
-                  record.optimizationGroupCount.toLocaleString('zh-CN')
+                  (
+                    record.optimizationObjectCount ??
+                    record.optimizationGroupCount
+                  ).toLocaleString('zh-CN')
                 }}
-                组</strong>
+                个活动/组</strong>
               <span>{{
                   record.actionableSuggestionCount.toLocaleString('zh-CN')
                 }}
@@ -2060,8 +2436,40 @@ watch(apiScope, () => {
           :aria-selected="activeAction === tab.value"
           @click="setActionFilter(tab.value)"
         >
-          {{ tab.label }} <b>{{ tab.count.toLocaleString('zh-CN') }}</b>
+          {{ tab.label }}
+          <b>{{
+            summaryLoading || summaryError
+              ? '—'
+              : tab.count.toLocaleString('zh-CN')
+          }}</b>
         </button>
+      </div>
+      <div class="level-filter-row" role="group" aria-label="层级筛选">
+        <span class="level-filter-label">层级</span>
+        <div class="level-filter-options">
+          <button
+            v-for="tab in levelTabs"
+            :key="tab.value || 'all'"
+            class="action-tab"
+            :class="{ active: activeLevel === tab.value }"
+            type="button"
+            :aria-pressed="activeLevel === tab.value"
+            @click="setLevelFilter(tab.value)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+        <div class="hierarchy-filter-slot">
+          <HierarchyPicker
+            :filters="{
+              ...query,
+              snapshotDate: data?.snapshot?.snapshot_date || query.snapshotDate,
+            }"
+            :scope="apiScope"
+            :value="query.hierarchyPaths"
+            @change="setHierarchyFilter"
+          />
+        </div>
       </div>
       <div class="action-bar">
         <div class="selection-status">
@@ -2097,7 +2505,24 @@ watch(apiScope, () => {
         </Space>
       </div>
 
-      <div class="table-band">
+      <div
+        ref="tableBand"
+        class="table-band"
+        @scroll.capture="syncTableScrollbar"
+      >
+        <input
+          v-if="data?.rows.length"
+          class="table-horizontal-scrollbar"
+          type="range"
+          min="0"
+          max="1000"
+          step="1"
+          :value="horizontalPosition"
+          aria-label="建议清单横向滚动"
+          :aria-valuetext="`${Math.round(horizontalPosition / 10)}%`"
+          title="左右拖动查看后面的列，也可使用方向键、Home 和 End"
+          @input="scrollTableHorizontally"
+        />
         <Spin :spinning="loading">
           <Table
             v-if="data?.rows.length"
@@ -2106,9 +2531,10 @@ watch(apiScope, () => {
             :pagination="pagination"
             :row-class-name="rowClassName"
             :row-key="(row) => row.suggestion_id"
-            :scroll="{ x: 2410, y: 'calc(100vh - 440px)' }"
+            :scroll="{ x: tableWidth, y: 'calc(100vh - 440px)' }"
             size="small"
             @change="tableChange"
+            @resize-column="resizeColumn"
           >
             <template #headerCell="{ column }">
               <span
@@ -2228,6 +2654,26 @@ watch(apiScope, () => {
                 <small>{{ record.campaign_id || '-' }} ·
                   {{ record.ad_group_id || '-' }}</small>
               </div>
+              <Tooltip
+                v-else-if="column.dataIndex === 'responsible'"
+                :title="record.responsible_note || undefined"
+              >
+                <span>{{ record.responsible
+                  }}<Info
+                    v-if="record.responsible_note"
+                    :size="12"
+                    class="inline-block"
+                /></span>
+              </Tooltip>
+              <span v-else-if="column.dataIndex === 'product_tags'">
+                {{
+                  [
+                    ...(record.lifecycle_tags ?? []),
+                    ...(record.project_tags ?? []),
+                    ...(record.slow_tags ?? []),
+                  ].join(' · ') || '-'
+                }}
+              </span>
               <Tag
                 v-else-if="column.dataIndex === 'action_type'"
                 :color="severityColor(record.severity)"
@@ -2270,20 +2716,65 @@ watch(apiScope, () => {
               >
                 {{ record.relevance_label || '-' }}
               </Tag>
-              <Tag
+              <Space
                 v-else-if="column.dataIndex === 'decision_status'"
-                :color="
-                  record.decision_status === 'approved'
-                    ? 'green'
-                    : record.decision_status === 'dismissed'
-                      ? 'default'
-                      : 'blue'
-                "
+                direction="vertical"
+                :size="2"
               >
-                {{
-                  statusLabels[record.decision_status] || record.decision_status
-                }}
-              </Tag>
+                <Tag
+                  :color="
+                    record.decision_status === 'approved'
+                      ? 'green'
+                      : record.decision_status === 'dismissed'
+                        ? 'default'
+                        : 'blue'
+                  "
+                >
+                  {{
+                    statusLabels[record.decision_status] ||
+                    record.decision_status
+                  }}
+                </Tag>
+                <Tag
+                  v-if="
+                    record.execution_status !== 'running' &&
+                    needsExecutionReview(record)
+                  "
+                  color="orange"
+                >
+                  执行待核对
+                </Tag>
+                <Tag
+                  v-else-if="
+                    ['running', 'queued', 'submitted'].includes(
+                      record.execution_status,
+                    )
+                  "
+                  color="blue"
+                >
+                  执行中
+                </Tag>
+                <Tag
+                  v-else-if="isSuggestionExecuted(suggestionRecord(record))"
+                  color="green"
+                >
+                  已执行
+                </Tag>
+                <Tag
+                  v-else-if="record.execution_status === 'failed'"
+                  color="red"
+                >
+                  执行失败
+                </Tag>
+                <Button
+                  v-if="needsExecutionReview(record)"
+                  size="small"
+                  type="link"
+                  @click="openDetail(record)"
+                >
+                  核对结果
+                </Button>
+              </Space>
               <Space v-else-if="column.key === 'operation'" :size="0">
                 <Tooltip title="修改领星广告设置">
                   <Button
@@ -2468,6 +2959,7 @@ watch(apiScope, () => {
         </div>
       </div>
       <div v-if="selectedBidRows.length > 0" class="execution-section">
+        <p>比例以提交时领星实时竞价为基数，CPC 仅供参考。</p>
         <strong>广告组竞价调整</strong>
         <p v-if="bidLoading">正在读取领星当前竞价…</p>
         <Alert
@@ -2502,9 +2994,52 @@ watch(apiScope, () => {
           当前值来自领星，提交时会再次读取；期间竞价变化时，以写入前的实时值为准。
         </p>
       </div>
+      <div v-if="selectedNegativeRows.length > 0" class="execution-section">
+        <strong>否定搜索词</strong>
+        <p>活动级否定会影响该活动下所有广告组；ASIN 使用商品否定接口。</p>
+        <div
+          v-for="row in selectedNegativeRows"
+          :key="row.suggestion_id"
+          class="execution-item"
+        >
+          <div>
+            <b>{{ row.search_term || row.entity_name }}</b><span>{{ row.campaign_name }} · {{ row.ad_group_name }}</span>
+          </div>
+          <Space wrap>
+            <Select
+              v-if="negativeDrafts[row.suggestion_id]"
+              v-model:value="negativeDrafts[row.suggestion_id]!.scope"
+              aria-label="否定层级"
+              placeholder="选择否定层级"
+              style="min-width: 140px"
+              :options="[
+                { label: '广告组级', value: 'ad_group' },
+                { label: '广告活动级（全部组）', value: 'campaign' },
+              ]"
+            />
+            <Select
+              v-if="
+                row.action_type === 'negative_keyword' &&
+                negativeDrafts[row.suggestion_id]
+              "
+              v-model:value="negativeDrafts[row.suggestion_id]!.matchType"
+              aria-label="否定方式"
+              placeholder="选择否定方式"
+              style="min-width: 130px"
+              :options="[
+                { label: '精准否定', value: 'negativeExact' },
+                { label: '词组否定', value: 'negativePhrase' },
+              ]"
+            />
+            <Tag v-else>ASIN 商品否定</Tag>
+          </Space>
+        </div>
+      </div>
       <div v-if="selectedMatchRows.length > 0" class="execution-section">
         <strong>调整匹配方式</strong>
-        <p>将在当前广告活动下新建广告组，不修改原广告组；复制原广告组有效商品广告，并添加当前同词关键词。</p>
+        <p>
+          将在当前广告活动下新建广告组，不修改原广告组；复制原广告组有效商品广告，并添加当前同词关键词。
+        </p>
         <div
           v-for="row in selectedMatchRows"
           :key="row.suggestion_id"
@@ -2514,7 +3049,9 @@ watch(apiScope, () => {
             <b>{{ row.targeting_text || row.entity_name }}</b>
             <span>
               原广告组 {{ row.ad_group_name || row.ad_group_id }} · 原匹配
-              {{ matchContexts[row.suggestion_id]?.originalMatchType || '未知' }}
+              {{
+                matchContexts[row.suggestion_id]?.originalMatchType || '未知'
+              }}
             </span>
             <Input
               v-model:value="matchGroupNameDrafts[row.suggestion_id]"
@@ -2527,7 +3064,6 @@ watch(apiScope, () => {
             <Select
               v-model:value="matchTypeDrafts[row.suggestion_id]"
               :options="[
-                { label: '广泛匹配', value: 'broad' },
                 { label: '词组匹配', value: 'phrase' },
                 { label: '精确匹配', value: 'exact' },
               ]"
@@ -2538,10 +3074,10 @@ watch(apiScope, () => {
               v-model:value="matchCpcDrafts[row.suggestion_id]"
               :min="0.01"
               :precision="2"
-              placeholder="CPC"
-              aria-label="CPC"
+              placeholder="新组默认竞价"
+              aria-label="新组默认竞价"
             />
-            <span>CPC</span>
+            <span>新组默认竞价（原关键词各自竞价保留）</span>
           </div>
         </div>
       </div>
@@ -2585,10 +3121,33 @@ watch(apiScope, () => {
     <Drawer
       :open="Boolean(detail)"
       :title="detail?.entity_name || '建议明细'"
-      width="520"
+      width="min(520px, 100vw)"
       @close="detail = null"
     >
       <template v-if="detail">
+        <Alert
+          v-if="needsExecutionReview(detail) || reviewMessage"
+          type="warning"
+          show-icon
+          message="执行结果核对"
+          :description="
+            reviewMessage ||
+            '该建议可能已写入领星，暂不可重复提交。核对只读取实时数据，不再次修改广告。'
+          "
+        />
+        <p v-if="detail.execution_batch_id">
+          执行编号：{{ detail.execution_batch_id }}
+        </p>
+        <p v-if="detail.execution_error" style="overflow-wrap: anywhere">
+          {{ detail.execution_error }}
+        </p>
+        <Button
+          v-if="needsExecutionReview(detail)"
+          :loading="reviewLoading"
+          @click="reviewExecution"
+        >
+          读取领星并核对结果
+        </Button>
         <div class="detail-metrics">
           <div>
             <span>广告 CVR</span><strong :class="cvrTone(detail)">{{ percent(detail.cvr) }}</strong>
@@ -2632,9 +3191,11 @@ watch(apiScope, () => {
   --opt-text: hsl(var(--foreground));
 
   max-width: 1680px;
-  min-height: 100%;
+  height: var(--vben-content-height, calc(100dvh - 88px));
+  min-height: 0;
   padding: 24px;
   margin: 0 auto;
+  overflow-y: auto;
   color: var(--opt-text);
   background: var(--opt-page);
 }
@@ -3343,6 +3904,104 @@ watch(apiScope, () => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
+}
+
+.level-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--opt-border);
+}
+
+.hierarchy-filter-slot {
+  flex: 0 1 360px;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+@media (max-width: 767px) {
+  .hierarchy-filter-slot {
+    flex-basis: 100%;
+  }
+}
+
+.table-horizontal-scrollbar {
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  appearance: none;
+  cursor: ew-resize;
+  background: transparent;
+}
+
+.table-horizontal-scrollbar::-webkit-slider-runnable-track {
+  height: 12px;
+  background: var(--opt-border);
+  border-radius: 6px;
+}
+
+.table-horizontal-scrollbar::-webkit-slider-thumb {
+  width: 64px;
+  height: 12px;
+  appearance: none;
+  background: var(--opt-muted);
+  border-radius: 6px;
+}
+
+.table-horizontal-scrollbar::-moz-range-track {
+  height: 12px;
+  background: var(--opt-border);
+  border-radius: 6px;
+}
+
+.table-horizontal-scrollbar::-moz-range-thumb {
+  width: 64px;
+  height: 12px;
+  background: var(--opt-muted);
+  border: 0;
+  border-radius: 6px;
+}
+
+.table-horizontal-scrollbar:focus-visible {
+  outline: 2px solid var(--opt-primary, #175cd3);
+  outline-offset: 2px;
+}
+
+.table-band :deep(.ant-table-body::-webkit-scrollbar) {
+  width: 14px;
+  height: 14px;
+}
+
+.table-band :deep(.ant-table-body::-webkit-scrollbar-thumb) {
+  background: var(--opt-muted);
+  border: 2px solid var(--opt-border);
+  border-radius: 8px;
+}
+
+.table-band :deep(.ant-table-body::-webkit-scrollbar-track) {
+  background: var(--opt-border);
+}
+
+.level-filter-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--opt-muted);
+}
+
+.level-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.level-filter-options .action-tab:focus-visible {
+  outline: 2px solid var(--opt-primary, #175cd3);
+  outline-offset: 2px;
 }
 
 .action-tab:hover {
