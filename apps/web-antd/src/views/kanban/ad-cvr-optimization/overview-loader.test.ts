@@ -3,9 +3,11 @@ import type { OverviewState } from './overview-loader';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createLatestTaskScheduler,
   createOverviewLoader,
   mergeOverviewSummary,
   overviewParams,
+  pinOverviewSnapshot,
 } from './overview-loader';
 
 function value(date = '2026-09-02'): OverviewState {
@@ -18,6 +20,34 @@ function value(date = '2026-09-02'): OverviewState {
 }
 
 describe('progressive overview', () => {
+  it('coalesces queued aggregate work and never overlaps tasks', async () => {
+    vi.useFakeTimers();
+    let finishFirst!: () => void;
+    const firstTask = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          finishFirst = () => resolve('first');
+        }),
+    );
+    const secondTask = vi.fn().mockResolvedValue('second');
+    const latestTask = vi.fn().mockResolvedValue('latest');
+    const scheduler = createLatestTaskScheduler<string>(10);
+
+    const first = scheduler.schedule(firstTask);
+    await vi.advanceTimersByTimeAsync(10);
+    const second = scheduler.schedule(secondTask);
+    const latest = scheduler.schedule(latestTask);
+    await expect(second).resolves.toEqual({ skipped: true });
+    expect(latestTask).not.toHaveBeenCalled();
+
+    finishFirst();
+    await expect(first).resolves.toEqual({ value: 'first' });
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(latest).resolves.toEqual({ value: 'latest' });
+    expect(secondTask).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('does not recalculate a summary when paging or sorting', async () => {
     const fetcher = vi.fn().mockResolvedValue(value());
     const loader = createOverviewLoader(fetcher);
@@ -121,5 +151,21 @@ describe('progressive overview', () => {
       responsePart: 'summary',
     });
     expect(filters.page).toBe(3);
+  });
+
+  it('pins cached interactions to the visible snapshot', () => {
+    const params = { page: 2, snapshotDate: '' };
+    expect(pinOverviewSnapshot(params, '2026-09-02', true)).toEqual({
+      page: 2,
+      snapshotDate: '2026-09-02',
+    });
+    expect(pinOverviewSnapshot(params, '2026-09-02', false)).toEqual(params);
+    expect(
+      pinOverviewSnapshot(
+        { ...params, snapshotDate: '2026-09-03' },
+        '2026-09-02',
+        true,
+      ),
+    ).toEqual({ page: 2, snapshotDate: '2026-09-03' });
   });
 });

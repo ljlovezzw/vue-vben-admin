@@ -65,6 +65,7 @@ export async function executeAdCvrOptimizationSuggestions(
   negativeAdjustments: Record<
     string,
     {
+      keywordText?: string;
       matchType?: 'negativeExact' | 'negativePhrase';
       scope: 'ad_group' | 'campaign';
     }

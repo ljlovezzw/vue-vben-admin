@@ -1414,12 +1414,12 @@ export interface AdCvrOptimizationOverview {
     levels: Array<{ label: string; value: string }>;
     lifecycleTags?: string[];
     organizationTree?: Array<{
-      children: Array<{ key: string; title: string; value: string; }>;
+      children: Array<{ key: string; title: string; value: string }>;
       key: string;
       title: string;
       value: string;
     }>;
-    products?: Array<{ parentAsin: string; spu: string; }>;
+    products?: Array<{ parentAsin: string; spu: string }>;
     projectTags?: string[];
     responsibles: string[];
     serviceStatuses: string[];

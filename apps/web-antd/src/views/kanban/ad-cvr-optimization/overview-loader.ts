@@ -12,6 +12,10 @@ type Fetcher = (
   params: Params,
   scope: 'daily' | 'legacy',
 ) => Promise<OverviewState>;
+export type ScheduledTaskResult<T> =
+  | { error: unknown }
+  | { skipped: true }
+  | { value: T };
 
 // Page/order never change aggregate scope. Snapshot is pinned by the row response.
 export function overviewParams(params: Params, part: OverviewPart): Params {
@@ -23,6 +27,64 @@ export function overviewParams(params: Params, part: OverviewPart): Params {
       ),
     ),
     responsePart: part,
+  };
+}
+
+export function pinOverviewSnapshot(
+  params: Params,
+  currentSnapshotDate: unknown,
+  enabled: boolean,
+): Params {
+  const requested = String(params.snapshotDate ?? '').trim();
+  const current = String(currentSnapshotDate ?? '').trim();
+  if (!enabled || requested || !current) return { ...params };
+  return { ...params, snapshotDate: current };
+}
+
+export function createLatestTaskScheduler<T>(delayMs = 150) {
+  type Pending = {
+    resolve: (result: ScheduledTaskResult<T>) => void;
+    task: () => Promise<T>;
+    timer?: ReturnType<typeof setTimeout>;
+  };
+  let pending: Pending | undefined;
+  let running = false;
+
+  const launch = () => {
+    if (running || !pending) return;
+    const item = pending;
+    item.timer = setTimeout(async () => {
+      if (pending !== item) return;
+      pending = undefined;
+      running = true;
+      try {
+        item.resolve({ value: await item.task() });
+      } catch (error) {
+        item.resolve({ error });
+      } finally {
+        running = false;
+        launch();
+      }
+    }, Math.max(0, delayMs));
+  };
+
+  return {
+    clear() {
+      if (!pending) return;
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.resolve({ skipped: true });
+      pending = undefined;
+    },
+    schedule(task: () => Promise<T>): Promise<ScheduledTaskResult<T>> {
+      if (pending) {
+        if (pending.timer) clearTimeout(pending.timer);
+        pending.resolve({ skipped: true });
+      }
+      return new Promise((resolve) => {
+        pending = { resolve, task };
+        launch();
+      });
+    },
   };
 }
 

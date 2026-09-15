@@ -46,6 +46,7 @@ export async function runAdCvrExecutionTask(
   negativeAdjustments: Record<
     string,
     {
+      keywordText?: string;
       matchType?: 'negativeExact' | 'negativePhrase';
       scope: 'ad_group' | 'campaign';
     }

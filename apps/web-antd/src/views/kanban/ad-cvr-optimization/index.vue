@@ -65,7 +65,12 @@ import {
   runAdCvrExecutionTask,
 } from './execution-task';
 import HierarchyPicker from './HierarchyPicker.vue';
-import { createOverviewLoader, mergeOverviewSummary } from './overview-loader';
+import {
+  createLatestTaskScheduler,
+  createOverviewLoader,
+  mergeOverviewSummary,
+  pinOverviewSnapshot,
+} from './overview-loader';
 
 defineOptions({ name: 'KanbanAdCvrOptimization' });
 
@@ -110,6 +115,7 @@ const negativeDrafts = ref<
   Record<
     string,
     {
+      keywordText?: string;
       matchType?: 'negativeExact' | 'negativePhrase';
       scope?: 'ad_group' | 'campaign';
     }
@@ -120,6 +126,9 @@ const bidLoadError = ref('');
 let operationLoadToken = 0;
 let loadRequestSequence = 0;
 const overviewLoader = createOverviewLoader(fetchAdCvrOptimizationOverview);
+const summaryScheduler = createLatestTaskScheduler<
+  Awaited<ReturnType<typeof overviewLoader.get>>
+>();
 const query = reactive({
   actions: [] as string[],
   adGroupKeyword: '',
@@ -1002,6 +1011,7 @@ function priorityPreview(severity?: string) {
 }
 
 function clearOverviewCache() {
+  summaryScheduler.clear();
   overviewLoader.clear();
 }
 
@@ -1338,8 +1348,20 @@ async function load(reset = false, reuseCache = reset) {
   summaryLoading.value = true;
   summaryError.value = '';
   loadError.value = '';
-  const params = structuredClone(toRaw(query));
+  const params = pinOverviewSnapshot(
+    structuredClone(toRaw(query)),
+    data.value?.snapshot?.snapshot_date,
+    reuseCache,
+  );
   const scope = apiScope.value;
+  // Once a snapshot is known, rows and aggregate statistics can load in
+  // parallel. The latest-only scheduler coalesces rapid filter changes and
+  // keeps at most one expensive aggregate request running at a time.
+  const parallelSummary = String(params.snapshotDate || '').trim()
+    ? summaryScheduler.schedule(() =>
+        overviewLoader.get(params, scope, 'summary'),
+      )
+    : null;
   try {
     const result = await overviewLoader.get(params, scope, 'rows');
     if (requestId !== loadRequestSequence) return;
@@ -1358,14 +1380,25 @@ async function load(reset = false, reuseCache = reset) {
       ),
     );
     try {
-      const summary = await overviewLoader.get(
-        {
-          ...params,
-          snapshotDate: result.snapshot?.snapshot_date || params.snapshotDate,
-        },
-        scope,
-        'summary',
-      );
+      const summaryResult = parallelSummary
+        ? await parallelSummary
+        : await overviewLoader
+            .get(
+              {
+                ...params,
+                snapshotDate:
+                  result.snapshot?.snapshot_date || params.snapshotDate,
+              },
+              scope,
+              'summary',
+            )
+            .then(
+              (value) => ({ value }),
+              (error: unknown) => ({ error }),
+            );
+      if ('skipped' in summaryResult) return;
+      if ('error' in summaryResult) throw summaryResult.error;
+      const summary = summaryResult.value;
       if (requestId !== loadRequestSequence) return;
       data.value = mergeOverviewSummary(result, summary);
     } catch (error) {
@@ -1548,7 +1581,28 @@ async function executeSelected() {
   matchCpcDrafts.value = {};
   matchContexts.value = {};
   negativeDrafts.value = Object.fromEntries(
-    selectedNegativeRows.value.map((row) => [row.suggestion_id, {}]),
+    selectedNegativeRows.value.map((row) => {
+      const recommendedScope = row.metrics?.recommended_negative_scope;
+      const recommendedMatchType = row.metrics?.recommended_negative_match_type;
+      return [
+        row.suggestion_id,
+        {
+          scope: recommendedScope === 'campaign' ? 'campaign' : 'ad_group',
+          ...(row.action_type === 'negative_keyword'
+            ? {
+                keywordText:
+                  String(row.metrics?.recommended_negative_text || '').trim() ||
+                  row.search_term ||
+                  row.entity_name,
+                matchType:
+                  recommendedMatchType === 'negativePhrase'
+                    ? 'negativePhrase'
+                    : 'negativeExact',
+              }
+            : {}),
+        },
+      ];
+    }),
   );
   executionOpen.value = true;
   bidLoading.value = true;
@@ -1596,25 +1650,26 @@ async function submitExecution() {
   const negativeAdjustments: Record<
     string,
     {
+      keywordText?: string;
       matchType?: 'negativeExact' | 'negativePhrase';
       scope: 'ad_group' | 'campaign';
     }
   > = {};
   for (const row of selectedNegativeRows.value) {
     const draft = negativeDrafts.value[row.suggestion_id];
+    const keywordText = String(draft?.keywordText || '').trim();
     if (
       !draft?.scope ||
-      (row.action_type === 'negative_keyword' && !draft.matchType)
+      (row.action_type === 'negative_keyword' &&
+        (!draft.matchType || !keywordText))
     ) {
-      message.warning(
-        '请为每条搜索词选择否定层级；关键词还需选择精准或词组否定',
-      );
+      message.warning('请完整填写否定层级、否定方式和实际否定内容');
       return;
     }
     negativeAdjustments[row.suggestion_id] = {
       scope: draft.scope,
       ...(row.action_type === 'negative_keyword'
-        ? { matchType: draft.matchType }
+        ? { keywordText, matchType: draft.matchType }
         : {}),
     };
   }
@@ -1695,6 +1750,20 @@ async function submitExecution() {
   } catch {
     // The persistent notification owns execution errors and recovery guidance.
   }
+}
+
+function changeNegativeMatchType(
+  row: AdCvrOptimizationSuggestion,
+  matchType: unknown,
+) {
+  if (matchType !== 'negativeExact' && matchType !== 'negativePhrase') return;
+  const draft = negativeDrafts.value[row.suggestion_id];
+  if (!draft) return;
+  const sourceTerm = row.search_term || row.entity_name;
+  draft.keywordText =
+    matchType === 'negativePhrase'
+      ? String(row.metrics?.negative_phrase_text || '').trim() || sourceTerm
+      : sourceTerm;
 }
 
 const tableChange: NonNullable<
@@ -2996,16 +3065,21 @@ watch(apiScope, () => {
       </div>
       <div v-if="selectedNegativeRows.length > 0" class="execution-section">
         <strong>否定搜索词</strong>
-        <p>活动级否定会影响该活动下所有广告组；ASIN 使用商品否定接口。</p>
+        <p>
+          系统已按合理点击数和相关性预选较安全的方式；活动级否定会影响该活动下所有广告组，ASIN
+          使用商品否定接口。
+        </p>
         <div
           v-for="row in selectedNegativeRows"
           :key="row.suggestion_id"
-          class="execution-item"
+          class="execution-item execution-negative-item"
         >
-          <div>
-            <b>{{ row.search_term || row.entity_name }}</b><span>{{ row.campaign_name }} · {{ row.ad_group_name }}</span>
+          <div class="execution-negative-copy">
+            <b>{{ row.search_term || row.entity_name }}</b>
+            <span>{{ row.campaign_name }} · {{ row.ad_group_name }}</span>
+            <small>{{ row.reason }}</small>
           </div>
-          <Space wrap>
+          <div class="execution-negative-controls">
             <Select
               v-if="negativeDrafts[row.suggestion_id]"
               v-model:value="negativeDrafts[row.suggestion_id]!.scope"
@@ -3026,13 +3100,27 @@ watch(apiScope, () => {
               aria-label="否定方式"
               placeholder="选择否定方式"
               style="min-width: 130px"
+              @change="changeNegativeMatchType(row, $event)"
               :options="[
                 { label: '精准否定', value: 'negativeExact' },
                 { label: '词组否定', value: 'negativePhrase' },
               ]"
             />
             <Tag v-else>ASIN 商品否定</Tag>
-          </Space>
+            <Input
+              v-if="
+                row.action_type === 'negative_keyword' &&
+                negativeDrafts[row.suggestion_id]
+              "
+              v-model:value="negativeDrafts[row.suggestion_id]!.keywordText"
+              :disabled="
+                negativeDrafts[row.suggestion_id]!.matchType === 'negativeExact'
+              "
+              :maxlength="255"
+              aria-label="实际否定内容"
+              placeholder="输入原搜索词中的连续词组"
+            />
+          </div>
         </div>
       </div>
       <div v-if="selectedMatchRows.length > 0" class="execution-section">
@@ -4289,6 +4377,48 @@ watch(apiScope, () => {
 .execution-item b,
 .execution-item span {
   display: block;
+}
+
+.execution-negative-item {
+  align-items: flex-start;
+}
+
+.execution-negative-copy {
+  flex: 1 1 360px;
+}
+
+.execution-negative-copy small {
+  display: -webkit-box;
+  margin-top: 7px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #475467;
+}
+
+.execution-negative-controls {
+  display: grid;
+  flex: 0 1 440px;
+  grid-template-columns: minmax(140px, 1fr) minmax(130px, 1fr);
+  gap: 8px;
+  min-width: 300px !important;
+}
+
+.execution-negative-controls > :last-child:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .execution-negative-item {
+    flex-direction: column;
+  }
+
+  .execution-negative-controls {
+    width: 100%;
+    min-width: 0 !important;
+  }
 }
 
 .execution-item b {
