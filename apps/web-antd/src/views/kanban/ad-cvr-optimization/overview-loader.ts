@@ -53,19 +53,22 @@ export function createLatestTaskScheduler<T>(delayMs = 150) {
   const launch = () => {
     if (running || !pending) return;
     const item = pending;
-    item.timer = setTimeout(async () => {
-      if (pending !== item) return;
-      pending = undefined;
-      running = true;
-      try {
-        item.resolve({ value: await item.task() });
-      } catch (error) {
-        item.resolve({ error });
-      } finally {
-        running = false;
-        launch();
-      }
-    }, Math.max(0, delayMs));
+    item.timer = setTimeout(
+      async () => {
+        if (pending !== item) return;
+        pending = undefined;
+        running = true;
+        try {
+          item.resolve({ value: await item.task() });
+        } catch (error) {
+          item.resolve({ error });
+        } finally {
+          running = false;
+          launch();
+        }
+      },
+      Math.max(0, delayMs),
+    );
   };
 
   return {

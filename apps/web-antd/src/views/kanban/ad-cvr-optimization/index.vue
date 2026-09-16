@@ -126,9 +126,8 @@ const bidLoadError = ref('');
 let operationLoadToken = 0;
 let loadRequestSequence = 0;
 const overviewLoader = createOverviewLoader(fetchAdCvrOptimizationOverview);
-const summaryScheduler = createLatestTaskScheduler<
-  Awaited<ReturnType<typeof overviewLoader.get>>
->();
+const summaryScheduler =
+  createLatestTaskScheduler<Awaited<ReturnType<typeof overviewLoader.get>>>();
 const query = reactive({
   actions: [] as string[],
   adGroupKeyword: '',
