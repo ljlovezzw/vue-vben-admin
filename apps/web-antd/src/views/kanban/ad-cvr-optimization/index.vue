@@ -3,6 +3,7 @@ import type { TableColumnsType, TableProps } from 'ant-design-vue';
 
 import type { OverviewState } from './overview-loader';
 
+import type { AdCvrBatchTask } from '#/api/kanban/ad-cvr-optimization';
 import type {
   AdCvrOptimizationOperationContext,
   AdCvrOptimizationOperatorSummaryRow,
@@ -51,6 +52,7 @@ import {
 } from 'ant-design-vue';
 
 import {
+  fetchAdCvrBatchTasks,
   fetchAdCvrOptimizationOperationContext,
   fetchAdCvrOptimizationOverview,
   reconcileAdCvrExecution,
@@ -60,8 +62,18 @@ import {
 } from '#/api/kanban/ad-cvr-optimization';
 
 import {
+  executionBlockReason,
+  MAX_BATCH_SELECTION,
+  mergeSelection,
+  readBatchContexts,
+  summarizeSelection,
+} from './batch-selection';
+import {
   adCvrExecutionInProgress,
   adCvrExecutionRevision,
+  adCvrExecutionTask,
+  adCvrExecutionTaskScope,
+  resumeAdCvrExecutionTask,
   runAdCvrExecutionTask,
 } from './execution-task';
 import HierarchyPicker from './HierarchyPicker.vue';
@@ -88,6 +100,18 @@ const submitting = ref(false);
 const loadError = ref('');
 const data = ref<null | OverviewState>(null);
 const selectedIds = ref<string[]>([]);
+const selectedRecords = ref<Record<string, AdCvrOptimizationSuggestion>>({});
+const selectingBatch = ref(false);
+const taskDrawerOpen = ref(false);
+const taskHistory = ref<AdCvrBatchTask[]>([]);
+const taskHistoryLoading = ref(false);
+const bulkAction = ref('lower_bid');
+const bulkPercent = ref<number>();
+const bulkNegativeScope = ref<'ad_group' | 'campaign'>('ad_group');
+const bulkNegativeMatch = ref<'negativeExact' | 'negativePhrase'>(
+  'negativeExact',
+);
+const executionRiskConfirmed = ref(false);
 const detail = ref<AdCvrOptimizationSuggestion | null>(null);
 const reviewLoading = ref(false);
 const reviewMessage = ref('');
@@ -125,6 +149,7 @@ const bidLoading = ref(false);
 const bidLoadError = ref('');
 let operationLoadToken = 0;
 let loadRequestSequence = 0;
+let executionContextSequence = 0;
 const overviewLoader = createOverviewLoader(fetchAdCvrOptimizationOverview);
 const summaryScheduler =
   createLatestTaskScheduler<Awaited<ReturnType<typeof overviewLoader.get>>>();
@@ -289,7 +314,7 @@ const directExecutableActions = new Set([
 ]);
 const budgetExecutableActions = new Set(['decrease_budget', 'increase_budget']);
 const bidExecutableActions = new Set(['increase_bid', 'lower_bid']);
-const maxDirectExecutionBatch = 20;
+const maxDirectExecutionBatch = MAX_BATCH_SELECTION;
 const completedExecutionStatuses = new Set(['succeeded']);
 const levelLabels: Record<string, string> = {
   ad_group: '广告组',
@@ -606,13 +631,38 @@ const allCurrentSelected = computed(() => {
     current.every((row) => selectedIds.value.includes(row.suggestion_id))
   );
 });
-const selectedRows = computed(
+const selectedRows = computed(() =>
+  selectedIds.value.flatMap((id) =>
+    selectedRecords.value[id] ? [selectedRecords.value[id]] : [],
+  ),
+);
+const batchSummary = computed(() => summarizeSelection(selectedRows.value));
+const bulkActionOptions = computed(() =>
+  [
+    ...new Set(
+      selectedRows.value
+        .filter(
+          (row) =>
+            budgetExecutableActions.has(row.action_type) ||
+            bidExecutableActions.has(row.action_type),
+        )
+        .map((row) => row.action_type),
+    ),
+  ].map((value) => ({ value, label: actionLabels[value] || value })),
+);
+watch(
   () =>
-    data.value?.rows.filter(
-      (row) =>
-        isSuggestionSelectable(row) &&
-        selectedIds.value.includes(row.suggestion_id),
-    ) ?? [],
+    JSON.stringify({
+      ...query,
+      page: 0,
+      pageSize: 0,
+      sortField: '',
+      sortOrder: '',
+    }),
+  () => {
+    selectedIds.value = [];
+    selectedRecords.value = {};
+  },
 );
 const selectedBudgetRows = computed(() =>
   selectedRows.value.filter((row) =>
@@ -638,6 +688,36 @@ const selectedNegativeRows = computed(() =>
   selectedRows.value.filter((row) =>
     ['negative_asin', 'negative_keyword'].includes(row.action_type),
   ),
+);
+const executionHasBroadImpact = computed(
+  () =>
+    batchSummary.value.convertingClosures > 0 ||
+    selectedNegativeRows.value.some(
+      (row) =>
+        negativeDrafts.value[row.suggestion_id]?.scope === 'campaign' ||
+        negativeDrafts.value[row.suggestion_id]?.matchType === 'negativePhrase',
+    ),
+);
+const executionRiskDescription = computed(() => {
+  const risks: string[] = [];
+  if (batchSummary.value.convertingClosures > 0) risks.push(`${batchSummary.value.convertingClosures} 条有订单对象关闭`);
+  const campaignNegatives = selectedNegativeRows.value.filter((row) => negativeDrafts.value[row.suggestion_id]?.scope === 'campaign').length;
+  const phraseNegatives = selectedNegativeRows.value.filter((row) => negativeDrafts.value[row.suggestion_id]?.matchType === 'negativePhrase').length;
+  if (campaignNegatives > 0) risks.push(`${campaignNegatives} 条活动级否定`);
+  if (phraseNegatives > 0) risks.push(`${phraseNegatives} 条词组否定`);
+  return `本批包含${risks.join('、')}，请核对影响范围。`;
+});
+watch(
+  () =>
+    JSON.stringify([
+      selectedIds.value,
+      negativeDrafts.value,
+      bidAdjustmentDrafts.value,
+      budgetAdjustmentDrafts.value,
+    ]),
+  () => {
+    executionRiskConfirmed.value = false;
+  },
 );
 
 function referenceCpc(row: { clicks?: unknown; spend?: unknown }) {
@@ -760,7 +840,21 @@ watch(
 );
 
 watch(adCvrExecutionRevision, () => {
-  selectedIds.value = [];
+  if (
+    adCvrExecutionTask.value &&
+    adCvrExecutionTaskScope.value === apiScope.value
+  ) {
+    const failed = new Set(
+      adCvrExecutionTask.value?.result?.results
+        ?.filter((row) => row.status === 'failed')
+        .map((row) => row.suggestionId),
+    );
+    selectedIds.value = selectedIds.value.filter((id) => failed.has(id));
+    if (selectedIds.value.length > 0)
+      message.info(
+        '明确失败项已保留勾选，请重新核对参数后提交；待核对项不会自动重试',
+      );
+  }
   void load();
 });
 
@@ -1373,11 +1467,15 @@ async function load(reset = false, reuseCache = reset) {
     ) {
       query.snapshotDate = String(result.snapshot.snapshot_date);
     }
-    selectedIds.value = selectedIds.value.filter((id) =>
-      data.value?.rows.some(
-        (row) => row.suggestion_id === id && isSuggestionSelectable(row),
-      ),
-    );
+    for (const row of result.rows) {
+      if (selectedIds.value.includes(row.suggestion_id)) {
+        selectedRecords.value[row.suggestion_id] = row;
+        if (!isSuggestionSelectable(row))
+          selectedIds.value = selectedIds.value.filter(
+            (id) => id !== row.suggestion_id,
+          );
+      }
+    }
     try {
       const summaryResult = parallelSummary
         ? await parallelSummary
@@ -1453,6 +1551,11 @@ function resetFilters() {
 
 function toggle(row: AdCvrOptimizationSuggestion, checked: boolean) {
   if (checked && !isSuggestionSelectable(row)) return;
+  if (checked && selectedIds.value.length >= maxDirectExecutionBatch) {
+    message.warning(`最多选择 ${maxDirectExecutionBatch} 条，请先处理当前批次`);
+    return;
+  }
+  selectedRecords.value[row.suggestion_id] = row;
   selectedIds.value = checked
     ? [...new Set([...selectedIds.value, row.suggestion_id])]
     : selectedIds.value.filter((id) => id !== row.suggestion_id);
@@ -1463,9 +1566,105 @@ function toggleCurrent(checked: boolean) {
   const selectableIds = selectableCurrentRows.value.map(
     (row) => row.suggestion_id,
   );
+  for (const row of selectableCurrentRows.value)
+    selectedRecords.value[row.suggestion_id] = row;
   selectedIds.value = checked
-    ? [...new Set([...selectedIds.value, ...selectableIds])]
+    ? [...new Set([...selectedIds.value, ...selectableIds])].slice(
+        0,
+        maxDirectExecutionBatch,
+      )
     : selectedIds.value.filter((id) => !currentPageIds.includes(id));
+}
+
+function keepExecutableSelection() {
+  selectedIds.value = selectedRows.value
+    .filter((row) => !executionBlockReason(row))
+    .map((row) => row.suggestion_id);
+}
+
+async function selectFilteredBatch() {
+  selectingBatch.value = true;
+  const filterKey = JSON.stringify(query);
+  const scope = apiScope.value;
+  try {
+    const result = await fetchAdCvrOptimizationOverview(
+      {
+        ...toRaw(query),
+        snapshotDate: data.value?.snapshot?.snapshot_date || query.snapshotDate,
+        page: 1,
+        pageSize: maxDirectExecutionBatch,
+        responsePart: 'rows',
+      },
+      scope,
+    );
+    if (scope !== apiScope.value || filterKey !== JSON.stringify(query)) return;
+    const eligible = result.rows.filter((row) => !executionBlockReason(row));
+    const merged = mergeSelection(selectedRows.value, eligible);
+    for (const row of merged) selectedRecords.value[row.suggestion_id] = row;
+    selectedIds.value = merged.map((row) => row.suggestion_id);
+    message.info(
+      `已从筛选前 ${result.rows.length} 条中加入 ${eligible.length} 条可执行建议，当前共选 ${merged.length} 条；未选择全部筛选结果`,
+    );
+  } catch (error) {
+    message.error(`批量选择失败：${String(error)}`);
+  } finally {
+    selectingBatch.value = false;
+  }
+}
+
+function applyBulkPercent() {
+  const value = Number(bulkPercent.value);
+  const decrease = ['decrease_budget', 'lower_bid'].includes(bulkAction.value);
+  if (
+    !Number.isFinite(value) ||
+    value <= 0 ||
+    value > 100 ||
+    (decrease && value >= 100)
+  ) {
+    message.warning('请输入大于 0 且不超过 100 的比例；降低须小于 100%');
+    return;
+  }
+  for (const row of selectedRows.value.filter(
+    (row) => row.action_type === bulkAction.value,
+  )) {
+    if (bidExecutableActions.has(row.action_type))
+      bidAdjustmentDrafts.value[row.suggestion_id] = value;
+    else budgetAdjustmentDrafts.value[row.suggestion_id] = value;
+  }
+}
+
+function applyBulkNegative() {
+  for (const row of selectedNegativeRows.value) {
+    negativeDrafts.value[row.suggestion_id] = {
+      scope: bulkNegativeScope.value,
+      ...(row.action_type === 'negative_keyword'
+        ? {
+            matchType: bulkNegativeMatch.value,
+            keywordText:
+              bulkNegativeMatch.value === 'negativePhrase'
+                ? String(
+                    row.metrics?.negative_phrase_text ||
+                      row.search_term ||
+                      row.entity_name,
+                  )
+                : row.search_term || row.entity_name,
+          }
+        : {}),
+    };
+  }
+}
+
+async function showExecutionTasks() {
+  taskDrawerOpen.value = true;
+  taskHistoryLoading.value = true;
+  try {
+    const response = await fetchAdCvrBatchTasks(apiScope.value);
+    taskHistory.value = response.tasks;
+  } catch (error) {
+    message.error(`读取批次失败：${String(error)}`);
+  } finally {
+    taskHistoryLoading.value = false;
+  }
 }
 
 async function decide(status: 'dismissed' | 'pending') {
@@ -1538,6 +1737,12 @@ async function executeSelected() {
     );
     return;
   }
+  if (batchSummary.value.blocked) {
+    message.warning(
+      `有 ${batchSummary.value.blocked} 条暂不可执行，请先点击“仅保留可执行”`,
+    );
+    return;
+  }
   const dismissed = selectedRows.value.filter(
     (row) => row.decision_status === 'dismissed',
   );
@@ -1604,22 +1809,33 @@ async function executeSelected() {
     }),
   );
   executionOpen.value = true;
+  executionRiskConfirmed.value = false;
+  bulkAction.value = bulkActionOptions.value[0]?.value || 'lower_bid';
+  bulkPercent.value = undefined;
   bidLoading.value = true;
+  const contextSequence = ++executionContextSequence;
   try {
-    for (const row of selectedBidRows.value) {
-      const context = await fetchAdCvrOptimizationOperationContext(
+    const contextRows = [...selectedBidRows.value, ...selectedMatchRows.value];
+    const scope = apiScope.value;
+    const contexts = await readBatchContexts(contextRows, async (row) => ({
+      id: row.suggestion_id,
+      value: await fetchAdCvrOptimizationOperationContext(
         row.suggestion_id,
-        apiScope.value,
-      );
+        scope,
+      ),
+    }));
+    if (!executionOpen.value || scope !== apiScope.value || contextSequence !== executionContextSequence) return;
+    const contextById = new Map(contexts.map((item) => [item.id, item.value]));
+    for (const row of selectedBidRows.value) {
+      const context = contextById.get(row.suggestion_id);
+      if (!context) throw new Error('选择范围已变化，请重新打开弹窗');
       if (!context.currentBid || context.currentBid <= 0)
         throw new Error('领星未返回有效当前竞价');
       currentBids.value[row.suggestion_id] = context.currentBid;
     }
     for (const row of selectedMatchRows.value) {
-      const context = await fetchAdCvrOptimizationOperationContext(
-        row.suggestion_id,
-        apiScope.value,
-      );
+      const context = contextById.get(row.suggestion_id);
+      if (!context) throw new Error('选择范围已变化，请重新打开弹窗');
       if (!context.matchTypeEditable) {
         throw new Error(
           context.matchTypeBlockedReason || '当前建议无法创建匹配方式广告组',
@@ -1638,14 +1854,19 @@ async function executeSelected() {
       matchTypeDrafts.value[row.suggestion_id] = defaultMatchType;
     }
   } catch (error) {
+    if (contextSequence !== executionContextSequence) return;
     bidLoadError.value = `读取当前竞价失败，请关闭弹窗重试：${String(error)}`;
   } finally {
-    bidLoading.value = false;
+    if (contextSequence === executionContextSequence) bidLoading.value = false;
   }
 }
 
 async function submitExecution() {
   if (bidLoading.value || bidLoadError.value) return;
+  if (executionHasBroadImpact.value && !executionRiskConfirmed.value) {
+    message.warning('请先确认有订单关闭、活动级否定或词组否定的影响范围');
+    return;
+  }
   const negativeAdjustments: Record<
     string,
     {
@@ -1786,6 +2007,7 @@ function rowClassName(record: AdCvrOptimizationSuggestion) {
 }
 
 onMounted(() => {
+  void resumeAdCvrExecutionTask(apiScope.value);
   const responsible = String(route.query.responsible || '').trim();
   if (responsible) query.responsible = responsible;
   const countries = route.query.countries;
@@ -1813,11 +2035,15 @@ onMounted(() => {
 });
 
 watch(apiScope, () => {
+  executionOpen.value = false;
+  taskDrawerOpen.value = false;
+  taskHistory.value = [];
   query.snapshotDate = '';
   selectedIds.value = [];
   data.value = null;
   clearOverviewCache();
   void load(true);
+  void resumeAdCvrExecutionTask(apiScope.value);
 });
 </script>
 
@@ -2550,8 +2776,36 @@ watch(apiScope, () => {
             选择当前页
           </Checkbox>
           <span>已选 <b>{{ selectedIds.length }}</b> 条</span>
+          <Tooltip
+            title="翻页和排序保留选择；更换筛选条件会清空选择。最多 200 条。"
+          >
+            <span>跨页保留 · 上限 200</span>
+          </Tooltip>
+          <Button
+            size="small"
+            :loading="selectingBatch"
+            :disabled="loading || adCvrExecutionInProgress"
+            @click="selectFilteredBatch"
+          >
+            选取筛选前 200 条可执行项
+          </Button>
+          <Button
+            v-if="batchSummary.blocked"
+            size="small"
+            @click="keepExecutableSelection"
+          >
+            仅保留可执行（排除 {{ batchSummary.blocked }} 条）
+          </Button>
+          <Button
+            v-if="selectedIds.length > 0"
+            size="small"
+            @click="selectedIds = []"
+          >
+            清空选择
+          </Button>
         </div>
         <Space class="batch-actions" wrap>
+          <Button @click="showExecutionTasks">执行批次</Button>
           <Button
             :disabled="selectedIds.length === 0"
             :loading="submitting"
@@ -2999,7 +3253,13 @@ watch(apiScope, () => {
       cancel-text="返回检查"
       ok-text="确认写入领星"
       title="确认执行广告优化"
-      :ok-button-props="{ disabled: bidLoading || Boolean(bidLoadError) }"
+      :body-style="{ maxHeight: '65vh', overflowY: 'auto' }"
+      :ok-button-props="{
+        disabled:
+          bidLoading ||
+          Boolean(bidLoadError) ||
+          (executionHasBroadImpact && !executionRiskConfirmed),
+      }"
       @cancel="closeExecution"
       @ok="submitExecution"
     >
@@ -3009,6 +3269,41 @@ watch(apiScope, () => {
         show-icon
         type="warning"
       />
+      <p>
+        本批 {{ selectedRows.length }} 条 · {{ batchSummary.campaigns }} 个活动
+        ·
+        {{ batchSummary.groups }}
+        个广告组。不同层级可能包含同一笔花费，不累加为节省金额。
+      </p>
+      <Alert
+        v-if="executionHasBroadImpact"
+        type="warning"
+        show-icon
+        :message="executionRiskDescription"
+      />
+      <Checkbox
+        v-if="executionHasBroadImpact"
+        v-model:checked="executionRiskConfirmed"
+      >
+        已核对订单、统计期及否定覆盖范围，确认执行
+      </Checkbox>
+      <Space v-if="bulkActionOptions.length > 0" class="execution-section" wrap>
+        <Select
+          v-model:value="bulkAction"
+          :options="bulkActionOptions"
+          aria-label="批量调整动作"
+          style="min-width: 140px"
+        />
+        <InputNumber
+          v-model:value="bulkPercent"
+          :min="0.01"
+          :max="100"
+          :precision="2"
+          placeholder="调整比例 %"
+          aria-label="统一调整比例"
+        />
+        <Button @click="applyBulkPercent">应用到同类动作</Button>
+      </Space>
       <div v-if="selectedDirectRows.length > 0" class="execution-section">
         <strong>直接执行</strong>
         <div class="execution-list">
@@ -3021,6 +3316,8 @@ watch(apiScope, () => {
               <b>{{ displayAction(row) }}</b>
               <span>{{ row.entity_name }} ·
                 {{ row.campaign_name || row.campaign_id }}</span>
+              <small>{{ row.clicks }} 点击 · {{ row.orders }} 订单 · 广告 CVR
+                {{ percent(row.cvr) }} · {{ row.reason }}</small>
             </div>
             <Tag color="red">暂停投放</Tag>
           </div>
@@ -3028,7 +3325,7 @@ watch(apiScope, () => {
       </div>
       <div v-if="selectedBidRows.length > 0" class="execution-section">
         <p>比例以提交时领星实时竞价为基数，CPC 仅供参考。</p>
-        <strong>广告组竞价调整</strong>
+        <strong>投放 / 广告组竞价调整</strong>
         <p v-if="bidLoading">正在读取领星当前竞价…</p>
         <Alert
           v-if="bidLoadError"
@@ -3064,6 +3361,27 @@ watch(apiScope, () => {
       </div>
       <div v-if="selectedNegativeRows.length > 0" class="execution-section">
         <strong>否定搜索词</strong>
+        <Space wrap>
+          <Select
+            v-model:value="bulkNegativeScope"
+            :options="[
+              { label: '广告组级', value: 'ad_group' },
+              { label: '广告活动级', value: 'campaign' },
+            ]"
+            aria-label="批量否定层级"
+            style="min-width: 120px"
+          />
+          <Select
+            v-model:value="bulkNegativeMatch"
+            :options="[
+              { label: '精准否定', value: 'negativeExact' },
+              { label: '词组否定', value: 'negativePhrase' },
+            ]"
+            aria-label="批量关键词否定方式"
+            style="min-width: 120px"
+          />
+          <Button @click="applyBulkNegative">应用到否定项</Button>
+        </Space>
         <p>
           系统已按合理点击数和相关性预选较安全的方式；活动级否定会影响该活动下所有广告组，ASIN
           使用商品否定接口。
@@ -3125,7 +3443,7 @@ watch(apiScope, () => {
       <div v-if="selectedMatchRows.length > 0" class="execution-section">
         <strong>调整匹配方式</strong>
         <p>
-          将在当前广告活动下新建广告组，不修改原广告组；复制原广告组有效商品广告，并添加当前同词关键词。
+          将在当前活动下创建新广告组，完整复制原组商品、关键词和否定配置，收窄关键词匹配方式；不修改原组。每组只选择一条复制建议。
         </p>
         <div
           v-for="row in selectedMatchRows"
@@ -3204,6 +3522,77 @@ watch(apiScope, () => {
         </div>
       </div>
     </Modal>
+
+    <Drawer
+      :open="taskDrawerOpen"
+      title="最近执行批次"
+      width="min(760px, 100vw)"
+      @close="taskDrawerOpen = false"
+    >
+      <Space wrap>
+        <Button :loading="taskHistoryLoading" @click="showExecutionTasks">
+          刷新批次
+        </Button>
+        <Button
+          :disabled="adCvrExecutionInProgress"
+          @click="resumeAdCvrExecutionTask(apiScope)"
+        >
+          恢复进度通知
+        </Button>
+      </Space>
+      <p>
+        仅明确失败项可重新选择；待核对或中断项请先回到清单核对，不自动重放。
+      </p>
+      <Empty
+        v-if="!taskHistoryLoading && taskHistory.length === 0"
+        description="暂无执行批次"
+      />
+      <section
+        v-for="task in taskHistory"
+        :key="task.taskId"
+        class="execution-section"
+      >
+        <strong>{{ task.createdAt }} ·
+          {{
+            {
+              queued: '排队中',
+              running: '执行中',
+              succeeded: '完成',
+              partial_failed: '部分失败',
+              interrupted: '中断待核对',
+            }[task.status]
+          }}</strong>
+        <p>
+          {{ task.completed }}/{{ task.total }} 条 ·
+          {{ task.result?.message || task.message }}
+        </p>
+        <small>批次编号 {{ task.taskId }}</small>
+        <div
+          v-for="item in task.result?.results || []"
+          :key="item.suggestionId"
+          class="execution-item"
+        >
+          <div>
+            <b>{{ actionLabels[item.actionType] || item.actionType }}</b>
+            <span>{{ item.entityName || '广告对象' }} · {{ item.storeName }} · 活动
+              {{ item.campaignId }}</span>
+            <span>{{ item.suggestionId }}</span>
+            <span v-if="item.oldBid !== undefined || item.newBid !== undefined">竞价 {{ item.oldBid ?? '-' }} → {{ item.newBid ?? '-' }}</span>
+            <span>{{ item.message }}</span>
+          </div>
+          <Tag>
+            {{
+              {
+                failed: '明确失败',
+                needs_review: '待核对',
+                succeeded: '成功',
+                unchanged: '无需变更',
+              }[item.status]
+            }}
+          </Tag>
+        </div>
+      </section>
+    </Drawer>
 
     <Drawer
       :open="Boolean(detail)"
@@ -4115,6 +4504,7 @@ watch(apiScope, () => {
 }
 
 .selection-status {
+  flex-wrap: wrap;
   gap: 16px;
   color: var(--opt-muted);
 }

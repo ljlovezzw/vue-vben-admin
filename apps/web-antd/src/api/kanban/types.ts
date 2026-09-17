@@ -1331,6 +1331,11 @@ export interface AdCvrOptimizationOperationResult {
 }
 
 export interface AdCvrOptimizationExecutionItem {
+  entityName?: string;
+  storeName?: string;
+  campaignId?: string;
+  oldBid?: number | string;
+  newBid?: number | string;
   actionType: string;
   batchId?: string;
   message: string;

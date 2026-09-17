@@ -5145,10 +5145,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         alert(`图片详情写入失败：\n${error.message}`);
         return;
       }
+      const filename = await zipFilenameWithMd5(root, zip);
       const url = URL.createObjectURL(zip);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${root}.zip`;
+      a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
@@ -5220,6 +5221,71 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function bytesToHex(bytes) {
       return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+    }
+
+    // MD5 is used only as a content-based filename suffix, never for authentication.
+    function md5Hex(bytes) {
+      const shifts = [
+        7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+        5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+        4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+        6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+      ];
+      const constants = Array.from({ length: 64 }, (_, index) =>
+        Math.floor(Math.abs(Math.sin(index + 1)) * 0x100000000) >>> 0,
+      );
+      const fullLength = bytes.length - (bytes.length % 64);
+      const remainder = bytes.length - fullLength;
+      const tail = new Uint8Array(remainder < 56 ? 64 : 128);
+      tail.set(bytes.subarray(fullLength));
+      tail[remainder] = 0x80;
+      const bitLength = BigInt(bytes.length) * 8n;
+      for (let index = 0; index < 8; index += 1) {
+        tail[tail.length - 8 + index] = Number((bitLength >> BigInt(index * 8)) & 0xffn);
+      }
+      const state = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+      function processBlocks(data, length) {
+        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        for (let offset = 0; offset < length; offset += 64) {
+          let [a, b, c, d] = state;
+          for (let index = 0; index < 64; index += 1) {
+            let value;
+            let word;
+            if (index < 16) {
+              value = (b & c) | (~b & d);
+              word = index;
+            } else if (index < 32) {
+              value = (d & b) | (~d & c);
+              word = (5 * index + 1) % 16;
+            } else if (index < 48) {
+              value = b ^ c ^ d;
+              word = (3 * index + 5) % 16;
+            } else {
+              value = c ^ (b | ~d);
+              word = (7 * index) % 16;
+            }
+            const sum = (a + value + constants[index] + view.getUint32(offset + word * 4, true)) >>> 0;
+            const rotated = ((sum << shifts[index]) | (sum >>> (32 - shifts[index]))) >>> 0;
+            [a, b, c, d] = [d, (b + rotated) >>> 0, b, c];
+          }
+          state[0] = (state[0] + a) >>> 0;
+          state[1] = (state[1] + b) >>> 0;
+          state[2] = (state[2] + c) >>> 0;
+          state[3] = (state[3] + d) >>> 0;
+        }
+      }
+      processBlocks(bytes, fullLength);
+      processBlocks(tail, tail.length);
+      const digest = new Uint8Array(16);
+      const output = new DataView(digest.buffer);
+      state.forEach((value, index) => output.setUint32(index * 4, value, true));
+      return bytesToHex(digest);
+    }
+
+    async function zipFilenameWithMd5(root, blob) {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const base = String(root).replace(/_(?:[0-9a-f]{16}|[0-9a-f]{32})$/i, "");
+      return `${base}_${md5Hex(bytes).slice(0, 16)}.zip`;
     }
 
     async function prepareUploadZipFile(item) {
@@ -5355,7 +5421,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         sourceFilesFingerprint(sourceEntries),
       ]);
       return {
-        filename: `${root}.zip`,
+        filename: await zipFilenameWithMd5(root, zip),
         contentType: "application/zip",
         blob: zip,
         sourceFingerprint,

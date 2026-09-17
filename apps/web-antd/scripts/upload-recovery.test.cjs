@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { webcrypto } = require('node:crypto');
+const { createHash, webcrypto } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
@@ -33,7 +33,7 @@ function runtime() {
     section('    function imageFlagRecord(', '    function renderGalleryPool('),
     section('    function crc32Table(', '    function utf16LeNullTerminated('),
     section('    async function buildZip(', '    async function downloadZip('),
-    section('    function adler32(', '    async function buildUploadZip('),
+    section('    function adler32(', '    async function gpsrImageUploadFile('),
     section('    function feishuTaskApiBaseUrl(', '    function taskLogStatusText('),
     section('    async function readJsonResponse(', '    async function requestFeishuEdgeTicket('),
     section('    async function pollBackendUploadTask(', '    async function uploadFeishuTaskViaBackend('),
@@ -42,6 +42,28 @@ function runtime() {
   return ctx;
 }
 const meta = [{ shop: 'test', spu: 'test', parentAsin: 'B000000001', asins: ['B000000002'] }];
+
+test('ZIP filenames contain the first 16 MD5 characters of actual ZIP bytes', async () => {
+  const ctx = runtime();
+  for (const length of [0, 1, 55, 56, 63, 64, 65, 4096]) {
+    const bytes = Buffer.alloc(length, 0x61);
+    assert.equal(ctx.md5Hex(bytes), createHash('md5').update(bytes).digest('hex'));
+  }
+  ctx.preparedZipEntries = async entries => entries;
+  ctx.sourceFilesFingerprint = async () => 'source-fingerprint';
+  const first = await ctx.buildUploadZip(
+    [{ path: 'same/a.txt', file: new Blob(['first']) }], 'same', { includeImageFlags: false },
+  );
+  const second = await ctx.buildUploadZip(
+    [{ path: 'same/a.txt', file: new Blob(['second']) }], 'same', { includeImageFlags: false },
+  );
+  const expected = createHash('md5').update(Buffer.from(await first.blob.arrayBuffer())).digest('hex');
+  assert.equal(first.filename, `same_${expected.slice(0, 16)}.zip`);
+  assert.match(second.filename, /^same_[0-9a-f]{16}\.zip$/);
+  assert.notEqual(first.filename, second.filename);
+  assert.equal(await ctx.zipFilenameWithMd5('same', first.blob), first.filename);
+  assert.equal(await ctx.zipFilenameWithMd5(`same_${expected}`, first.blob), first.filename);
+});
 
 test('same A+ images produce identical ZIP bytes and keys across time and selection order', async () => {
   const ctx = runtime();

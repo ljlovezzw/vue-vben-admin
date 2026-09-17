@@ -1,37 +1,102 @@
-import type { AdCvrOptimizationScope } from '#/api/kanban/ad-cvr-optimization';
-import type { AdCvrOptimizationExecutionResult } from '#/api/kanban/types';
+import type {
+  AdCvrBatchTask,
+  AdCvrOptimizationScope,
+} from '#/api/kanban/ad-cvr-optimization';
 
 import { computed, readonly, ref } from 'vue';
 
 import { notification } from 'ant-design-vue';
 
-import { executeAdCvrOptimizationSuggestions } from '#/api/kanban/ad-cvr-optimization';
+import {
+  fetchAdCvrBatchTask,
+  fetchAdCvrBatchTasks,
+  submitAdCvrBatchTask,
+} from '#/api/kanban/ad-cvr-optimization';
 
-type ExecutionPhase = 'executing' | 'idle' | 'submitting';
-
-const executionNotificationKey = 'ad-cvr-optimization-execution';
-const executionPhase = ref<ExecutionPhase>('idle');
+const executionPhase = ref<'executing' | 'idle' | 'submitting'>('idle');
 const executionRevision = ref(0);
-
+const currentTask = ref<AdCvrBatchTask | null>(null);
+const currentScope = ref<AdCvrOptimizationScope>('legacy');
+const key = 'ad-cvr-optimization-execution';
 export const adCvrExecutionPhase = readonly(executionPhase);
 export const adCvrExecutionRevision = readonly(executionRevision);
+export const adCvrExecutionTask = readonly(currentTask);
+export const adCvrExecutionTaskScope = readonly(currentScope);
 export const adCvrExecutionInProgress = computed(
   () => executionPhase.value !== 'idle',
 );
 
-function errorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+function showTask(task: AdCvrBatchTask) {
+  currentTask.value = task;
+  const active = ['queued', 'running'].includes(task.status);
+  const config = {
+    description: active
+      ? `已处理 ${task.completed}/${task.total} 条。后台继续执行，可切换页面；刷新后可从“执行批次”恢复查看。`
+      : task.result?.message ||
+        task.message ||
+        `已处理 ${task.completed}/${task.total} 条，请查看执行批次。`,
+    duration: active || task.status !== 'succeeded' ? 0 : 10,
+    key,
+    message: active
+      ? '执行中'
+      : (task.status === 'succeeded'
+        ? '执行完成'
+        : '执行完成，请核对结果'),
+    placement: 'topRight' as const,
+  };
+  if (active) notification.info(config);
+  else if (task.status === 'succeeded') notification.success(config);
+  else notification.warning(config);
 }
 
-function showExecuting(count: number) {
-  executionPhase.value = 'executing';
-  notification.info({
-    description: `领星正在逐条处理 ${count} 条建议。可切换其他页面，请勿关闭或刷新浏览器；中断后先核对结果。`,
+async function poll(task: AdCvrBatchTask, scope: AdCvrOptimizationScope) {
+  let latest = task;
+  let errors = 0;
+  while (['queued', 'running'].includes(latest.status)) {
+    executionPhase.value = 'executing';
+    showTask(latest);
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 2000));
+    try {
+      latest = await fetchAdCvrBatchTask(latest.taskId, scope);
+      errors = 0;
+    } catch (error) {
+      if (++errors >= 5) throw error;
+    }
+  }
+  showTask(latest);
+  return latest;
+}
+
+function reportError(error: unknown) {
+  notification.error({
+    description: `${error instanceof Error ? error.message : String(error)}。后台任务可能仍在执行，请从“执行批次”查询，勿直接重复提交。`,
     duration: 0,
-    key: executionNotificationKey,
-    message: '执行中',
+    key,
+    message: '暂时无法获取执行结果',
     placement: 'topRight',
   });
+}
+
+export async function resumeAdCvrExecutionTask(scope: AdCvrOptimizationScope) {
+  if (adCvrExecutionInProgress.value) return;
+  executionPhase.value = 'submitting';
+  let resumed = false;
+  try {
+    const { tasks } = await fetchAdCvrBatchTasks(scope);
+    const task = tasks.find((item) =>
+      ['queued', 'running'].includes(item.status),
+    );
+    if (task) {
+      resumed = true;
+      currentScope.value = scope;
+      await poll(task, scope);
+    }
+  } catch (error) {
+    reportError(error);
+  } finally {
+    executionPhase.value = 'idle';
+    if (resumed) executionRevision.value += 1;
+  }
 }
 
 export async function runAdCvrExecutionTask(
@@ -51,67 +116,34 @@ export async function runAdCvrExecutionTask(
       scope: 'ad_group' | 'campaign';
     }
   > = {},
-): Promise<AdCvrOptimizationExecutionResult> {
-  if (executionPhase.value !== 'idle') {
+) {
+  if (adCvrExecutionInProgress.value)
     throw new Error('已有广告优化任务正在执行，请等待当前任务完成');
-  }
-
-  const count = suggestionIds.length;
   executionPhase.value = 'submitting';
+  currentScope.value = scope;
+  currentTask.value = null;
   notification.info({
-    description: `正在提交 ${count} 条广告优化建议，请勿重复提交。`,
+    description: `正在提交 ${suggestionIds.length} 条建议，请勿重复点击。`,
     duration: 0,
-    key: executionNotificationKey,
+    key,
     message: '提交中',
     placement: 'topRight',
   });
-
-  const executingTimer = globalThis.setTimeout(() => showExecuting(count), 450);
-
   try {
-    const result = await executeAdCvrOptimizationSuggestions(
-      suggestionIds,
-      budgetAdjustments,
+    const task = await submitAdCvrBatchTask(
+      {
+        requestId: globalThis.crypto.randomUUID(),
+        suggestionIds,
+        budgetAdjustments,
+        bidAdjustments,
+        matchTypeAdjustments,
+        negativeAdjustments,
+      },
       scope,
-      bidAdjustments,
-      matchTypeAdjustments,
-      negativeAdjustments,
     );
-    globalThis.clearTimeout(executingTimer);
-    if (executionPhase.value === 'submitting') showExecuting(count);
-
-    if (result.failed > 0 || (result.needsReview || 0) > 0) {
-      notification.warning({
-        description:
-          result.message ||
-          '部分建议未完成，请查看执行状态；待核对的建议不可重复提交。',
-        duration: 0,
-        key: executionNotificationKey,
-        message:
-          (result.needsReview || 0) > 0
-            ? '执行结果待核对'
-            : '执行完成，部分失败',
-        placement: 'topRight',
-      });
-    } else {
-      notification.success({
-        description: result.message || '广告优化建议已写入领星广告账户。',
-        duration: 10,
-        key: executionNotificationKey,
-        message: '执行完成',
-        placement: 'topRight',
-      });
-    }
-    return result;
+    return await poll(task, scope);
   } catch (error) {
-    globalThis.clearTimeout(executingTimer);
-    notification.error({
-      description: `${errorText(error)}。未收到完整结果不代表未执行，请刷新清单并核对领星结果，勿直接重复提交。`,
-      duration: 0,
-      key: executionNotificationKey,
-      message: '未收到完整执行结果',
-      placement: 'topRight',
-    });
+    reportError(error);
     throw error;
   } finally {
     executionPhase.value = 'idle';

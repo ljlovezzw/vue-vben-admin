@@ -13,6 +13,41 @@ import { requestClient } from '#/api/request';
 
 export type AdCvrOptimizationScope = 'daily' | 'legacy';
 
+export interface AdCvrBatchTask {
+  completed: number;
+  createdAt: string;
+  message: string;
+  result: null | Partial<AdCvrOptimizationExecutionResult>;
+  status: 'interrupted' | 'partial_failed' | 'queued' | 'running' | 'succeeded';
+  taskId: string;
+  total: number;
+}
+
+export function submitAdCvrBatchTask(
+  payload: Record<string, unknown>,
+  scope: AdCvrOptimizationScope,
+): Promise<AdCvrBatchTask> {
+  return requestClient.post(
+    `${optimizationBase(scope)}/execution-tasks`,
+    payload,
+  );
+}
+
+export function fetchAdCvrBatchTask(
+  taskId: string,
+  scope: AdCvrOptimizationScope,
+): Promise<AdCvrBatchTask> {
+  return requestClient.get(
+    `${optimizationBase(scope)}/execution-tasks/${encodeURIComponent(taskId)}`,
+  );
+}
+
+export function fetchAdCvrBatchTasks(
+  scope: AdCvrOptimizationScope,
+): Promise<{ tasks: AdCvrBatchTask[] }> {
+  return requestClient.get(`${optimizationBase(scope)}/execution-tasks`);
+}
+
 function optimizationBase(scope: AdCvrOptimizationScope) {
   return scope === 'daily'
     ? '/kanban/ads/daily-optimization'

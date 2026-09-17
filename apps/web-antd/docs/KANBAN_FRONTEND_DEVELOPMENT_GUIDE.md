@@ -585,6 +585,7 @@ public\tools\upload-tool.html
 - 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
 - 基础设置中的橱窗图、A+ 和品牌故事压缩包名根据 SPU 自动生成，默认分别为 `SPU橱窗图`、`SPUA+`、`SPU品牌故事`；用户手动改过某个包名后，后续修改 SPU 不再覆盖该手动值。
+- 实际下载和上传的 ZIP 文件名为 `包名_16位MD5.zip`，后缀取最终 ZIP 字节的 MD5 前 16 位；相同包名但内容不同通常不会共用文件名。MD5 仅用于文件命名，任务去重仍使用 ZIP 的 SHA-256 / 稳定素材指纹。
 - 橱窗图素材标题栏提供 `GPSR图片` 按钮，选择一张图片后会随本次飞书任务一起上传；后端确认 `gpsrImage` 上传成功后，在多维表格记录中写入 `是否上传GPSR合规图片=是`，未选择或上传失败则写“否”。
 - A+ 图像轮播组件固定生成 6 组图片，即手机端 6 张、电脑端 6 张；完整图和轮播共用 A+ 图片组序号，轮播输出文件名格式为 `SPU-端_图片组序号-轮播序号`。
 - A+ 顶部批量拖放区会按默认文件名自动分配素材：`SPU-手机端_01` / `SPU-电脑端_01` 定位完整图，带轮播序号的 `SPU-手机端_05-1` 定位对应轮播文件位，视频文件和 `视频封面` 定位视频组件。空白组件类型可按文件名自动调整；无法识别、目标已有文件或校验失败的素材保留在文件池供人工分配。
@@ -610,7 +611,7 @@ public\tools\upload-tool.html
 - 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
 - 图片上传工具任务日志失败记录会按任务表“错误日志链接”关联错误日志表，并展示日志表中的 `errorReason` 和“查看错误日志”链接；前端仅允许打开 HTTP(S) 地址。
 - ZIP 生成后前端计算 SHA-256，并按当前登录 token、任务组合和 ZIP 内容生成会话缓存键。相同内容在 30 分钟内重复点击“上传到飞书任务”时直接复用原任务结果，不再次上传附件；页面会显示“已复用”及原 `recordIds`。服务端仍使用 Redis 幂等缓存作为跨页面、跨 Worker 的最终防线，前端缓存不可代替后端去重。
-- 原 `multipart/form-data -> /api/feishu/image-upload-tasks` 仅作为服务端降级接口保留。含 `galleryZip + sidMsku` 的领星橱窗图自动更新必须让后端读取 ZIP，因此使用 `image-upload-sessions`：前端按 512KB 分片，每片 45 秒超时并最多重试 3 次；复用会话时读取后端已持久化分片序号，仅补传缺失部分。提交前同时核对全部已选 MSKU 颜色是否具有对应主图，缺色时直接显示颜色并阻止传输。其它附件仍默认走 Worker 边缘直传。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260911-resumable-upload-v5`。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks` 仅作为服务端降级接口保留。含 `galleryZip + sidMsku` 的领星橱窗图自动更新必须让后端读取 ZIP，因此使用 `image-upload-sessions`：前端按 512KB 分片，每片 45 秒超时并最多重试 3 次；复用会话时读取后端已持久化分片序号，仅补传缺失部分。提交前同时核对全部已选 MSKU 颜色是否具有对应主图，缺色时直接显示颜色并阻止传输。其它附件仍默认走 Worker 边缘直传。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260916-zip-md5-16-v9`。
 - 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
