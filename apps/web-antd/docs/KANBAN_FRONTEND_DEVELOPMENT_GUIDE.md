@@ -1,6 +1,46 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-09-14
+更新时间：2026-09-21
+
+## 2026-09-21 自动传图抗中断（隔离静态发布）
+
+- 18:06:52 已发布至 `dist-production/upload-resilience-20260921`；18:07 公网资源、诊断日志和后端健康验证通过。已有页面不强制升级，先完成传输再刷新整个看板。
+
+- `public/tools/upload-frame-host.js` 由首页加载；路由 iframe 只做定位占位，真正的上传 iframe 固定留在主文档，不随 KeepAlive 移动。不是把活跃 iframe 从一个 DOM 父节点挪到另一个，否则仍会销毁浏览上下文。
+- 上传 HTML 初始化先询问宿主是否是占位页；没有宿主的旧首页/独立页继续兼容原行为。保持表单、身份桥、通知和原草稿格式，`edgeCheckpoint` 仅新增可选恢复信息。
+- 29 项恢复单元测试与 16 项浏览器测试通过；新增 `scripts/upload-host.browser.test.cjs` 覆盖真实 Vue KeepAlive、业务页签关闭重开、在途请求不终止。所有写接口均模拟。
+- 隔离准备 `deploy/prepare-upload-resilience-isolated.cjs`，发布与回退证据见 `E:/junlee/Kanban/docs/audits/RELEASE_AUDIT_2026-09-21_UPLOAD_RESILIENCE.md`。不重启后端、不发布 Worker、不修改凭据，不强刷现有会话。
+
+## 2026-09-21 全量发布与广告页签空白修复
+
+- 09:23 全量前端已发布，09:55 广告页签修复发布到 `dist-production/ad-tabs-fix-20260921`；当前入口 `/jse/index-index-CpPwgAja.js`。原全量版本 `full-20260921` 保留，但有本节描述的空白问题，不作为无缺陷回退版本。
+- 工作台根 `ConfigProvider` 最终渲染 Fragment，无法完成全局 `Transition mode="out-in"` 离场回调，导致切换今日页后包括其他页签在内的内容区都停在空白。入口必须保留单一真实 `div` 根；不要在它之前/之后添加模板注释，开发模式保留根注释仍会生成 Fragment。
+- 月度/每日各缓存实例固定自身 scope，仅在所属路由活动时同步 URL 筛选；相同筛选不生成新数组，防止切回页签清空选择并重复加载。未改变后端规则、快照或执行接口。
+- 新增真实 Router/Transition/KeepAlive 回归与模板 AST 根节点保护；全部 47 文件、362 项测试通过，类型检查与目标文件 ESLint 通过。自动传图 HTML 和正式运行配置保持逐字节一致。
+- 详细原因、验证与发布记录：`E:/junlee/Kanban/docs/audits/RELEASE_AUDIT_2026-09-21_AD_TABS.md`。下方旧槽位及入口名称为当日历史记录，不代表当前版本。
+
+## 2026-09-20 P3 工作台已发布
+
+- 生产入口 `/kanban/ad-cvr-optimization` 已切换新版工作台，配套 P3 后端接口同步上线；页面实际读取 v4 重算快照。默认范围共 641 个任务包、240 个今日任务，数量随权限与筛选变化。
+- 前端由隔离源码 `E:/kanban-release/frontend-ad-cvr-p3-20260920` 构建，活动槽 blue，入口 `/jse/index-index-Dz-VVwND.js`；原 green 保留回退。已发布的发货保险及传图恢复功能保留。
+- 本轮 8 文件 / 37 项前端测试、类型检查及生产构建通过；公网资源核验和登录后的工作台显示验证通过。影子模式继续生效，未提交真实广告写入。
+- 完整发布与回退记录：后端 `Kanban/docs/audits/RELEASE_AUDIT_2026-09-20_AD_CVR_P3.md`。下方“未发布”描述对应开发日期的历史状态，由本节更新。
+
+## 2026-09-18 P3 冗余代码清理（未发布）
+
+- 移除无引用的 `TaskGovernance.vue`、`HierarchyPicker.vue`、`hierarchy-picker.ts`、`overview-loader.ts` 及后两者的旧专用测试。视图目录的 glob 路由映射会把孤立 Vue 文件纳入构建，仅移除按钮不足以清理构建产物。
+- 移除 8 个失去调用方的前端 API 包装，以及旧版重复提交路径、无消费者的响应式状态、旧选择汇总和归档标签工具。统一使用任务包预演提交路径，200 项选择上限复用单一常量。
+- 保留分析首页仍使用的 overview API、广告活动详情 API、操作上下文、批次查询/恢复、执行结果核对；没有删除后台接口、数据库或归档。
+- 执行测试改为覆盖实际 P3 提交：原样传递签名/请求 ID、双 scope、重复提交拦截、刷新恢复、响应丢失不重放、轮询瞬断恢复与失败退出。旧模块测试移除不代表仍在运行的业务测试被跳过。
+
+## 2026-09-17 P3 广告任务工作台（开发验证，未发布）
+
+- 入口仍为 `/kanban/ad-cvr-optimization`，2026-09-18 移除原建议清单页面及切换逻辑，入口直接渲染 `TaskWorkbench.vue`；日快照 scope、项目标签与后台执行恢复继续保留。按演示包组织今日任务、全部任务、执行中心，保留应用侧栏。按用户最新要求去掉“规则与口径”和“历史版本”入口，但保留服务端规则、权限和审计记录。
+- SPU/店铺/站点任务包使用服务端分页与权限范围；五阶段逐层判断，09-18 已取消人工领取，授权范围内可直接编辑并由后端事务锁保证并发一致性。支持批量采纳/观察/忽略/保留、跨页和跨阶段选取、批量参数、执行预演与异步逐项回执。转交任务有逐包反馈，不把部分成功当全部成功。
+- `TaskReviews.vue` 展示到期/执行后复查。证据抽屉展示实际禁用原因及判断记录。原 `TaskGovernance.vue` 历史与策略页面已按用户要求移除，后台功能仍保留。
+- 默认影子模式，P3 提交由后端阻断，三个周期人工验收后再开放。界面门禁不能代替后端版本、权限、租约、依赖与实体写入校验；不伪造颜色到关键词的包含关系。
+- 本轮模块前端 5 文件 / 24 项测试、typecheck、定向 ESLint/Oxlint、生产构建通过；检查了 1440/1920 桌面及 390px 首屏/证据抽屉。独立界面复核原三项修复已闭合，不代表真实广告业务全面验收。未切换生产槽位、未修改真实广告、未提交 Git。
+- 完整后端/API/快照/验收边界见后端仓库 `Kanban/docs/P3广告任务工作台.md`；原 2026-09-14 发布记录仅描述旧清单，不能据其推断 P3 已发布。
 
 ## 2026-09-14 广告优化分段加载（已发布）
 
@@ -318,6 +358,8 @@ apps\web-antd\src\api\kanban\types.ts
 | `fetchAdMonitorOverview` | `GET /kanban/ads/overview` |
 | `fetchNetProfitOverview` | `GET /kanban/net-profit/overview`，读取 `net_profit_summary` 汇总和 `net_profit` 明细费用拆解，支持月份/YTD、品牌、国家、部门、运营人员和维度排行筛选 |
 | `fetchNetProfitDetails` | `GET /kanban/net-profit/details`，按纯利计算排行行点击下钻，分页返回 `net_profit` 明细，并用 `net_profit_summary` 补齐部门口径 |
+| `startNetProfitSync` | `POST /kanban/net-profit/sync`，启动 `net_profit` 与 `net_profit_summary` 的云端到本地 upsert 同步 |
+| `fetchNetProfitSyncStatus` | `GET /kanban/net-profit/sync/status`，轮询同步任务及分表执行状态 |
 | `fetchTargetTrackerOverview` | `GET /kanban/targets/overview` |
 | `fetchAsin360Overview` | `GET /kanban/asin360/overview` |
 | `fetchAsin360StoreOptions` | `GET /kanban/asin360/stores` |
@@ -501,12 +543,14 @@ src\views\kanban\net-profit\index.vue
 用途：
 
 - 给管理层查看纯利口径，默认展示最新月份，同时支持切换到 2026 年累计。
+- 页面顶部“同步云端数据”启动后台同步；执行期间禁用重复提交并显示当前表状态，完成后自动刷新当前分析视图。
 - 顶部展示纯利、累计纯利、亏损占比和账号覆盖；中部展示资金从回款收入到最终纯利的形成路径、月度趋势和费用拆解。纯利形成路径按财务公式展示：`回款收入 = 领星毛利 + 采购成本 + 头程成本 + 自定义费用`，`纯利 = 回款收入 - ASIN标准费用 - ASIN营销相关费用 - ASIN其他费用`。采购成本、头程成本和自定义费用只作为回款收入构成展示，不作为纯利主链路扣减节点。
 - 维度排行支持按账号、品牌、国家、部门、运营人员和父 ASIN 切换；点击排行行打开明细抽屉，分页查看 `net_profit` 的 MSKU/SKU/SPU/父 ASIN/成本/纯利。
 
 口径：
 
 - 汇总来自 `net_profit_summary`，明细和费用拆解来自 `net_profit`。
+- ROI 统一按 `纯利 ÷ 销售额` 计算；销售额为 0 时显示为 0。
 - `YTD` 明细限制在 `2026%` 月份范围内，避免未来或其他年份明细混入 2026 年累计口径。
 - 部门筛选和部门下钻使用 `net_profit_summary.所属部门`，通过 `店铺 + 父ASIN` 回补到明细。
 
@@ -582,8 +626,9 @@ public\tools\upload-tool.html
 
 用途：
 
-- 将 `E:\junlee\Kanban\upload-tool.html` 挂入与运营看板同级的工具菜单。
+- 将前端仓库的 `apps/web-antd/public/tools/upload-tool.html` 作为静态工具页挂入工具菜单。
 - 当前工具为图片标准命名打包工具，支持 A+ 与品牌故事素材选择、文件名预览、ZIP 下载，以及将生成的 A+ / 品牌故事 ZIP 上传到飞书任务。
+- “选择上传ASIN”区域提供上传类型，默认“常规”；选择“节日”后显示必填的节日名称，提交时随每个 `metadataList` 项发送 `uploadType/holidayName`。飞书任务表文本列 `常规/节日` 写入“常规”或具体节日名称。名称纳入浏览器缓存键；后端同样校验并纳入幂等键，避免不同节日任务误复用。
 - 基础设置中的橱窗图、A+ 和品牌故事压缩包名根据 SPU 自动生成，默认分别为 `SPU橱窗图`、`SPUA+`、`SPU品牌故事`；用户手动改过某个包名后，后续修改 SPU 不再覆盖该手动值。
 - 实际下载和上传的 ZIP 文件名为 `包名_16位MD5.zip`，后缀取最终 ZIP 字节的 MD5 前 16 位；相同包名但内容不同通常不会共用文件名。MD5 仅用于文件命名，任务去重仍使用 ZIP 的 SHA-256 / 稳定素材指纹。
 - 橱窗图素材标题栏提供 `GPSR图片` 按钮，选择一张图片后会随本次飞书任务一起上传；后端确认 `gpsrImage` 上传成功后，在多维表格记录中写入 `是否上传GPSR合规图片=是`，未选择或上传失败则写“否”。
@@ -611,8 +656,11 @@ public\tools\upload-tool.html
 - 飞书任务上传默认走 Cloudflare Worker 边缘直传。前端先调用 `POST /api/feishu/image-upload-ticket` 获取短期票据和 `uploadBaseUrl=https://upload.junlee.top`；20MB 以内把 ZIP 发到 Worker `/upload-small`，超过 20MB 按 Worker `/prepare` 返回的飞书 `blockSize/blockNum` 调用 `/part`，完成后调用 `/finish`。Adler32 由浏览器计算并放入 `X-Chunk-Checksum`，Worker 不做大文件循环计算。Worker 返回签名 `receipt` 后，前端只把 `ticket + receipts` 交给 `POST /api/feishu/image-upload-tasks/from-tokens` 创建任务记录，ZIP 不再进入本机后端或公网 Tunnel。
 - 图片上传工具任务日志失败记录会按任务表“错误日志链接”关联错误日志表，并展示日志表中的 `errorReason` 和“查看错误日志”链接；前端仅允许打开 HTTP(S) 地址。
 - ZIP 生成后前端计算 SHA-256，并按当前登录 token、任务组合和 ZIP 内容生成会话缓存键。相同内容在 30 分钟内重复点击“上传到飞书任务”时直接复用原任务结果，不再次上传附件；页面会显示“已复用”及原 `recordIds`。服务端仍使用 Redis 幂等缓存作为跨页面、跨 Worker 的最终防线，前端缓存不可代替后端去重。
-- 原 `multipart/form-data -> /api/feishu/image-upload-tasks` 仅作为服务端降级接口保留。含 `galleryZip + sidMsku` 的领星橱窗图自动更新必须让后端读取 ZIP，因此使用 `image-upload-sessions`：前端按 512KB 分片，每片 45 秒超时并最多重试 3 次；复用会话时读取后端已持久化分片序号，仅补传缺失部分。提交前同时核对全部已选 MSKU 颜色是否具有对应主图，缺色时直接显示颜色并阻止传输。其它附件仍默认走 Worker 边缘直传。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260916-zip-md5-16-v9`。
-- 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken`，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
+- 原 `multipart/form-data -> /api/feishu/image-upload-tasks` 仅作为服务端降级接口保留。含 `galleryZip + sidMsku` 的领星橱窗图自动更新必须让后端读取 ZIP，因此使用 `image-upload-sessions`：前端按 512KB 分片，每片请求超时 120 秒并最多重试 3 次；复用会话时读取后端已持久化分片序号，仅补传缺失部分。提交前同时核对全部已选 MSKU 颜色是否具有对应主图，缺色时直接显示颜色并阻止传输。其它附件仍默认走 Worker 边缘直传。iframe URL 使用版本参数避免生产浏览器继续命中旧静态 HTML，当前为 `v=20260917-upload-drafts-v1`。
+- 上传前浏览器先准备 ZIP，再将 ZIP Blob、任务元数据和账号标识写入 IndexedDB；缓存失败则不开始网络提交。失败或结果待确认时，自动传图页显示“本地待续任务”，同账号可直接重新提交，无需重新选择文件或压缩；成功后清除本地副本。缓存仅保存在当前浏览器，清理站点数据后无法恢复。后端分片会话及服务端幂等键仍负责跨刷新恢复和避免重复创建任务。
+- `UploadTool` 路由启用 `keepAlive`，切换其他模块时 iframe 不卸载，上传流程继续运行；关闭浏览器标签页、刷新或关闭看板选项卡仍会中断浏览器端传输，返回后应从本地待续任务继续。iframe 用 `postMessage` 报告准备、缓存、上传、后台执行、成功或失败状态，`src/app.vue` 的全局右上角小通知在其它模块也能显示结果，失败通知可跳回缓存任务。
+- 2026-09-17 隔离发布时，为保留当时线上广告模块的构建产物，生产入口暂通过 `deploy/upload-task-shell.js` 实现同等通知、路由保活与账号桥接；下次从完整源码构建的入口由 `src/app.vue` 的 `UploadTaskNotice.vue` 和路由 `meta.keepAlive` 接管。不要同时在生产入口引入临时脚本和完整源码通知组件，否则会重复提示。
+- 工具页作为静态 HTML iframe 挂载，不能直接依赖 Vue/Pinia 运行时。`src/views/kanban/tools/upload/index.vue` 负责在 iframe `load` 后通过 `postMessage` 注入当前 `accessToken` 和用户 ID，HTML 内部保存到 `state.authToken` 后再调用飞书任务接口；开发环境保留读取 `localStorage['vben-web-antd-core-access']` 的兜底，线上 SecureLS 加密存储不能作为主要取 token 方式。
 
 权限：
 

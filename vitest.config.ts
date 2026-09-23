@@ -23,6 +23,7 @@ export default defineConfig({
       '**/node_modules/**',
       // These recovery checks use node:test and run separately with node --test.
       'apps/web-antd/scripts/*.test.cjs',
+      'apps/web-antd/deploy/*.test.cjs',
       '**/{stylelint,eslint}.config.*',
       '**/{oxfmt,oxlint}.config.*',
     ],

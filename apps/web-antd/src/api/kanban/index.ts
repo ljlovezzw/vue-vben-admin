@@ -30,6 +30,7 @@ import type {
   NetProfitDetails,
   NetProfitGroupsResult,
   NetProfitOverview,
+  NetProfitSyncStatus,
   OperationGroupPayload,
   OperationGroupRow,
   SearchTermReportCampaignsResult,
@@ -403,6 +404,14 @@ export async function fetchNetProfitOverview(
   params: NetProfitOverviewParams = {},
 ): Promise<NetProfitOverview> {
   return requestClient.get('/kanban/net-profit/overview', { params });
+}
+
+export async function fetchNetProfitSyncStatus(): Promise<NetProfitSyncStatus> {
+  return requestClient.get('/kanban/net-profit/sync/status');
+}
+
+export async function startNetProfitSync(): Promise<NetProfitSyncStatus> {
+  return requestClient.post('/kanban/net-profit/sync');
 }
 
 export async function fetchNetProfitBreakEven(

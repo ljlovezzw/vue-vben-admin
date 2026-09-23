@@ -247,6 +247,8 @@ function cardPlainText(item: InAppCardNotification) {
 function notificationSceneText(scene: string) {
   const labels: Record<string, string> = {
     beer_dress_calendar: '啤酒服销售日历',
+    halloween_calendar: '万圣节运营日历',
+    christmas_calendar: '圣诞节运营日历',
     cold_start_fba_arrival: '新品 FBA 到货',
     cold_start_performance_bonus: '冷启动优秀表现',
     first_week_visual_cvr_low: '第一周低 CVR',
@@ -322,6 +324,8 @@ function calendarPriorityColor(priority: unknown) {
 }
 
 function calendarActionUrl(item: InAppCardNotification | null) {
+  if (item?.scene === 'halloween_calendar') return '/kanban/halloween-calendar';
+  if (item?.scene === 'christmas_calendar') return '/kanban/christmas-calendar';
   const elements = Array.isArray(item?.card?.elements)
     ? item.card.elements
     : [];
@@ -338,6 +342,9 @@ function calendarActionUrl(item: InAppCardNotification | null) {
 
 function openCalendarNotification(item: InAppCardNotification | null) {
   const url = calendarActionUrl(item);
+  inAppNotificationCollapsed.value = true;
+  notificationHistoryDetail.value = null;
+  notificationHistoryOpen.value = false;
   if (url) {
     navigateTo(url);
   } else {
@@ -361,11 +368,27 @@ function normalizeCardMarkdown(value: unknown) {
 }
 
 function cardContentBlocks(item: InAppCardNotification | null) {
-  const elements = Array.isArray(item?.card?.elements)
-    ? item?.card?.elements
-    : [];
+  const cardElements = item?.card?.body?.elements ?? item?.card?.elements;
+  const elements = Array.isArray(cardElements) ? cardElements : [];
   return elements
     .map((element: Record<string, any>) => {
+      if (element.tag === 'column_set' && Array.isArray(element.columns)) {
+        return {
+          kind: 'markdown',
+          text: element.columns
+            .map((column: Record<string, any>) =>
+              (column.elements ?? [])
+                .filter(
+                  (child: Record<string, any>) => child.tag === 'markdown',
+                )
+                .map((child: Record<string, any>) =>
+                  normalizeCardMarkdown(child.content),
+                )
+                .join(' '),
+            )
+            .join(' · '),
+        };
+      }
       if (element.tag === 'markdown') {
         const text = normalizeCardMarkdown(element.content);
         return { kind: 'markdown', text };
@@ -951,6 +974,16 @@ onBeforeUnmount(() => {
               收起
             </Button>
             <Button
+              v-if="
+                ['halloween_calendar', 'christmas_calendar'].includes(
+                  activeInAppCardNotification.scene,
+                )
+              "
+              @click="openCalendarNotification(activeInAppCardNotification)"
+            >
+              打开{{ notificationSceneText(activeInAppCardNotification.scene) }}
+            </Button>
+            <Button
               :loading="ackLoadingId === activeInAppCardNotification.id"
               type="primary"
               @click="acknowledgeActiveInAppNotification"
@@ -1077,6 +1110,16 @@ onBeforeUnmount(() => {
           >
             {{ block.text }}
           </div>
+          <Button
+            v-if="
+              ['halloween_calendar', 'christmas_calendar'].includes(
+                notificationHistoryDetail.scene,
+              )
+            "
+            @click="openCalendarNotification(notificationHistoryDetail)"
+          >
+            打开{{ notificationSceneText(notificationHistoryDetail.scene) }}
+          </Button>
           <div
             v-if="notificationHistoryDetail.inAppStatus === 'pending'"
             class="in-app-card-actions"

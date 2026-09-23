@@ -1,0 +1,23 @@
+{
+  "route": "http://127.0.0.1:5673/kanban/halloween-calendar",
+  "errors": [],
+  "failed": [],
+  "requests": [
+    "/auth/feishu-login",
+    "/user/info",
+    "/auth/codes",
+    "/auth/codes",
+    "/kanban/halloween-calendar/overview",
+    "/kanban/card-notifications/in-app",
+    "/user/info",
+    "/auth/codes",
+    "/kanban/halloween-calendar/overview"
+  ],
+  "checks": [
+    "production lazy module",
+    "permission menu",
+    "full reload",
+    "calendar dialog",
+    "escape close"
+  ]
+}

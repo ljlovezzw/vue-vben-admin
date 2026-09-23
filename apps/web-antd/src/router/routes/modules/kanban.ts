@@ -86,6 +86,26 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        name: 'KanbanHalloweenCalendar',
+        path: 'halloween-calendar',
+        component: () => import('#/views/kanban/halloween-calendar/index.vue'),
+        meta: {
+          authority: ['kanban:monitor'],
+          icon: 'lucide:calendar-range',
+          title: '万圣节运营日历',
+        },
+      },
+      {
+        name: 'KanbanChristmasCalendar',
+        path: 'christmas-calendar',
+        component: () => import('#/views/kanban/christmas-calendar/index.vue'),
+        meta: {
+          authority: ['kanban:monitor'],
+          icon: 'lucide:calendar-heart',
+          title: '圣诞节运营日历',
+        },
+      },
+      {
         name: 'KanbanAsin360',
         path: 'asin360',
         component: () => import('#/views/kanban/asin360/index.vue'),

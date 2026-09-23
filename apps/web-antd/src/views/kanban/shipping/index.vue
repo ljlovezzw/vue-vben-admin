@@ -69,6 +69,15 @@ const fullResultLoaded = ref(false);
 const bootstrapTotalReturnedQty = ref(0);
 
 const channels = computed(() => workspace.value?.channels ?? []);
+const airInsuranceCodes = new Set(['CA_AIR', 'EU_AIR', 'UK_AIR', 'US_AIR']);
+
+function isAirInsurance(mode: string, code: string, name: string) {
+  return (
+    mode === 'air' &&
+    (airInsuranceCodes.has(code.toUpperCase()) || name.includes('保险'))
+  );
+}
+
 const receipts = computed(() => workspace.value?.receipts ?? []);
 const skuPlans = computed(() => workspace.value?.skuPlans ?? []);
 const allocations = computed(() => result.value?.allocations ?? []);
@@ -723,6 +732,15 @@ onMounted(loadPage);
                           class="priority"
                           :class="[channel.priorityLevel.toLowerCase()]"
                           >{{ channel.priorityLevel }}</span>
+                        <small
+                          v-if="
+                            isAirInsurance(
+                              channel.mode,
+                              channel.code,
+                              channel.name,
+                            )
+                          "
+                          >保险优先</small>
                       </td>
                       <td>
                         <strong>{{ channel.name }}</strong><small>{{ channel.code }}</small>
@@ -744,7 +762,23 @@ onMounted(loadPage);
                           percent(channel.shippedCompletionRate)
                         }}</small>
                       </td>
-                      <td>{{ channel.deadline || '-' }}</td>
+                      <td>
+                        <template
+                          v-if="
+                            isAirInsurance(
+                              channel.mode,
+                              channel.code,
+                              channel.name,
+                            )
+                          "
+                        >
+                          不受时效限制
+                          <small v-if="channel.deadline">参考 {{ channel.deadline }}</small>
+                        </template>
+                        <template v-else>
+                          {{ channel.deadline || '-' }}
+                        </template>
+                      </td>
                       <td class="rule-cell">{{ channel.rule || '-' }}</td>
                     </tr>
                   </tbody>
@@ -897,7 +931,16 @@ onMounted(loadPage);
                         </td>
                         <td>
                           {{ batchSchedule(batch) }}
-                          <small>发走 {{ batch.plannedDispatchDate || '-' }} / 截止
+                          <small>发走 {{ batch.plannedDispatchDate || '-' }} /
+                            {{
+                              isAirInsurance(
+                                batch.mode,
+                                batch.channelCode,
+                                batch.channelName,
+                              )
+                                ? '保险参考日期'
+                                : '截止'
+                            }}
                             {{ batch.deadline || '-' }}</small>
                         </td>
                         <td>
@@ -1229,7 +1272,16 @@ onMounted(loadPage);
                         </td>
                         <td>
                           {{ batch.plannedDispatchDate || '-' }}
-                          <small v-if="batch.deadline">截止 {{ batch.deadline }}</small>
+                          <small v-if="batch.deadline">{{
+                              isAirInsurance(
+                                batch.mode,
+                                batch.channelCode,
+                                batch.channelName,
+                              )
+                                ? '保险参考日期'
+                                : '截止'
+                            }}
+                            {{ batch.deadline }}</small>
                         </td>
                         <td>
                           <span
@@ -1520,6 +1572,15 @@ onMounted(loadPage);
                           </span>
                         </div>
                         <small>{{ channel.code }} · {{ channel.country }}</small>
+                        <small
+                          v-if="
+                            isAirInsurance(
+                              channel.mode,
+                              channel.code,
+                              channel.name,
+                            )
+                          "
+                          >空运保险优先，日期仅供参考</small>
                       </td>
                       <td class="channel-plan-qty">
                         <strong>{{ integer(channel.plannedQty) }}</strong>

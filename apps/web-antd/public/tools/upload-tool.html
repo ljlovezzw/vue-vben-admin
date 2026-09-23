@@ -514,6 +514,25 @@
       overflow: visible;
     }
 
+    .upload-kind-controls {
+      display: flex;
+      align-items: end;
+      gap: 12px;
+      flex-wrap: nowrap;
+      min-width: 382px;
+    }
+
+    .upload-kind-controls .field { min-width: 150px; }
+    .upload-kind-controls .holiday-field { min-width: min(220px, 100%); }
+    .upload-kind-controls .control { min-height: 42px; }
+    .upload-kind-controls .field-error {
+      color: #b42318;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .upload-kind-controls .control[aria-invalid="true"] { border-color: #d92d20; }
+
     .btn {
       display: inline-flex;
       align-items: center;
@@ -1414,6 +1433,23 @@
       background: #f8fafc;
     }
 
+    .upload-drafts { display: grid; gap: 9px; }
+    .upload-drafts-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; }
+    .upload-drafts-head strong { font-size: 14px; }
+    .upload-drafts-head span { min-width: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .upload-draft-list { display: grid; gap: 9px; }
+    .upload-draft { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+    .upload-draft.is-focused { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .upload-draft-main { min-width: 0; display: grid; gap: 3px; }
+    .upload-draft-main { flex: 1; }
+    .upload-queue-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .upload-draft progress { width: 100%; max-width: 360px; height: 8px; accent-color: var(--primary); }
+    .upload-draft-main strong { font-size: 13px; overflow-wrap: anywhere; }
+    .upload-draft-main span { font-size: 12px; color: var(--muted); line-height: 1.45; overflow-wrap: anywhere; }
+    .upload-draft-actions { display: flex; gap: 7px; flex: none; }
+    .upload-draft-actions .btn { padding: 7px 10px; font-size: 12px; }
+    .upload-draft-actions button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
     .hidden { display: none !important; }
 
     @media (max-width: 1180px) {
@@ -1430,10 +1466,13 @@
       .platform-pair-column .map-row > .field:last-child { grid-column: auto; }
       .shop-field { grid-column: 1; }
       .listing-query-grid { grid-template-columns: 1fr; }
+      .upload-kind-controls { width: 100%; min-width: 0; flex-wrap: wrap; }
+      .upload-kind-controls .field { width: 100%; }
       .keyword-editor-grid { grid-template-columns: 1fr; }
       .shop-options { grid-template-columns: 1fr; }
       .top { padding: 18px; }
       .panel-body { padding: 14px; }
+      .upload-draft { align-items: flex-start; flex-direction: column; }
     }
   </style>
 </head>
@@ -1460,7 +1499,20 @@
           <div class="panel-head">
             <div>
               <h2>选择上传ASIN</h2>
-          
+            </div>
+            <div class="upload-kind-controls">
+              <div class="field">
+                <label for="uploadType">上传类型</label>
+                <select class="control" id="uploadType">
+                  <option value="regular" selected>常规</option>
+                  <option value="holiday">节日</option>
+                </select>
+              </div>
+              <div class="field holiday-field hidden" id="holidayField">
+                <label for="holidayName">节日名称</label>
+                <input class="control" id="holidayName" type="text" maxlength="50" placeholder="例如：圣诞节" aria-describedby="holidayNameError" />
+                <span class="field-error hidden" id="holidayNameError" role="alert">请输入节日名称</span>
+              </div>
             </div>
           </div>
           <div class="panel-body">
@@ -1711,9 +1763,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         <section class="panel">
           <div class="panel-body">
             <div class="actions">
-              <button class="btn btn-green" id="uploadFeishuTask" type="button">上传到飞书任务</button>
+              <button class="btn btn-green" id="uploadFeishuTask" type="button">提交并继续添加</button>
             </div>
             <div class="notice hidden" id="feishuTaskStatus"></div>
+            <div class="upload-drafts hidden" id="uploadDrafts">
+              <div class="upload-drafts-head"><strong>上传任务</strong><span id="uploadQueueSummary">本地保存后可继续添加，最多同时处理 2 条</span></div>
+              <p class="upload-queue-hint">可切换其他模块；传输时请勿关闭或刷新此标签页。同一 Listing 顺序处理，请勿在其他设备重复改图。</p>
+              <div class="upload-draft-list" id="uploadDraftList"></div>
+            </div>
           </div>
         </section>
       </main>
@@ -1773,7 +1830,15 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       imageKeywordAbortController: null,
       imageKeywordTimer: null,
       authToken: "",
+      authOwner: "",
+      authBridgeReceived: false,
+      uploadJobs: new Map(),
+      uploadWorkers: 0,
       feishuTaskInFlight: false,
+      activeDraftId: "",
+      activeDraftCached: false,
+      activeDraftSpu: "",
+      uploadPhase: "preparing",
       taskLog: {
         items: [],
         loading: false,
@@ -1842,7 +1907,13 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       brandBulkInput: document.getElementById("brandBulkInput"),
       brandPool: document.getElementById("brandPool"),
       uploadFeishuTask: document.getElementById("uploadFeishuTask"),
+      uploadType: document.getElementById("uploadType"),
+      holidayField: document.getElementById("holidayField"),
+      holidayName: document.getElementById("holidayName"),
+      holidayNameError: document.getElementById("holidayNameError"),
       feishuTaskStatus: document.getElementById("feishuTaskStatus"),
+      uploadDrafts: document.getElementById("uploadDrafts"),
+      uploadDraftList: document.getElementById("uploadDraftList"),
       taskLogList: document.getElementById("taskLogList"),
       taskLogStatus: document.getElementById("taskLogStatus"),
       refreshTaskLog: document.getElementById("refreshTaskLog"),
@@ -1881,6 +1952,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     const previewUrls = new Map();
+    window.__kanbanUploadHasActiveJobs = () => [...state.uploadJobs.values()]
+      .some(job => job.active || job.enqueued);
 
     function previewUrlForFile(file) {
       if (!file) return "";
@@ -1890,9 +1963,23 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return previewUrls.get(file);
     }
 
-    window.addEventListener("beforeunload", () => {
+    window.addEventListener("pagehide", () => {
+      for (const job of state.uploadJobs.values()) {
+        if (!job.active && !job.enqueued) continue;
+        job.enqueued = false;
+        job.paused = true;
+        job.controller.abort();
+        reportUploadDiagnostic(job, "page-lifecycle", "page-hidden", 0);
+        job.phase("pending", "页面已关闭、刷新或重新加载，上传已暂停；本地副本保留，可查询并继续", "warn");
+      }
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
       previewUrls.clear();
+    });
+    window.addEventListener("beforeunload", (event) => {
+      if (state.feishuTaskInFlight || [...state.uploadJobs.values()].some(job => job.active || job.enqueued)) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
     });
 
     function setListingStatus(text, type = "normal") {
@@ -2122,11 +2209,42 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.feishuTaskStatus.classList.remove("hidden");
       els.feishuTaskStatus.textContent = text;
       els.feishuTaskStatus.classList.toggle("warn", type === "warn");
+      if (state.activeDraftId && window.parent && window.parent !== window) {
+        window.parent.postMessage({
+          source: "kanban-upload-tool",
+          type: "kanban-upload-task-status",
+          draftId: state.activeDraftId,
+          cached: state.activeDraftCached,
+          phase: state.uploadPhase,
+          spu: state.activeDraftSpu || (els.spu.value || "").trim(),
+          message: text,
+        }, window.location.origin);
+      }
+    }
+
+    function setUploadPhase(phase, text, type = "normal") {
+      state.uploadPhase = phase;
+      setFeishuTaskStatus(text, type);
     }
 
     function setFeishuTaskInFlight(inFlight) {
       state.feishuTaskInFlight = Boolean(inFlight);
       els.uploadFeishuTask.disabled = state.feishuTaskInFlight;
+      els.uploadFeishuTask.textContent = inFlight ? "正在保存本地副本…" : "提交并继续添加";
+      document.querySelectorAll("main > section.panel").forEach(panel => {
+        if (!panel.contains(els.uploadFeishuTask)) panel.inert = Boolean(inFlight);
+      });
+    }
+
+    function selectedUploadCategory(showError = false) {
+      const uploadType = els.uploadType.value;
+      const holidayName = (els.holidayName.value || "").trim();
+      const invalid = uploadType === "holiday" && !holidayName;
+      els.holidayField.classList.toggle("hidden", uploadType !== "holiday");
+      const revealError = invalid && (showError || !els.holidayNameError.classList.contains("hidden"));
+      els.holidayNameError.classList.toggle("hidden", !revealError);
+      els.holidayName.setAttribute("aria-invalid", revealError ? "true" : "false");
+      return invalid ? null : { uploadType, holidayName: uploadType === "holiday" ? holidayName : "" };
     }
 
     function extractRows(payload) {
@@ -3273,6 +3391,365 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     const FEISHU_SMALL_UPLOAD_LIMIT = 20 * 1024 * 1024;
     const FEISHU_TASK_CACHE_TTL_MS = 30 * 60 * 1000;
     const FEISHU_TASK_CACHE_PREFIX = "kanban:feishu-image-task:v1:";
+    const UPLOAD_DRAFT_DB_NAME = "kanban-image-upload-drafts";
+    const UPLOAD_DRAFT_STORE = "drafts";
+    const UPLOAD_DRAFT_STATUS_PREFIX = "kanban:image-upload-draft-status:v1:";
+
+    function openUploadDraftDatabase() {
+      return new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject(new Error("当前浏览器不支持本地文件缓存"));
+        const request = indexedDB.open(UPLOAD_DRAFT_DB_NAME, 1);
+        request.onupgradeneeded = () => {
+          if (!request.result.objectStoreNames.contains(UPLOAD_DRAFT_STORE)) {
+            const store = request.result.createObjectStore(UPLOAD_DRAFT_STORE, { keyPath: "id" });
+            store.createIndex("ownerKey", "ownerKey");
+          }
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error("打开本地缓存失败"));
+        request.onblocked = () => reject(new Error("本地缓存被其他页面占用，请关闭旧页面后重试"));
+      });
+    }
+
+    async function withUploadDraftStore(mode, operation) {
+      const db = await openUploadDraftDatabase();
+      try {
+        return await new Promise((resolve, reject) => {
+          const transaction = db.transaction(UPLOAD_DRAFT_STORE, mode);
+          const request = operation(transaction.objectStore(UPLOAD_DRAFT_STORE));
+          let result;
+          request.onsuccess = () => { result = request.result; };
+          request.onerror = () => reject(request.error || new Error("本地缓存操作失败"));
+          transaction.oncomplete = () => resolve(result);
+          transaction.onabort = () => reject(transaction.error || new Error("本地缓存空间不足或写入中断"));
+          transaction.onerror = () => reject(transaction.error || new Error("本地缓存操作失败"));
+        });
+      } finally {
+        db.close();
+      }
+    }
+
+    async function uploadDraftOwnerKey() {
+      if (state.authOwner) return `user:${state.authOwner}`;
+      const token = authToken();
+      if (!token) throw new Error("登录信息已失效，请重新登录");
+      return `token:${await taskResultCacheKey("image-upload-draft-owner", token)}`;
+    }
+
+    async function saveUploadDraft(draft) {
+      await withUploadDraftStore("readwrite", (store) => store.put(draft));
+      return draft;
+    }
+
+    function uploadDraftWithStatus(draft) {
+      if (!draft) return draft;
+      try {
+        const status = JSON.parse(localStorage.getItem(`${UPLOAD_DRAFT_STATUS_PREFIX}${draft.id}`) || "null");
+        if (status?.ownerKey === draft.ownerKey && Number(status.updatedAt) >= Number(draft.updatedAt)) {
+          return { ...draft, ...status, id: draft.id, ownerKey: draft.ownerKey };
+        }
+      } catch {
+        // A broken status marker must not hide or corrupt the cached files.
+      }
+      return draft;
+    }
+
+    function updateUploadDraftStatus(draft, status, error = "", extra = {}) {
+      const updatedAt = Date.now();
+      try {
+        localStorage.setItem(`${UPLOAD_DRAFT_STATUS_PREFIX}${draft.id}`, JSON.stringify({
+          ...extra, ownerKey: draft.ownerKey, status, error, updatedAt,
+        }));
+      } catch {
+        // Status is advisory; never block the upload to rewrite a large ZIP.
+      }
+      return { ...draft, ...extra, status, error, updatedAt };
+    }
+
+    const UPLOAD_QUEUE_CONCURRENCY = 2;
+    const UPLOAD_BUSY_PHASES = new Set(["queued", "preparing", "caching", "uploading", "executing"]);
+    let uploadQueueTimer = null;
+    let uploadRenderTimer = null;
+    let uploadRenderVersion = 0;
+
+    function uploadOwnerIsCurrent(job) {
+      if (!authToken()) return false;
+      return job.draft.ownerKey.startsWith("user:")
+        ? job.draft.ownerKey === `user:${state.authOwner}`
+        : job.token === authToken();
+    }
+
+    function assertUploadJobCurrent(job) {
+      if (!job) return;
+      if (job.paused || job.controller.signal.aborted || !uploadOwnerIsCurrent(job)) {
+        const error = new Error("登录账号已变更或页面已关闭；本地副本保留，请使用原账号查询并继续");
+        error.uploadPending = true;
+        throw error;
+      }
+    }
+
+    function scheduleUploadTaskRender() {
+      if (uploadRenderTimer) return;
+      uploadRenderTimer = setTimeout(() => {
+        uploadRenderTimer = null;
+        void renderUploadDrafts();
+      }, 80);
+    }
+
+    function uploadTargetKeys(draft) {
+      return [...new Set((draft.metadataList || []).map(item =>
+        `${String(item.shop || "").trim().toUpperCase()}:${String(item.parentAsin || "").trim().toUpperCase()}`,
+      ))].sort();
+    }
+
+    async function withUploadLocks(names, callback) {
+      if (!navigator.locks?.request) {
+        throw new Error("当前浏览器不支持安全任务队列，请使用新版 Chrome、Edge 或 Firefox；本地副本已保留");
+      }
+      const keys = [...new Set(names)].sort();
+      async function acquire(index) {
+        if (index === keys.length) { await callback(); return true; }
+        return navigator.locks.request(keys[index], { ifAvailable: true }, lock =>
+          lock ? acquire(index + 1) : false,
+        );
+      }
+      return acquire(0);
+    }
+
+    function createUploadJob(draft, token) {
+      const job = {
+        draft, token, status: "queued", message: "等待处理", progress: null,
+        active: false, enqueued: true, paused: false, controller: new AbortController(),
+        report(message, type = "normal", progress = this.progress) {
+          this.message = String(message);
+          this.progress = progress;
+          if (this.locked) this.draft = updateUploadDraftStatus(this.draft, this.status,
+            ["failed", "pending"].includes(this.status) ? this.message : "", {
+              message: this.message, progress, taskId: this.draft.taskId || null,
+              uploadId: this.draft.uploadId || null,
+              submissionKey: this.draft.submissionKey || null,
+              edgeSubmissionPending: Boolean(this.draft.edgeSubmissionPending),
+              edgeCheckpoint: this.draft.edgeCheckpoint || null,
+            });
+          if (uploadOwnerIsCurrent(this) && window.parent !== window) {
+            window.parent.postMessage({
+              source: "kanban-upload-tool", type: "kanban-upload-task-status",
+              draftId: this.draft.id, ownerKey: this.draft.ownerKey, cached: true,
+              spu: this.draft.spu, phase: this.status, message: this.message, progress,
+            }, window.location.origin);
+          }
+          scheduleUploadTaskRender();
+        },
+        phase(phase, message, type = "normal") {
+          this.status = phase;
+          this.report(message, type, phase === "uploading" ? this.progress : null);
+        },
+        async persist(patch) {
+          this.draft = { ...this.draft, ...patch, updatedAt: Date.now() };
+          const changesFiles = ["galleryZip", "aplusZip", "brandZip", "gpsrImage", "preparation"].some(key => Object.hasOwn(patch, key));
+          if (changesFiles) {
+            await saveUploadDraft(this.draft);
+          } else {
+            // Do not rewrite large ZIP Blobs just to save a task ID or resume marker.
+            const { id, ownerKey, status, error, updatedAt, taskId, uploadId,
+              submissionKey, edgeSubmissionPending, edgeCheckpoint, message, progress } = this.draft;
+            try {
+              localStorage.setItem(`${UPLOAD_DRAFT_STATUS_PREFIX}${id}`, JSON.stringify({
+                ownerKey, status, error, updatedAt, taskId, uploadId,
+                submissionKey, edgeSubmissionPending, edgeCheckpoint, message, progress,
+              }));
+            } catch { await saveUploadDraft(this.draft); }
+          }
+        },
+      };
+      return job;
+    }
+
+    function enqueueUploadDraft(draft, token) {
+      if (draft.status === "succeeded") return null;
+      const existing = state.uploadJobs.get(draft.id);
+      if (existing?.active || existing?.enqueued) return existing;
+      const job = createUploadJob(draft, token);
+      state.uploadJobs.set(draft.id, job);
+      job.phase("queued", "已加入队列，可以继续添加下一条任务");
+      scheduleUploadQueue();
+      return job;
+    }
+
+    function scheduleUploadQueue(delay = 0) {
+      if (uploadQueueTimer) return;
+      uploadQueueTimer = setTimeout(() => {
+        uploadQueueTimer = null;
+        pumpUploadQueue();
+      }, delay);
+    }
+
+    function pumpUploadQueue() {
+      for (const job of state.uploadJobs.values()) {
+        if (state.uploadWorkers >= UPLOAD_QUEUE_CONCURRENCY) break;
+        if (!job.enqueued || job.active || job.paused) continue;
+        if (!uploadOwnerIsCurrent(job)) { job.enqueued = false; continue; }
+        const targets = uploadTargetKeys(job.draft);
+        if ([...state.uploadJobs.values()].some(other => other.active
+          && uploadTargetKeys(other.draft).some(key => targets.includes(key)))) {
+          job.report("等待同一 Listing 的上一条任务完成");
+          continue;
+        }
+        job.active = true;
+        state.uploadWorkers += 1;
+        void runQueuedUpload(job).finally(() => {
+          job.active = false;
+          state.uploadWorkers -= 1;
+          scheduleUploadTaskRender();
+          if ([...state.uploadJobs.values()].some(item => item.enqueued && !item.paused)) scheduleUploadQueue(1500);
+        });
+      }
+    }
+
+    async function runQueuedUpload(job) {
+      try {
+        assertUploadJobCurrent(job);
+        const locks = [`kanban-upload-draft:${job.draft.id}`,
+          ...uploadTargetKeys(job.draft).map(key => `kanban-upload-target:${key}`)];
+        const acquired = await withUploadLocks(locks, async () => {
+          assertUploadJobCurrent(job);
+          const stored = await readUploadDraft(job.draft.id);
+          if (!stored) throw new Error("本地任务不存在，请重新选择文件");
+          job.draft = stored;
+          if (stored.status === "succeeded") {
+            job.enqueued = false;
+            job.phase("succeeded", stored.message || "任务已经完成，无需重复提交");
+            return;
+          }
+          const targets = uploadTargetKeys(stored);
+          const unresolved = (await listUploadDrafts()).find(other => other.id !== stored.id
+            && (["pending", "uploading", "executing"].includes(other.status)
+              || ((other.taskId || other.edgeSubmissionPending) && !["succeeded", "failed"].includes(other.status)))
+            && uploadTargetKeys(other).some(key => targets.includes(key)));
+          if (unresolved) {
+            job.report(`等待 ${unresolved.spu || "同一 Listing"} 的上一条任务确认结果，请先查询并继续该任务`);
+            return;
+          }
+          job.locked = true;
+          job.enqueued = false;
+          await submitPreparedUpload(job.draft, job.token, job);
+        });
+        if (!acquired) job.report("另一标签页正在处理该任务或同一 Listing，等待完成");
+      } catch (error) {
+        job.enqueued = false;
+        job.phase(error.uploadPending ? "pending" : "failed", error.message, "warn");
+      } finally {
+        job.locked = false;
+      }
+    }
+
+    async function readUploadDraft(id) {
+      const draft = await withUploadDraftStore("readonly", (store) => store.get(id));
+      if (!draft || draft.ownerKey !== await uploadDraftOwnerKey()) return null;
+      return uploadDraftWithStatus(draft);
+    }
+
+    async function listUploadDrafts() {
+      const ownerKey = await uploadDraftOwnerKey();
+      const drafts = await withUploadDraftStore("readonly", (store) => store.index("ownerKey").getAll(ownerKey));
+      return drafts.map(uploadDraftWithStatus).sort((left, right) => right.updatedAt - left.updatedAt);
+    }
+
+    async function deleteUploadDraft(id) {
+      const job = state.uploadJobs.get(id);
+      if (job?.active || job?.enqueued) throw new Error("任务仍在处理中，不能删除");
+      const acquired = await withUploadLocks([`kanban-upload-draft:${id}`], async () => {
+        const draft = await readUploadDraft(id);
+        if (!draft) return;
+        await withUploadDraftStore("readwrite", (store) => store.delete(id));
+        try { localStorage.removeItem(`${UPLOAD_DRAFT_STATUS_PREFIX}${id}`); } catch {}
+        state.uploadJobs.delete(id);
+      });
+      if (!acquired) throw new Error("另一标签页正在使用此任务，请等待完成");
+      await renderUploadDrafts();
+    }
+
+    let requestedUploadDraftId = "";
+
+    async function renderUploadDrafts() {
+      const version = ++uploadRenderVersion;
+      const owner = state.authOwner;
+      const token = authToken();
+      if (!authToken()) {
+        els.uploadDraftList.replaceChildren();
+        els.uploadDrafts.classList.add("hidden");
+        return;
+      }
+      let drafts;
+      try {
+        drafts = await listUploadDrafts();
+      } catch (error) {
+        if (version !== uploadRenderVersion || owner !== state.authOwner || token !== authToken()) return;
+        els.uploadDraftList.textContent = `读取本地待续任务失败：${error.message}。请勿清除浏览器数据，可刷新页面后重试。`;
+        els.uploadDrafts.classList.remove("hidden");
+        return;
+      }
+      if (version !== uploadRenderVersion || owner !== state.authOwner || token !== authToken()) return;
+      els.uploadDraftList.replaceChildren();
+      els.uploadDrafts.classList.toggle("hidden", !drafts.length);
+      const activeCount = [...state.uploadJobs.values()].filter(job => uploadOwnerIsCurrent(job) && (job.active || job.enqueued)).length;
+      document.getElementById("uploadQueueSummary").textContent = activeCount
+        ? `${activeCount} 条处理中 · 本标签页最多同时处理 2 条` : "文件保存在当前浏览器，可直接重试";
+      for (let draft of drafts) {
+        const job = state.uploadJobs.get(draft.id);
+        const busy = Boolean(job?.active || job?.enqueued);
+        if (job && uploadOwnerIsCurrent(job)) draft = { ...draft, status: job.status, message: job.message, progress: job.progress };
+        const row = document.createElement("div");
+        row.className = "upload-draft";
+        row.dataset.draftId = draft.id;
+        row.classList.toggle("is-focused", requestedUploadDraftId === draft.id);
+        const summary = document.createElement("div");
+        summary.className = "upload-draft-main";
+        const title = document.createElement("strong");
+        title.textContent = `${draft.spu || "未命名 SPU"} · ${draft.metadataList.length} 个飞书任务`;
+        const detail = document.createElement("span");
+        const labels = { queued: "等待处理", preparing: "正在打包", caching: "保存本地副本", uploading: "正在上传", executing: "后台执行中", pending: "结果待确认", failed: "上传失败", succeeded: "已完成" };
+        const label = labels[draft.status] || "可继续提交";
+        detail.textContent = `${!busy && UPLOAD_BUSY_PHASES.has(draft.status) ? "上次处理未完成" : label} · ${new Date(draft.updatedAt).toLocaleString("zh-CN")}`;
+        summary.append(title, detail);
+        const message = document.createElement("span");
+        message.textContent = draft.message || draft.error || "本地副本已保存";
+        summary.append(message);
+        if (busy && draft.progress?.total > 0) {
+          const progress = document.createElement("progress");
+          progress.max = draft.progress.total;
+          progress.value = draft.progress.completed || 0;
+          progress.setAttribute("aria-label", `${draft.spu} 上传进度`);
+          summary.append(progress);
+        }
+        const actions = document.createElement("div");
+        actions.className = "upload-draft-actions";
+        const retry = document.createElement("button");
+        retry.className = "btn btn-primary";
+        retry.type = "button";
+        retry.textContent = busy ? label : ["pending", "uploading", "executing"].includes(draft.status) ? "查询并继续" : "重新提交";
+        retry.disabled = busy;
+        retry.addEventListener("click", () => retryUploadDraft(draft.id));
+        const remove = document.createElement("button");
+        remove.className = "btn btn-soft";
+        remove.type = "button";
+        remove.textContent = draft.status === "succeeded" ? "移除记录" : "删除缓存";
+        remove.disabled = busy;
+        remove.addEventListener("click", async () => {
+          if (!window.confirm(draft.status === "succeeded" ? "移除这条本地完成记录？不会删除已创建的任务。" : "删除这份本地上传文件？删除后无法一键重试。")) return;
+          try { await deleteUploadDraft(draft.id); }
+          catch (error) { setFeishuTaskStatus(`删除缓存失败：${error.message}`, "warn"); }
+        });
+        if (draft.status !== "succeeded") actions.append(retry);
+        actions.append(remove);
+        row.append(summary, actions);
+        els.uploadDraftList.appendChild(row);
+        if (requestedUploadDraftId === draft.id) {
+          requestAnimationFrame(() => row.scrollIntoView({ behavior: "smooth", block: "center" }));
+          requestedUploadDraftId = "";
+        }
+      }
+    }
 
     function activeAPlusComponents() {
       return state.aPlus;
@@ -5057,8 +5534,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }));
     }
 
-    async function preparedZipEntries(entries, root, includeImageFlags) {
-      const embeddedEntries = await entriesWithEmbeddedKeywords(entries);
+    async function preparedZipEntries(entries, root, includeImageFlags, metadata = imageKeywordMetadata()) {
+      const embeddedEntries = await entriesWithEmbeddedKeywords(entries, metadata);
       return includeImageFlags
         ? withImageFlagJson(embeddedEntries, root)
         : embeddedEntries;
@@ -5166,6 +5643,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     function authToken() {
+      if (state.authBridgeReceived) return state.authToken || "";
       if (state.authToken) return state.authToken;
       const keys = ["accessToken", "token", "kanbanToken", "Authorization", "authorization"];
       for (const store of [localStorage, sessionStorage]) {
@@ -5181,12 +5659,36 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     function initAuthBridge() {
+      window.addEventListener("storage", event => {
+        if (event.key?.startsWith(UPLOAD_DRAFT_STATUS_PREFIX)) {
+          scheduleUploadTaskRender();
+          scheduleUploadQueue();
+        }
+      });
       window.addEventListener("message", (event) => {
-        if (event.origin !== window.location.origin) return;
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        if (event.data?.type === "kanban-upload-draft-focus") {
+          requestedUploadDraftId = String(event.data.draftId || "");
+          renderUploadDrafts();
+          return;
+        }
         if (event.data?.type !== "kanban-auth-token") return;
+        state.authBridgeReceived = true;
         state.authToken = String(event.data.token || "").replace(/^Bearer\s+/i, "");
+        if (Object.prototype.hasOwnProperty.call(event.data, "userId")) {
+          state.authOwner = String(event.data.userId || "");
+        }
+        for (const job of state.uploadJobs.values()) {
+          if (!uploadOwnerIsCurrent(job) && (job.active || job.enqueued)) {
+            job.enqueued = false;
+            job.paused = true;
+            job.controller.abort();
+            job.phase("pending", "登录账号已变化，任务已暂停；切回原账号后查询并继续", "warn");
+          }
+        }
         loadShopOptions();
         loadTaskLog({ silent: true });
+        renderUploadDrafts();
       });
       if (window.parent && window.parent !== window) {
         window.parent.postMessage(
@@ -5334,6 +5836,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         .map((item) => ({
           asins: [...item.asins].sort(),
           parentAsin: item.parentAsin,
+          uploadType: item.uploadType || "regular",
+          holidayName: item.holidayName || "",
           sidMsku: (item.sidMsku || [])
             .map((entry) => {
               const storeId = Number(entry.store_id ?? entry.storeId ?? entry.sid);
@@ -5413,9 +5917,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
     }
 
-    async function buildUploadZip(entries, root, { includeImageFlags = true } = {}) {
+    async function buildUploadZip(entries, root, { includeImageFlags = true, keywordMetadata } = {}) {
       if (!entries.length) return null;
-      const sourceEntries = await preparedZipEntries(entries, root, includeImageFlags);
+      const sourceEntries = await preparedZipEntries(entries, root, includeImageFlags, keywordMetadata);
       const [zip, sourceFingerprint] = await Promise.all([
         buildZip(sourceEntries),
         sourceFilesFingerprint(sourceEntries),
@@ -5428,15 +5932,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       };
     }
 
-    async function gpsrImageUploadFile() {
-      if (!state.gpsrImage) return null;
-      const extension = extOf(state.gpsrImage, ".jpg");
-      const metadata = imageKeywordMetadata();
+    async function gpsrImageUploadFile(file = state.gpsrImage, metadata = imageKeywordMetadata(), prefix = spuPrefix()) {
+      if (!file) return null;
+      const extension = extOf(file, ".jpg");
       const embedded = metadata.all.length
-        ? await imageFileWithKeywordMetadata(state.gpsrImage, metadata)
-        : state.gpsrImage;
+        ? await imageFileWithKeywordMetadata(file, metadata)
+        : file;
       return {
-        filename: `${spuPrefix()}-GPSR合规图片${extension}`,
+        filename: `${prefix}-GPSR合规图片${extension}`,
         contentType: "image/jpeg",
         blob: embedded,
       };
@@ -5465,7 +5968,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return `${baseUrl}/${encodeURIComponent(uploadId)}${action ? `/${action}` : ""}`;
     }
 
-    async function confirmBackendChunkProgress(uploadId, fileKey, chunkIndex, token) {
+    async function confirmBackendChunkProgress(uploadId, fileKey, chunkIndex, token, context = null) {
       const progressPayload = await fetchJsonWithRetry(
         feishuUploadSessionApiUrl(uploadId),
         {
@@ -5478,6 +5981,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           retryLimit: 2,
           timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS,
         },
+        context,
       );
       const indexes = progressPayload?.data?.files?.[fileKey]?.uploaded;
       if (!Array.isArray(indexes)) throw new Error("服务器未返回有效上传进度");
@@ -5645,6 +6149,42 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return payload;
     }
 
+    function reportUploadNetwork(context, message, type = "normal", progress = null) {
+      if (context) context.report(message, type, progress);
+      else setFeishuTaskStatus(message, type);
+    }
+
+    function phaseUploadNetwork(context, phase, message, type = "normal") {
+      if (context) context.phase(phase, message, type);
+      else setUploadPhase(phase, message, type);
+    }
+
+    function guardUploadNetwork(context) {
+      if (context) assertUploadJobCurrent(context);
+    }
+
+    function pendingUploadNetwork(message, cause = null) {
+      const error = new Error(message);
+      error.uploadPending = true;
+      if (cause) error.cause = cause;
+      return error;
+    }
+
+    function reportUploadDiagnostic(context, stage, kind, status, attempt = 0) {
+      if (!context || typeof window === "undefined") return;
+      try {
+        // Deliberately exclude error text, tokens, file contents, URLs and receipts.
+        const url = new URL("/tools/upload-diagnostic.txt", location.origin);
+        const clean = value => String(value || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+        for (const [key, value] of Object.entries({
+          build: "20260921-v1", draft: clean(context.draft.id), spu: clean(context.draft.spu),
+          stage: clean(stage), kind: clean(kind), status: Number(status) || 0, attempt,
+        })) url.searchParams.set(key, String(value));
+        void fetch(url, { method: "GET", credentials: "omit", cache: "no-store",
+          referrerPolicy: "no-referrer", keepalive: true }).catch(() => {});
+      } catch { /* Diagnostics never block or change task execution. */ }
+    }
+
     async function fetchJsonWithRetry(
       url,
       options,
@@ -5653,27 +6193,47 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         confirmCompletion = null,
         retryLimit = BACKEND_UPLOAD_RETRY_LIMIT,
         timeoutMs = BACKEND_UPLOAD_REQUEST_TIMEOUT_MS,
+        edgeAttachment = false,
+        diagnosticStage = "backend",
       } = {},
+      context = null,
     ) {
       let lastError;
       for (let attempt = 1; attempt <= retryLimit; attempt += 1) {
+        guardUploadNetwork(context);
         const controller = new AbortController();
+        const jobSignal = context?.controller?.signal;
+        const abortRequest = () => controller.abort();
+        jobSignal?.addEventListener("abort", abortRequest, { once: true });
+        if (jobSignal?.aborted) controller.abort();
         const timeoutId = setTimeout(
           () => controller.abort(),
           timeoutMs,
         );
         try {
-          return await readJsonResponse(await fetch(url, {
+          guardUploadNetwork(context);
+          const payload = await readJsonResponse(await fetch(url, {
             ...options,
             signal: controller.signal,
           }));
+          guardUploadNetwork(context);
+          return payload;
         } catch (error) {
           clearTimeout(timeoutId);
+          guardUploadNetwork(context);
+          if (error.uploadPending) throw error;
           lastError = error?.name === "AbortError"
             ? new Error(`${label}超过 ${timeoutMs / 1000} 秒未完成`)
             : error;
           const status = Number(error?.status || 0);
-          const canRetry = !status || status >= 500;
+          // The deployed edge worker wraps upstream Feishu Internal Error as 400.
+          // Only attachment endpoints get this compatibility rule, NEVER task creation.
+          const transientEdge = edgeAttachment && status === 400
+            && /失败:\s*(?:Internal Error|Internal Server Error|Service Unavailable|HTTP (?:429|5\d\d))\s*$/i.test(String(error.message));
+          const canRetry = !status || status >= 500 || (edgeAttachment && status === 429) || transientEdge;
+          reportUploadDiagnostic(context, diagnosticStage,
+            transientEdge ? "upstream-internal" : error?.name === "AbortError" ? "timeout" : status ? "http-error" : "network-error",
+            status, attempt);
           if (canRetry && typeof confirmCompletion === "function") {
             try {
               const confirmedPayload = await confirmCompletion({
@@ -5682,25 +6242,32 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
               });
               if (confirmedPayload) return confirmedPayload;
             } catch (confirmationError) {
+              guardUploadNetwork(context);
               const pending = new Error("暂时无法确认上传进度，已保留会话；网络恢复后可重新提交续传");
               pending.uploadPending = true;
               pending.cause = confirmationError;
               throw pending;
             }
           }
-          if (!canRetry || attempt === retryLimit) throw lastError;
-          setFeishuTaskStatus(
+          if (!canRetry || attempt === retryLimit) {
+            if (transientEdge) {
+              lastError.message = `飞书附件服务暂时异常（${attempt} 次尝试仍失败）；文件尚未创建任务，请稍后重试`;
+            }
+            throw lastError;
+          }
+          reportUploadNetwork(context,
             `${label}失败，正在重试（${attempt}/${retryLimit - 1}）...`,
           );
           await new Promise((resolve) => setTimeout(resolve, 600 * attempt));
         } finally {
           clearTimeout(timeoutId);
+          jobSignal?.removeEventListener("abort", abortRequest);
         }
       }
       throw lastError || new Error(`${label}失败`);
     }
 
-    async function requestFeishuEdgeTicket(metadataList, zipFiles, token) {
+    async function requestFeishuEdgeTicket(metadataList, zipFiles, token, context = null) {
       const files = zipFiles.map((item) => ({
         contentType: item.contentType,
         filename: item.filename,
@@ -5711,7 +6278,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           : {}),
         size: item.blob.size,
       }));
-      const response = await fetch(feishuTicketApiUrl(), {
+      const payload = await fetchJsonWithRetry(feishuTicketApiUrl(), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -5722,8 +6289,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           metadata: metadataList[0],
           metadataList,
         }),
-      });
-      const payload = await readJsonResponse(response);
+      }, "申请安全上传凭证", { retryLimit: 1 }, context);
       const ticketData = payload?.data || {};
       if (!ticketData.ticket || !ticketData.uploadBaseUrl) {
         throw new Error("后端未返回边缘上传凭证");
@@ -5731,9 +6297,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       return ticketData;
     }
 
-    async function uploadSmallFileToFeishuEdge(uploadBaseUrl, ticket, item) {
-      setFeishuTaskStatus(`正在通过边缘节点上传 ${item.filename}（${formatBytes(item.blob.size)}）...`);
-      const response = await fetch(`${uploadBaseUrl}/upload-small`, {
+    async function uploadSmallFileToFeishuEdge(uploadBaseUrl, ticket, item, context = null) {
+      reportUploadNetwork(context, `正在通过边缘节点上传 ${item.filename}（${formatBytes(item.blob.size)}）...`);
+      const payload = await fetchJsonWithRetry(`${uploadBaseUrl}/upload-small`, {
         method: "POST",
         headers: {
           "Content-Type": item.contentType,
@@ -5741,31 +6307,32 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           "X-Upload-Ticket": ticket,
         },
         body: item.blob,
-      });
-      const payload = await readJsonResponse(response);
+      }, `边缘上传 ${item.filename}`, { retryLimit: 3, edgeAttachment: true, diagnosticStage: "edge-small" }, context);
       if (!payload.receipt) throw new Error(`${item.filename} 未返回上传回执`);
       return payload.receipt;
     }
 
-    async function uploadLargeFileToFeishuEdge(uploadBaseUrl, ticket, item) {
-      setFeishuTaskStatus(`正在准备飞书分片上传：${item.filename}...`);
-      const preparePayload = await readJsonResponse(await fetch(`${uploadBaseUrl}/prepare`, {
+    async function uploadLargeFileToFeishuEdge(uploadBaseUrl, ticket, item, context = null) {
+      reportUploadNetwork(context, `正在准备飞书分片上传：${item.filename}...`);
+      const preparePayload = await fetchJsonWithRetry(`${uploadBaseUrl}/prepare`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ fileKey: item.key, ticket }),
-      }));
+      }, `准备 ${item.filename} 分片上传`, { retryLimit: 3, edgeAttachment: true, diagnosticStage: "edge-prepare" }, context);
       const { blockNum, blockSize, uploadState } = preparePayload;
       if (!uploadState || !Number.isInteger(blockNum) || !Number.isInteger(blockSize)) {
         throw new Error("边缘节点未返回有效分片参数");
       }
       for (let chunkIndex = 0; chunkIndex < blockNum; chunkIndex += 1) {
+        guardUploadNetwork(context);
         const start = chunkIndex * blockSize;
         const end = Math.min(item.blob.size, start + blockSize);
         const chunkBytes = new Uint8Array(await item.blob.slice(start, end).arrayBuffer());
-        setFeishuTaskStatus(`正在上传 ${item.filename} 分片 ${chunkIndex + 1}/${blockNum}...`);
-        await readJsonResponse(await fetch(`${uploadBaseUrl}/part`, {
+        reportUploadNetwork(context, `正在上传 ${item.filename} 分片 ${chunkIndex + 1}/${blockNum}...`, "normal",
+          { completed: chunkIndex, total: blockNum, unit: "chunks" });
+        await fetchJsonWithRetry(`${uploadBaseUrl}/part`, {
           method: "POST",
           headers: {
             "Content-Type": "application/octet-stream",
@@ -5775,16 +6342,18 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             "X-Upload-Ticket": ticket,
           },
           body: chunkBytes,
-        }));
+        }, `上传 ${item.filename} 第 ${chunkIndex + 1} 片`, { retryLimit: 3, edgeAttachment: true, diagnosticStage: "edge-part" }, context);
+        reportUploadNetwork(context, `已上传 ${item.filename} 分片 ${chunkIndex + 1}/${blockNum}`, "normal",
+          { completed: chunkIndex + 1, total: blockNum, unit: "chunks" });
       }
-      setFeishuTaskStatus(`正在完成飞书分片上传：${item.filename}...`);
-      const finishPayload = await readJsonResponse(await fetch(`${uploadBaseUrl}/finish`, {
+      reportUploadNetwork(context, `正在完成飞书分片上传：${item.filename}...`);
+      const finishPayload = await fetchJsonWithRetry(`${uploadBaseUrl}/finish`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ ticket, uploadState }),
-      }));
+      }, `完成 ${item.filename} 边缘上传`, { retryLimit: 1, diagnosticStage: "edge-finish" }, context);
       if (!finishPayload.receipt) throw new Error(`${item.filename} 未返回上传回执`);
       return finishPayload.receipt;
     }
@@ -5796,7 +6365,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       brandZip,
       gpsrImage,
       token,
+      context = null,
     ) {
+      guardUploadNetwork(context);
       const zipFiles = await Promise.all([
         galleryZip ? { ...galleryZip, key: "galleryZip" } : null,
         aplusZip ? { ...aplusZip, key: "aplusZip" } : null,
@@ -5805,9 +6376,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       ].filter(Boolean).map(prepareUploadZipFile));
       const submissionKey = await submissionCacheKey(metadataList, zipFiles);
       const cacheKey = await taskResultCacheKey(submissionKey, token);
+      guardUploadNetwork(context);
       const cached = readFeishuTaskCache(cacheKey);
       if (cached) {
-        setFeishuTaskStatus("检测到相同内容已创建任务，正在复用原任务结果...");
+        reportUploadNetwork(context, "检测到相同内容已创建任务，正在复用原任务结果...");
         return {
           ...cached,
           data: {
@@ -5817,25 +6389,45 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           },
         };
       }
-      setFeishuTaskStatus("正在申请安全上传凭证...");
-      const ticketData = await requestFeishuEdgeTicket(metadataList, zipFiles, token);
-      const receipts = {};
-      for (const item of zipFiles) {
-        receipts[item.key] = item.blob.size <= FEISHU_SMALL_UPLOAD_LIMIT
-          ? await uploadSmallFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item)
-          : await uploadLargeFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item);
+      guardUploadNetwork(context);
+      if (context?.draft.edgeSubmissionPending) {
+        throw pendingUploadNetwork("上次飞书任务提交结果尚未确认，请先查看任务日志并联系管理员核对，不能重复创建任务");
       }
-      setFeishuTaskStatus("文件已直传飞书，正在创建任务记录...");
-      const payload = await readJsonResponse(await fetch(feishuTokenTaskApiUrl(), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ receipts, ticket: ticketData.ticket }),
-      }));
-      writeFeishuTaskCache(cacheKey, payload);
-      return payload;
+      reportUploadNetwork(context, "正在申请安全上传凭证...");
+      let checkpoint = context?.draft.edgeCheckpoint;
+      if (!checkpoint || checkpoint.submissionKey !== submissionKey
+        || checkpoint.expiresAt <= Date.now() + 60000) {
+        const ticketData = await requestFeishuEdgeTicket(metadataList, zipFiles, token, context);
+        checkpoint = { submissionKey, ticketData, receipts: {},
+          expiresAt: Date.now() + Math.min(Number(ticketData.expiresIn) || 0, 1800) * 1000 };
+        if (context) await context.persist({ edgeCheckpoint: checkpoint });
+      }
+      const { ticketData, receipts } = checkpoint;
+      for (const item of zipFiles) {
+        if (receipts[item.key]) continue;
+        receipts[item.key] = item.blob.size <= FEISHU_SMALL_UPLOAD_LIMIT
+          ? await uploadSmallFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item, context)
+          : await uploadLargeFileToFeishuEdge(ticketData.uploadBaseUrl, ticketData.ticket, item, context);
+        if (context) await context.persist({ edgeCheckpoint: checkpoint });
+      }
+      phaseUploadNetwork(context, "executing", "文件已直传飞书，正在创建任务记录...");
+      guardUploadNetwork(context);
+      if (context) await context.persist({ edgeSubmissionPending: true, submissionKey });
+      try {
+        const payload = await fetchJsonWithRetry(feishuTokenTaskApiUrl(), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ receipts, ticket: ticketData.ticket }),
+        }, "创建飞书任务记录", { retryLimit: 1, diagnosticStage: "task-create" }, context);
+        writeFeishuTaskCache(cacheKey, payload);
+        if (context) await context.persist({ edgeSubmissionPending: false, edgeCheckpoint: null });
+        return payload;
+      } catch (error) {
+        throw pendingUploadNetwork("飞书任务提交结果暂未确认，已保留本地副本；请查看任务日志，避免重复创建任务", error);
+      }
     }
 
     function shouldUseBackendGalleryUpload(metadataList, galleryZip) {
@@ -5845,12 +6437,22 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       );
     }
 
-    async function pollBackendUploadTask(taskId, cacheKey, token) {
+    async function pollBackendUploadTask(taskId, cacheKey, token, context = null) {
+      guardUploadNetwork(context);
+      if (context) {
+        try { await context.persist({ taskId }); }
+        catch (error) {
+          throw pendingUploadNetwork("后台任务已提交，但本地状态保存失败；请保留页面并稍后查询结果，不要重复提交", error);
+        }
+      }
+      phaseUploadNetwork(context, "executing", "文件已提交，后台正在处理；可以继续使用其他模块...");
       const pendingKey = `pending:${cacheKey}`;
       writeFeishuTaskCache(pendingKey, { taskId });
       let consecutiveErrors = 0;
       for (let attempt = 0; attempt < 240; attempt += 1) {
+        guardUploadNetwork(context);
         await new Promise((resolve) => setTimeout(resolve, attempt < 8 ? 1000 : 2000));
+        guardUploadNetwork(context);
         let statusPayload;
         try {
           statusPayload = await fetchJsonWithRetry(
@@ -5858,14 +6460,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             { headers: { Authorization: `Bearer ${token}` } },
             "查询后台任务状态",
             { retryLimit: 1, timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS },
+            context,
           );
           if (!["queued", "running", "succeeded", "failed"].includes(statusPayload?.data?.status)) {
             throw new Error("服务器未返回有效任务状态");
           }
           consecutiveErrors = 0;
         } catch (error) {
+          guardUploadNetwork(context);
+          if (error.uploadPending) throw error;
           consecutiveErrors += 1;
-          setFeishuTaskStatus("任务已提交，暂时无法查询结果，正在重试查询...");
+          reportUploadNetwork(context, "任务已提交，暂时无法查询结果，正在重试查询...");
           if (consecutiveErrors >= 5 || [401, 403, 404].includes(Number(error.status))) break;
           continue;
         }
@@ -5879,8 +6484,13 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           writeFeishuTaskCache(cacheKey, finalPayload);
           return finalPayload;
         }
-        if (task.status === "failed") throw new Error(task.error || "后台上传任务执行失败");
-        setFeishuTaskStatus("任务已提交，后台正在处理，请稍候...");
+        if (task.status === "failed") {
+          if (context) await context.persist({ taskId: null, uploadId: null });
+          const error = new Error(task.error || "后台上传任务执行失败");
+          error.taskFailed = true;
+          throw error;
+        }
+        reportUploadNetwork(context, "任务已提交，后台正在处理，请稍候...");
       }
       const pending = new Error("任务已提交，暂未取得执行结果；稍后重新提交相同内容将继续查询原任务，也可查看任务日志");
       pending.uploadPending = true;
@@ -5894,7 +6504,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       brandZip,
       gpsrImage,
       token,
+      context = null,
     ) {
+      guardUploadNetwork(context);
       const zipFiles = await Promise.all([
         galleryZip ? { ...galleryZip, key: "galleryZip" } : null,
         aplusZip ? { ...aplusZip, key: "aplusZip" } : null,
@@ -5903,9 +6515,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       ].filter(Boolean).map(prepareUploadZipFile));
       const submissionKey = await submissionCacheKey(metadataList, zipFiles);
       const cacheKey = await taskResultCacheKey(submissionKey, token);
+      guardUploadNetwork(context);
       const cached = readFeishuTaskCache(cacheKey);
-      if (cached) {
-        setFeishuTaskStatus("检测到相同内容已创建任务，正在复用原任务结果...");
+      if (cached && !context?.draft.taskId) {
+        reportUploadNetwork(context, "检测到相同内容已创建任务，正在复用原任务结果...");
         return {
           ...cached,
           data: {
@@ -5916,9 +6529,16 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         };
       }
 
-      const pendingTask = readFeishuTaskCache(`pending:${cacheKey}`);
+      const pendingTask = context?.draft.taskId
+        ? { taskId: context.draft.taskId }
+        : readFeishuTaskCache(`pending:${cacheKey}`);
       if (pendingTask?.taskId) {
-        return pollBackendUploadTask(pendingTask.taskId, cacheKey, token);
+        try {
+          return await pollBackendUploadTask(pendingTask.taskId, cacheKey, token, context);
+        } catch (error) {
+          if (!error.taskFailed) throw error;
+          reportUploadNetwork(context, "原后台任务已失败，正在重新上传并提交...");
+        }
       }
 
       const sessionFiles = zipFiles.map((item) => ({
@@ -5930,8 +6550,19 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }));
       const totalChunks = sessionFiles.reduce((total, item) => total + item.chunks, 0);
 
-      setFeishuTaskStatus(`正在创建后端分片上传会话（共 ${totalChunks} 片）...`);
-      const sessionPayload = await fetchJsonWithRetry(
+      reportUploadNetwork(context, `正在创建后端分片上传会话（共 ${totalChunks} 片）...`);
+      // A retained session is authoritative even when its Redis dedup marker expires.
+      const sessionPayload = context?.draft.uploadId
+        ? await fetchJsonWithRetry(
+            feishuUploadSessionApiUrl(context.draft.uploadId),
+            { headers: { Authorization: `Bearer ${token}` } },
+            "恢复服务器上传会话",
+            { retryLimit: 1, timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS },
+            context,
+          ).catch(error => {
+            throw pendingUploadNetwork("原上传会话状态暂未确认，已保留本地副本；请稍后查询并继续", error);
+          })
+        : await fetchJsonWithRetry(
         feishuUploadSessionApiUrl(),
         {
           method: "POST",
@@ -5950,14 +6581,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           }),
         },
         "创建上传会话",
+        {},
+        context,
       );
       if (sessionPayload?.data?.reusedSession) {
-        setFeishuTaskStatus("检测到相同内容正在上传，继续复用原上传会话...");
+        reportUploadNetwork(context, "检测到相同内容正在上传，继续复用原上传会话...");
       }
-      const uploadId = sessionPayload?.data?.uploadId;
+      const uploadId = sessionPayload?.data?.uploadId || context?.draft.uploadId;
       if (!uploadId) throw new Error("后端未返回上传会话 ID");
+      if (context) await context.persist({ uploadId, submissionKey });
       const existingTaskId = sessionPayload?.data?.finishedResult?.taskId;
-      if (existingTaskId) return pollBackendUploadTask(existingTaskId, cacheKey, token);
+      if (existingTaskId) return pollBackendUploadTask(existingTaskId, cacheKey, token, context);
 
       const serverFiles = sessionPayload?.data?.files || {};
       let uploadedChunks = Object.values(serverFiles).reduce(
@@ -5968,6 +6602,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         const chunkCount = Math.ceil(item.blob.size / BACKEND_UPLOAD_CHUNK_SIZE);
         const uploadedIndexes = new Set(serverFiles[item.key]?.uploaded || []);
         for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+          guardUploadNetwork(context);
           if (uploadedIndexes.has(chunkIndex)) continue;
           const start = chunkIndex * BACKEND_UPLOAD_CHUNK_SIZE;
           const end = Math.min(item.blob.size, start + BACKEND_UPLOAD_CHUNK_SIZE);
@@ -5979,8 +6614,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             item.blob.slice(start, end),
             `${item.filename}.part-${chunkIndex + 1}`,
           );
-          setFeishuTaskStatus(
+          reportUploadNetwork(context,
             `正在分片上传 ${item.filename}（${uploadedChunks + 1}/${totalChunks}）...`,
+            "normal", { completed: uploadedChunks, total: totalChunks, unit: "chunks" },
           );
           await fetchJsonWithRetry(
             feishuUploadSessionApiUrl(uploadId, "chunks"),
@@ -5994,7 +6630,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             `${item.filename} 第 ${chunkIndex + 1} 片上传`,
             {
               confirmCompletion: async () => {
-                setFeishuTaskStatus(
+                reportUploadNetwork(context,
                   `${item.filename} 第 ${chunkIndex + 1} 片响应较慢，正在确认服务器进度...`,
                 );
                 const confirmed = await confirmBackendChunkProgress(
@@ -6002,21 +6638,25 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
                   item.key,
                   chunkIndex,
                   token,
+                  context,
                 );
                 if (confirmed) {
-                  setFeishuTaskStatus(
+                  reportUploadNetwork(context,
                     `服务器已收到 ${item.filename} 第 ${chunkIndex + 1} 片，继续上传...`,
                   );
                 }
                 return confirmed;
               },
             },
+            context,
           );
           uploadedChunks += 1;
+          reportUploadNetwork(context, `已上传 ${uploadedChunks}/${totalChunks} 片`, "normal",
+            { completed: uploadedChunks, total: totalChunks, unit: "chunks" });
         }
       }
 
-      setFeishuTaskStatus("文件分片上传完成，正在提交后台处理...");
+      reportUploadNetwork(context, "文件分片上传完成，正在提交后台处理...");
       const queuedPayload = await fetchJsonWithRetry(
         feishuUploadSessionApiUrl(uploadId, "finish"),
         {
@@ -6033,19 +6673,120 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
               { headers: { Authorization: `Bearer ${token}` } },
               "确认后台提交结果",
               { retryLimit: 2, timeoutMs: BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS },
+              context,
             );
             if (typeof progress?.data?.finished !== "boolean") throw new Error("提交状态未知");
             return progress.data.finished ? { data: progress.data.finishedResult } : null;
           },
         },
-      );
+        context,
+      ).catch(error => {
+        throw pendingUploadNetwork("文件已传输，后台提交结果暂未确认；已保留原会话，请稍后查询并继续", error);
+      });
       const taskId = queuedPayload?.data?.taskId;
       if (!taskId) {
+        if (context) throw pendingUploadNetwork("后台未返回有效任务编号，原上传会话已保留；请稍后查询并继续");
         writeFeishuTaskCache(cacheKey, queuedPayload);
         return queuedPayload;
       }
 
-      return pollBackendUploadTask(taskId, cacheKey, token);
+      return pollBackendUploadTask(taskId, cacheKey, token, context);
+    }
+
+    async function prepareUploadJob(job) {
+      const source = job.draft.preparation;
+      if (!source) return;
+      job.phase("preparing", "本地副本已保存，正在打包图片；可以继续添加任务");
+      const options = { keywordMetadata: source.keywordMetadata };
+      const galleryZip = await buildUploadZip(source.galleryFiles, source.galleryRoot, { ...options, includeImageFlags: false });
+      assertUploadJobCurrent(job);
+      const aplusZip = await buildUploadZip(source.aPlusFiles, source.aPlusRoot, options);
+      assertUploadJobCurrent(job);
+      const brandZip = await buildUploadZip(source.brandFiles, source.brandRoot, options);
+      const gpsrImage = await gpsrImageUploadFile(source.gpsrFile, source.keywordMetadata, source.gpsrPrefix);
+      assertUploadJobCurrent(job);
+      await job.persist({ galleryZip, aplusZip, brandZip, gpsrImage, preparation: null });
+    }
+
+    async function submitPreparedUpload(draft, token, job) {
+      try {
+        assertUploadJobCurrent(job);
+        await prepareUploadJob(job);
+        assertUploadJobCurrent(job);
+        draft = job.draft;
+        job.phase("uploading", `正在上传 ${draft.spu} 的图片；可以继续添加任务或切换模块`);
+        const payload = shouldUseBackendGalleryUpload(draft.metadataList, draft.galleryZip)
+          ? await uploadFeishuTaskViaBackend(
+              draft.metadataList, draft.galleryZip, draft.aplusZip, draft.brandZip, draft.gpsrImage, token, job,
+            )
+          : await uploadFeishuTaskViaEdge(
+              draft.metadataList, draft.galleryZip, draft.aplusZip, draft.brandZip, draft.gpsrImage, token, job,
+            );
+        const taskCount = Number(payload?.data?.taskCount || draft.metadataList.length);
+        const recordIds = Array.isArray(payload?.data?.recordIds)
+          ? payload.data.recordIds.filter(Boolean) : [];
+        const reused = Boolean(payload?.data?.clientCached || payload?.data?.deduplicated);
+        const resultText = recordIds.length
+          ? `${reused ? "已复用" : "已创建"} ${taskCount} 个飞书任务：${recordIds.join("，")}`
+          : reused
+            ? `相同内容已创建过，已复用 ${taskCount} 个飞书任务`
+            : `文件已上传并创建 ${taskCount} 个飞书任务`;
+        job.phase("succeeded", resultText);
+        try {
+          await job.persist({ status: "succeeded", message: resultText, recordIds,
+            galleryZip: null, aplusZip: null, brandZip: null, gpsrImage: null, preparation: null });
+        } catch {
+          job.report(`${resultText}；本地文件清理失败，可手动移除完成记录`);
+        }
+        if (uploadOwnerIsCurrent(job)) loadTaskLog({ silent: true });
+      } catch (error) {
+        const pending = Boolean(error.uploadPending);
+        job.phase(
+          pending ? "pending" : "failed",
+          pending ? error.message : `上传失败：${error.message}；本地副本可重新提交`,
+          "warn",
+        );
+      } finally {
+        scheduleUploadTaskRender();
+      }
+    }
+
+    async function retryUploadDraft(id) {
+      const existing = state.uploadJobs.get(id);
+      if (existing?.active || existing?.enqueued) return;
+      const token = authToken();
+      if (!token) {
+        setFeishuTaskStatus("登录已失效，请重新登录后重试", "warn");
+        return;
+      }
+      let draft;
+      try { draft = await readUploadDraft(id); }
+      catch (error) {
+        setFeishuTaskStatus(`读取本地副本失败：${error.message}`, "warn");
+        return;
+      }
+      if (!draft) {
+        setFeishuTaskStatus("本地副本不存在或属于其他账号，请重新选择文件", "warn");
+        await renderUploadDrafts();
+        return;
+      }
+      if (token !== authToken()) return;
+      enqueueUploadDraft(draft, token);
+    }
+
+    function resetSubmittedUploadForm() {
+      resetGallery(false);
+      resetBrand(false);
+      state.aPlus = [];
+      state.pool = [];
+      state.aPlusAutoAssignResult = null;
+      els.spu.value = "";
+      resetListingResults("上一份任务已保存，请输入下一份 SPU 并查询 Listing");
+      document.querySelectorAll('input[type="file"]').forEach(input => { input.value = ""; });
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
+      previewUrls.clear();
+      syncZipNamesWithSpu({ force: true });
+      render();
     }
 
     async function uploadFeishuTask() {
@@ -6054,19 +6795,35 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         return;
       }
       setFeishuTaskInFlight(true);
+      try {
       const galleryFiles = collectGalleryFiles();
       const aPlusFiles = collectAPlusFiles();
       const brandFiles = collectBrandFiles();
       const hasGpsrImage = Boolean(state.gpsrImage);
       const token = authToken();
+      const capturedOwner = state.authOwner;
+      const preparation = {
+        galleryFiles: structuredClone(galleryFiles), aPlusFiles: structuredClone(aPlusFiles),
+        brandFiles: structuredClone(brandFiles), gpsrFile: state.gpsrImage,
+        keywordMetadata: structuredClone(imageKeywordMetadata()),
+        galleryRoot: galleryRoot(), aPlusRoot: aPlusRoot(), brandRoot: brandRoot(), gpsrPrefix: spuPrefix(),
+      };
       const spu = (els.spu.value || "").trim();
+      const category = selectedUploadCategory(true);
+      if (!category) {
+        setFeishuTaskStatus("请先填写节日名称，再上传到飞书任务", "warn");
+        setFeishuTaskInFlight(false);
+        els.holidayName.focus();
+        return;
+      }
       const listingGroups = selectedListingGroups();
       const metadataList = listingGroups.map((group) => ({
         shop: group.shop,
         spu,
         parentAsin: group.parentAsin,
-        asins: group.asins,
-        sidMsku: group.sidMsku || [],
+        asins: structuredClone(group.asins),
+        sidMsku: structuredClone(group.sidMsku || []),
+        ...category,
       }));
 
       if (!token) {
@@ -6145,61 +6902,36 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         return;
       }
 
-      setFeishuTaskStatus("正在整理上传文件...");
-      try {
-        const gpsrImage = await gpsrImageUploadFile();
-        const galleryZip = await buildUploadZip(
-          galleryFiles,
-          galleryRoot(),
-          { includeImageFlags: false },
-        );
-        const aplusZip = await buildUploadZip(aPlusFiles, aPlusRoot());
-        const brandZip = await buildUploadZip(brandFiles, brandRoot());
-        const zipLabels = [galleryZip, aplusZip, brandZip, gpsrImage]
-          .filter(Boolean)
-          .map((item) => `${item.filename} ${formatBytes(item.blob.size)}`)
-          .join("，");
-        setFeishuTaskStatus(`文件已准备（${zipLabels}），正在创建 ${metadataList.length} 个飞书任务...`);
-        const payload = shouldUseBackendGalleryUpload(metadataList, galleryZip)
-          ? await uploadFeishuTaskViaBackend(
-              metadataList,
-              galleryZip,
-              aplusZip,
-              brandZip,
-              gpsrImage,
-              token,
-            )
-          : await uploadFeishuTaskViaEdge(
-              metadataList,
-              galleryZip,
-              aplusZip,
-              brandZip,
-              gpsrImage,
-              token,
-            );
-        const taskCount = Number(payload?.data?.taskCount || metadataList.length);
-        const recordIds = Array.isArray(payload?.data?.recordIds)
-          ? payload.data.recordIds.filter(Boolean)
-          : [];
-        const reused = Boolean(
-          payload?.data?.clientCached || payload?.data?.deduplicated,
-        );
-        if (recordIds.length) {
-          setFeishuTaskStatus(
-            `${reused ? "已复用" : "已创建"} ${taskCount} 个飞书任务：${recordIds.join("，")}`,
-          );
-        } else {
-          setFeishuTaskStatus(
-            reused
-              ? `相同内容已创建过，已复用 ${taskCount} 个飞书任务`
-              : `文件已上传并创建 ${taskCount} 个飞书任务`,
-          );
-        }
-        loadTaskLog({ silent: true });
+      setFeishuTaskStatus("正在保存本地副本，保存后即可继续添加任务…");
+        if (token !== authToken() || capturedOwner !== state.authOwner) throw new Error("登录账号已变化，请重新检查表单后提交");
+        const ownerKey = await uploadDraftOwnerKey();
+        if (token !== authToken() || capturedOwner !== state.authOwner) throw new Error("登录账号已变化，请重新检查表单后提交");
+        const draft = {
+          id: uid("upload"),
+          ownerKey,
+          spu,
+          metadataList,
+          preparation,
+          galleryZip: null, aplusZip: null, brandZip: null, gpsrImage: null,
+          status: "queued",
+          error: "",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await saveUploadDraft(draft);
+        if (token !== authToken() || capturedOwner !== state.authOwner) throw new Error("登录账号已变化，本地副本已保存到原账号，请切回后重试");
+        resetSubmittedUploadForm();
+        enqueueUploadDraft(draft, token);
+        setFeishuTaskStatus(`${spu} 已保存到本地并加入队列，可以继续添加下一条任务`);
       } catch (error) {
-        setFeishuTaskStatus(error.uploadPending ? error.message : `上传失败：${error.message}`, "warn");
+        setUploadPhase("failed", `准备文件或保存本地副本失败，任务尚未提交：${error.message}。请检查文件或浏览器存储空间后重试`, "warn");
       } finally {
-        setFeishuTaskInFlight(false);
+        if (state.feishuTaskInFlight) {
+          state.activeDraftId = "";
+          state.activeDraftCached = false;
+          state.activeDraftSpu = "";
+          setFeishuTaskInFlight(false);
+        }
       }
     }
 
@@ -6353,6 +7085,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
     }
 
     function init() {
+      try {
+        requestedUploadDraftId = new URL(window.parent.location.href).searchParams.get("uploadDraft") || "";
+      } catch {
+        requestedUploadDraftId = "";
+      }
       initAuthBridge();
       document.getElementById("addAplusFull").addEventListener("click", addAplusFull);
       document.getElementById("addAplusCarousel").addEventListener("click", addAplusCarousel);
@@ -6396,6 +7133,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         render();
       });
       els.uploadFeishuTask.addEventListener("click", uploadFeishuTask);
+      els.uploadType.addEventListener("change", () => {
+        selectedUploadCategory();
+        if (els.uploadType.value === "holiday") els.holidayName.focus();
+      });
+      els.holidayName.addEventListener("input", selectedUploadCategory);
       els.refreshTaskLog.addEventListener("click", () => loadTaskLog());
       els.fetchListingBtn.addEventListener("click", fetchListingData);
       els.refreshImageKeywords.addEventListener("click", () => {
@@ -6481,7 +7223,11 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       startTaskLogPolling();
     }
 
-    init();
+    // A route-owned iframe is just an anchor. Its persistent sibling is created
+    // once by the document host before any form interaction or upload can start.
+    const hostedPlaceholder = window.parent !== window
+      && window.parent.__kanbanUploadFrameHost?.attach(window.frameElement);
+    if (!hostedPlaceholder) init();
   </script>
 </body>
 </html>

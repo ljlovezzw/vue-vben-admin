@@ -58,3 +58,6 @@ vite.config.ts.*
 .claude
 .codex
 skills-lock.json
+
+# Local build snapshots and review baselines
+/tmp/

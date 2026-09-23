@@ -210,6 +210,24 @@ export interface NetProfitSummary {
   ytdNetProfit: number;
 }
 
+export interface NetProfitSyncTableStatus {
+  finishedAt: null | string;
+  rows: number;
+  status: 'failed' | 'pending' | 'running' | 'succeeded';
+  table: 'net_profit' | 'net_profit_summary';
+}
+
+export interface NetProfitSyncStatus {
+  cacheGeneration?: number;
+  error?: string;
+  finishedAt: null | string;
+  jobId: string;
+  message: string;
+  startedAt: null | string;
+  status: 'failed' | 'idle' | 'queued' | 'running' | 'succeeded';
+  tables: NetProfitSyncTableStatus[];
+}
+
 export interface NetProfitTrendPoint {
   label: string;
   netProfit: number;
@@ -1318,16 +1336,6 @@ export interface AdCvrOptimizationOperationContext {
   matchTypeOptions?: string[];
   matchTypeEditable?: boolean;
   matchTypeBlockedReason?: string;
-}
-
-export interface AdCvrOptimizationOperationResult {
-  adGroupName?: string;
-  adjustmentPercent?: number;
-  batchId?: string;
-  campaignName?: string;
-  dailyBudget?: null | number;
-  message: string;
-  status: 'succeeded' | 'unchanged';
 }
 
 export interface AdCvrOptimizationExecutionItem {

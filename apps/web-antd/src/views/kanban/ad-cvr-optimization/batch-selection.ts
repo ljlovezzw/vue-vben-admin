@@ -52,36 +52,3 @@ export function executionBlockReason(row: AdCvrOptimizationSuggestion) {
     return '搜索词已有订单，请复核竞价，不直接否定';
   return '';
 }
-
-export function mergeSelection(
-  current: AdCvrOptimizationSuggestion[],
-  incoming: AdCvrOptimizationSuggestion[],
-) {
-  const rows = new Map(current.map((row) => [row.suggestion_id, row]));
-  for (const row of incoming) {
-    if (rows.size >= MAX_BATCH_SELECTION && !rows.has(row.suggestion_id)) break;
-    rows.set(row.suggestion_id, row);
-  }
-  return [...rows.values()];
-}
-
-export function summarizeSelection(rows: AdCvrOptimizationSuggestion[]) {
-  const campaigns = new Set<string>();
-  const groups = new Set<string>();
-  let blocked = 0;
-  let convertingClosures = 0;
-  for (const row of rows) {
-    campaigns.add(`${row.profile_id}:${row.campaign_id}`);
-    if (row.ad_group_id)
-      groups.add(`${row.profile_id}:${row.campaign_id}:${row.ad_group_id}`);
-    if (executionBlockReason(row)) blocked++;
-    if (row.action_type.startsWith('close_') && Number(row.orders) > 0)
-      convertingClosures++;
-  }
-  return {
-    blocked,
-    campaigns: campaigns.size,
-    convertingClosures,
-    groups: groups.size,
-  };
-}

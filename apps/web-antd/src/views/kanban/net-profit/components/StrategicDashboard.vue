@@ -78,12 +78,6 @@ const kpiCards = computed<KpiCard[]>(() => {
       value: kpi.roi.toFixed(2),
     },
     {
-      note: `回款 ${formatMoney(kpi.cashIncome)}`,
-      title: '净利率',
-      tone: thresholdTone(kpi.profitMargin, benchmarks.minNetMargin),
-      value: `${(kpi.profitMargin * 100).toFixed(2)}%`,
-    },
-    {
       note: '亏损面、低回报与利润缓冲综合评分',
       title: '经营风险',
       tone: riskTone(kpi.riskScore),
@@ -108,7 +102,7 @@ const kpiCards = computed<KpiCard[]>(() => {
         <Col
           v-for="card in kpiCards"
           :key="card.title"
-          :lg="6"
+          :lg="8"
           :sm="12"
           :xs="24"
         >

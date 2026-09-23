@@ -3,38 +3,30 @@ import type {
   AdCvrOptimizationScope,
 } from '#/api/kanban/ad-cvr-optimization';
 
-import { computed, readonly, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 import { notification } from 'ant-design-vue';
 
 import {
   fetchAdCvrBatchTask,
   fetchAdCvrBatchTasks,
-  submitAdCvrBatchTask,
+  submitAdCvrTaskPackage,
 } from '#/api/kanban/ad-cvr-optimization';
 
 const executionPhase = ref<'executing' | 'idle' | 'submitting'>('idle');
-const executionRevision = ref(0);
-const currentTask = ref<AdCvrBatchTask | null>(null);
-const currentScope = ref<AdCvrOptimizationScope>('legacy');
 const key = 'ad-cvr-optimization-execution';
-export const adCvrExecutionPhase = readonly(executionPhase);
-export const adCvrExecutionRevision = readonly(executionRevision);
-export const adCvrExecutionTask = readonly(currentTask);
-export const adCvrExecutionTaskScope = readonly(currentScope);
 export const adCvrExecutionInProgress = computed(
   () => executionPhase.value !== 'idle',
 );
 
 function showTask(task: AdCvrBatchTask) {
-  currentTask.value = task;
   const active = ['queued', 'running'].includes(task.status);
   const config = {
     description: active
-      ? `已处理 ${task.completed}/${task.total} 条。后台继续执行，可切换页面；刷新后可从“执行批次”恢复查看。`
+      ? `已处理 ${task.completed}/${task.total} 条。后台继续执行，可切换页面；刷新后可从“执行中心”恢复查看。`
       : task.result?.message ||
         task.message ||
-        `已处理 ${task.completed}/${task.total} 条，请查看执行批次。`,
+        `已处理 ${task.completed}/${task.total} 条，请查看执行中心。`,
     duration: active || task.status !== 'succeeded' ? 0 : 10,
     key,
     message: active
@@ -69,7 +61,7 @@ async function poll(task: AdCvrBatchTask, scope: AdCvrOptimizationScope) {
 
 function reportError(error: unknown) {
   notification.error({
-    description: `${error instanceof Error ? error.message : String(error)}。后台任务可能仍在执行，请从“执行批次”查询，勿直接重复提交。`,
+    description: `${error instanceof Error ? error.message : String(error)}。后台任务可能仍在执行，请从“执行中心”查询，勿直接重复提交。`,
     duration: 0,
     key,
     message: '暂时无法获取执行结果',
@@ -80,73 +72,42 @@ function reportError(error: unknown) {
 export async function resumeAdCvrExecutionTask(scope: AdCvrOptimizationScope) {
   if (adCvrExecutionInProgress.value) return;
   executionPhase.value = 'submitting';
-  let resumed = false;
   try {
     const { tasks } = await fetchAdCvrBatchTasks(scope);
     const task = tasks.find((item) =>
       ['queued', 'running'].includes(item.status),
     );
     if (task) {
-      resumed = true;
-      currentScope.value = scope;
       await poll(task, scope);
     }
   } catch (error) {
     reportError(error);
   } finally {
     executionPhase.value = 'idle';
-    if (resumed) executionRevision.value += 1;
   }
 }
 
-export async function runAdCvrExecutionTask(
-  suggestionIds: string[],
-  budgetAdjustments: Record<string, number>,
-  scope: AdCvrOptimizationScope = 'legacy',
-  bidAdjustments: Record<string, number> = {},
-  matchTypeAdjustments: Record<
-    string,
-    { cpc: number; groupName: string; matchType: 'broad' | 'exact' | 'phrase' }
-  > = {},
-  negativeAdjustments: Record<
-    string,
-    {
-      keywordText?: string;
-      matchType?: 'negativeExact' | 'negativePhrase';
-      scope: 'ad_group' | 'campaign';
-    }
-  > = {},
+export async function runAdCvrTaskPackageExecution(
+  payload: Record<string, unknown>,
+  scope: AdCvrOptimizationScope,
 ) {
   if (adCvrExecutionInProgress.value)
     throw new Error('已有广告优化任务正在执行，请等待当前任务完成');
   executionPhase.value = 'submitting';
-  currentScope.value = scope;
-  currentTask.value = null;
   notification.info({
-    description: `正在提交 ${suggestionIds.length} 条建议，请勿重复点击。`,
+    description: '正在提交已预演的任务包动作，请勿重复点击。',
     duration: 0,
     key,
     message: '提交中',
     placement: 'topRight',
   });
   try {
-    const task = await submitAdCvrBatchTask(
-      {
-        requestId: globalThis.crypto.randomUUID(),
-        suggestionIds,
-        budgetAdjustments,
-        bidAdjustments,
-        matchTypeAdjustments,
-        negativeAdjustments,
-      },
-      scope,
-    );
+    const task = await submitAdCvrTaskPackage(payload, scope);
     return await poll(task, scope);
   } catch (error) {
     reportError(error);
     throw error;
   } finally {
     executionPhase.value = 'idle';
-    executionRevision.value += 1;
   }
 }

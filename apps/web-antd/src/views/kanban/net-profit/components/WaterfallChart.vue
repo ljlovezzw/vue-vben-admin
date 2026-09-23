@@ -117,12 +117,15 @@ const option = computed(() => {
       formatter: (items: TooltipItem[]) => {
         const step = data.steps[items[0]?.dataIndex ?? 0];
         if (!step) return '';
-        return [
+        const lines = [
           step.label,
           `本项：${formatMoney(step.value)}`,
           `累计：${formatMoney(step.cumulative)}`,
-          `占回款：${(step.percentage * 100).toFixed(2)}%`,
-        ].join('\n');
+        ];
+        if (step.type !== 'end') {
+          lines.push(`占回款：${(step.percentage * 100).toFixed(2)}%`);
+        }
+        return lines.join('\n');
       },
       renderMode: 'richText',
       trigger: 'axis',

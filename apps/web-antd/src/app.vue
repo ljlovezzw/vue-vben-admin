@@ -7,6 +7,7 @@ import { preferences, usePreferences } from '@vben/preferences';
 import { App, ConfigProvider, theme } from 'ant-design-vue';
 
 import { antdLocale } from '#/locales';
+import UploadTaskNotice from '#/views/kanban/tools/upload/UploadTaskNotice.vue';
 
 defineOptions({ name: 'App' });
 
@@ -34,6 +35,7 @@ const tokenTheme = computed(() => {
   <ConfigProvider :locale="antdLocale" :theme="tokenTheme">
     <App>
       <RouterView />
+      <UploadTaskNotice />
     </App>
   </ConfigProvider>
 </template>

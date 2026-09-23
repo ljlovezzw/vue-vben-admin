@@ -1,0 +1,24 @@
+{
+  "checks": [
+    "header legible",
+    "seven phases",
+    "inclusive 6/15 day progress",
+    "active phase",
+    "English category",
+    "unique stock total",
+    "742 available",
+    "742 sales",
+    "742 inbound action",
+    "current owner",
+    "confirm persisted response",
+    "confirmed excluded from pending",
+    "department owner sync",
+    "invalid owner reset",
+    "operations complete",
+    "mobile no document overflow",
+    "refresh failure keeps data",
+    "empty state",
+    "no runtime JS errors"
+  ],
+  "errors": []
+}

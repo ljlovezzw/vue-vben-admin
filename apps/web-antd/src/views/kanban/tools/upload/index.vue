@@ -1,27 +1,63 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
-import { useAccessStore } from '@vben/stores';
+import { useAccessStore, useUserStore } from '@vben/stores';
 
 const baseUrl = import.meta.env.BASE_URL || '/';
-const toolUrl = `${baseUrl.replace(/\/$/, '')}/tools/upload-tool.html?v=20260916-zip-md5-16-v9`;
+const toolUrl = `${baseUrl.replace(/\/$/, '')}/tools/upload-tool.html?v=20260917-upload-drafts-v1`;
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const accessStore = useAccessStore();
+const userStore = useUserStore();
+const route = useRoute();
 
 function postAuthToken() {
+  // The global bridge retains WindowProxy references across KeepAlive moves and
+  // owns logout/token updates. Avoid duplicate broadcasts and duplicate queries.
+  if (
+    (window as Window & { __kanbanUploadIdentityBridge?: boolean })
+      .__kanbanUploadIdentityBridge
+  )
+    return;
   const frameWindow = iframeRef.value?.contentWindow;
-  if (!frameWindow || !accessStore.accessToken) {
+  if (!frameWindow) {
     return;
   }
   frameWindow.postMessage(
     {
       source: 'kanban-dashboard',
-      token: accessStore.accessToken,
+      token: accessStore.accessToken || '',
       type: 'kanban-auth-token',
+      userId: String(
+        userStore.userInfo?.userId ||
+          userStore.userInfo?.id ||
+          userStore.userInfo?.username ||
+          '',
+      ),
     },
     window.location.origin,
   );
 }
+
+function focusDraft() {
+  const draftId = route.query.uploadDraft;
+  if (typeof draftId !== 'string' || !draftId) return;
+  iframeRef.value?.contentWindow?.postMessage(
+    { source: 'kanban-dashboard', type: 'kanban-upload-draft-focus', draftId },
+    window.location.origin,
+  );
+}
+
+function onFrameLoad() {
+  postAuthToken();
+  focusDraft();
+}
+
+watch(() => route.query.uploadDraft, focusDraft);
+watch(
+  () => [accessStore.accessToken, userStore.userInfo?.userId],
+  postAuthToken,
+);
 
 function handleMessage(event: MessageEvent) {
   if (event.origin !== window.location.origin) {
@@ -48,7 +84,7 @@ onBeforeUnmount(() => {
       class="upload-tool-frame"
       :src="toolUrl"
       title="图片标准命名打包工具"
-      @load="postAuthToken"
+      @load="onFrameLoad"
     ></iframe>
   </div>
 </template>

@@ -6,6 +6,7 @@ import type {
   NetProfitDetails,
   NetProfitGroupRow,
   NetProfitOverview,
+  NetProfitSyncStatus,
 } from '#/api/kanban/types';
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
@@ -33,6 +34,8 @@ import {
   fetchNetProfitGroups,
   fetchNetProfitOverview,
   fetchNetProfitPivot,
+  fetchNetProfitSyncStatus,
+  startNetProfitSync,
 } from '#/api/kanban';
 
 import FacetSelect from './components/FacetSelect.vue';
@@ -138,6 +141,7 @@ function cloneQuery(source: ProfitQuery): ProfitQuery {
 }
 
 const loading = ref(false);
+const syncStatus = ref<NetProfitSyncStatus | null>(null);
 const breakEvenLoading = ref(false);
 const pivotLoading = ref(false);
 const dashboardLoading = ref(false);
@@ -201,6 +205,8 @@ let treeGeneration = 0;
 let treeRequestSequence = 0;
 const treeRequestIds = new Map<string, number>();
 let filterLoadTimer: ReturnType<typeof setTimeout> | undefined;
+let syncPollTimer: ReturnType<typeof setTimeout> | undefined;
+let activeSyncJobId = '';
 let pendingFacetKey: null | ProfitFacetKey = null;
 
 const facetKeys: ProfitFacetKey[] = [
@@ -335,6 +341,19 @@ const periodRange = computed<[string, string] | undefined>({
   },
 });
 const summary = computed(() => overview.value?.summary);
+const syncing = computed(() =>
+  ['queued', 'running'].includes(syncStatus.value?.status || ''),
+);
+const syncStatusText = computed(() => {
+  const current = syncStatus.value;
+  if (!current || current.status === 'idle') return '';
+  if (current.status === 'queued') return '同步任务排队中';
+  if (current.status === 'running')
+    return current.message || '正在同步云端数据';
+  if (current.status === 'failed') return current.message || '同步失败';
+  const rows = current.tables.reduce((total, item) => total + item.rows, 0);
+  return `同步完成，共更新 ${formatInteger(rows)} 行`;
+});
 const breakdownMap = computed(() =>
   Object.fromEntries(
     (overview.value?.breakdown?.items ?? []).map((item) => [
@@ -347,11 +366,6 @@ const cashIncome = computed(() => breakdownMap.value.cashIncome || 0);
 const standardFee = computed(() => breakdownMap.value.standardFee || 0);
 const marketingFee = computed(() => breakdownMap.value.marketingFee || 0);
 const otherFee = computed(() => breakdownMap.value.otherFee || 0);
-const netMargin = computed(() =>
-  cashIncome.value
-    ? Number(summary.value?.selectedNetProfit || 0) / cashIncome.value
-    : 0,
-);
 const expenseRate = computed(() =>
   cashIncome.value
     ? Number(summary.value?.investment || 0) / cashIncome.value
@@ -368,7 +382,7 @@ const formulaVariance = computed(
 const roiPlainText = computed(() => {
   const roi = Number(summary.value?.roi || 0);
   const verb = roi >= 0 ? '净赚' : '亏损';
-  return `每投入 ¥1.00，${verb} ¥${Math.abs(roi).toFixed(2)}`;
+  return `每 ¥1.00 销售额，${verb} ¥${Math.abs(roi).toFixed(2)}`;
 });
 function treeNodeKey(lineage: ProfitTreePathItem[]) {
   return lineage
@@ -632,6 +646,71 @@ function overviewParams() {
     periodFrom: query.periodFrom || undefined,
     periodTo: query.periodTo || undefined,
   };
+}
+
+function clearSyncPolling() {
+  clearTimeout(syncPollTimer);
+  syncPollTimer = undefined;
+}
+
+function scheduleSyncStatusPoll() {
+  clearSyncPolling();
+  syncPollTimer = setTimeout(() => void pollSyncStatus(), 2000);
+}
+
+async function pollSyncStatus() {
+  try {
+    const status = await fetchNetProfitSyncStatus();
+    syncStatus.value = status;
+    if (['queued', 'running'].includes(status.status)) {
+      activeSyncJobId ||= status.jobId;
+      scheduleSyncStatusPoll();
+      return;
+    }
+    clearSyncPolling();
+    if (!activeSyncJobId || status.jobId !== activeSyncJobId) return;
+    activeSyncJobId = '';
+    if (status.status === 'succeeded') {
+      message.success(status.message || '云端纯利数据同步完成');
+      await loadOverview();
+    } else if (status.status === 'failed') {
+      message.error(status.message || '云端纯利数据同步失败，请稍后重试');
+    }
+  } catch (error) {
+    console.error('load net profit sync status failed', error);
+    if (activeSyncJobId) scheduleSyncStatusPoll();
+  }
+}
+
+async function restoreSyncStatus() {
+  try {
+    const status = await fetchNetProfitSyncStatus();
+    syncStatus.value = status;
+    if (['queued', 'running'].includes(status.status)) {
+      activeSyncJobId = status.jobId;
+      scheduleSyncStatusPoll();
+    }
+  } catch (error) {
+    console.error('restore net profit sync status failed', error);
+  }
+}
+
+async function syncCloudData() {
+  if (syncing.value) return;
+  try {
+    const status = await startNetProfitSync();
+    syncStatus.value = status;
+    activeSyncJobId = status.jobId;
+    if (['queued', 'running'].includes(status.status)) {
+      message.info('已开始从云端同步纯利数据');
+      scheduleSyncStatusPoll();
+      return;
+    }
+    await pollSyncStatus();
+  } catch (error) {
+    message.error('同步任务启动失败，请检查服务状态后重试');
+    console.error('start net profit sync failed', error);
+  }
 }
 
 async function loadOverview() {
@@ -963,9 +1042,13 @@ function breakEvenRows() {
   }));
 }
 
-onMounted(loadOverview);
+onMounted(() => {
+  void loadOverview();
+  void restoreSyncStatus();
+});
 onBeforeUnmount(() => {
   clearTimeout(filterLoadTimer);
+  clearSyncPolling();
   invalidatePendingLoads();
 });
 </script>
@@ -977,10 +1060,35 @@ onBeforeUnmount(() => {
         <h1>纯利与回报</h1>
         <p>看清净赚金额、资金回报效率，以及利润被哪类费用消耗。</p>
       </div>
-      <Button type="primary" :loading="loading" @click="loadOverview">
-        <template #icon><RotateCw :size="15" /></template>
-        刷新数据
-      </Button>
+      <div class="page-actions">
+        <div class="sync-action">
+          <Tooltip
+            title="从云端拉取 net_profit 和 net_profit_summary，并按主键更新本地数据库"
+          >
+            <Button
+              :disabled="syncing"
+              :loading="syncing"
+              @click="syncCloudData"
+            >
+              <template #icon><RotateCw :size="15" /></template>
+              {{ syncing ? '正在同步' : '同步云端数据' }}
+            </Button>
+          </Tooltip>
+          <span
+            v-if="syncStatusText"
+            class="sync-status"
+            :class="{ 'is-error': syncStatus?.status === 'failed' }"
+            aria-live="polite"
+            role="status"
+          >
+            {{ syncStatusText }}
+          </span>
+        </div>
+        <Button type="primary" :loading="loading" @click="loadOverview">
+          <template #icon><RotateCw :size="15" /></template>
+          刷新数据
+        </Button>
+      </div>
     </div>
 
     <div class="view-tabs">
@@ -1139,16 +1247,13 @@ onBeforeUnmount(() => {
             >
               {{ formatMoneyWan(summary?.selectedNetProfit) }}
             </strong>
-            <p>
-              纯利率 {{ formatPercent(netMargin) }}，来自
-              {{ formatMoneyWan(cashIncome) }} 回款收入
-            </p>
+            <p>回款收入 {{ formatMoneyWan(cashIncome) }}</p>
           </div>
           <div class="roi-result">
             <div class="metric-label">
               投资回报 ROI
               <Tooltip
-                title="ROI = 纯利 ÷ 总投入。这里的总投入等于 ASIN 标准费用、营销费用和其他费用之和。"
+                title="ROI = 纯利 ÷ 销售额。销售额为 0 时，ROI 按 0 展示。"
               >
                 <Info :size="15" />
               </Tooltip>
@@ -1242,7 +1347,6 @@ onBeforeUnmount(() => {
             >
               <span>纯利</span>
               <strong>{{ formatMoneyWan(summary?.selectedNetProfit) }}</strong>
-              <small>纯利率 {{ formatPercent(netMargin) }}</small>
             </button>
           </div>
           <div class="return-quality">
@@ -1583,6 +1687,31 @@ onBeforeUnmount(() => {
 .page-head p {
   margin: 6px 0 0;
   color: #607089;
+}
+
+.page-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.sync-action {
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+}
+
+.sync-status {
+  max-width: 360px;
+  font-size: 12px;
+  color: #52657d;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.sync-status.is-error {
+  color: #b42318;
 }
 
 .view-tabs {
@@ -2367,6 +2496,19 @@ onBeforeUnmount(() => {
 
   .page-head {
     flex-direction: column;
+  }
+
+  .page-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .sync-action {
+    justify-items: start;
+  }
+
+  .sync-status {
+    text-align: left;
   }
 
   .executive-strip,

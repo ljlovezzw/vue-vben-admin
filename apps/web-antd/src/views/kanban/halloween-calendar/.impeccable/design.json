@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-21T10:01:25.697Z",
+  "title": "Design System: 万圣节运营日历",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "primary",
+        "displayName": "深绿墨色",
+        "tonalRamp": [
+          "oklch(15.00% 0.04147 190.43)",
+          "oklch(26.43% 0.04147 190.43)",
+          "oklch(37.86% 0.04147 190.43)",
+          "oklch(49.29% 0.04147 190.43)",
+          "oklch(60.71% 0.04147 190.43)",
+          "oklch(72.14% 0.04147 190.43)",
+          "oklch(83.57% 0.04147 190.43)",
+          "oklch(95.00% 0.04147 190.43)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "灰绿辅助文字",
+        "tonalRamp": [
+          "oklch(15.00% 0.02973 168.35)",
+          "oklch(26.43% 0.02973 168.35)",
+          "oklch(37.86% 0.02973 168.35)",
+          "oklch(49.29% 0.02973 168.35)",
+          "oklch(60.71% 0.02973 168.35)",
+          "oklch(72.14% 0.02973 168.35)",
+          "oklch(83.57% 0.02973 168.35)",
+          "oklch(95.00% 0.02973 168.35)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "暖分隔线",
+        "tonalRamp": [
+          "oklch(15.00% 0.01750 84.59)",
+          "oklch(26.43% 0.01750 84.59)",
+          "oklch(37.86% 0.01750 84.59)",
+          "oklch(49.29% 0.01750 84.59)",
+          "oklch(60.71% 0.01750 84.59)",
+          "oklch(72.14% 0.01750 84.59)",
+          "oklch(83.57% 0.01750 84.59)",
+          "oklch(95.00% 0.01750 84.59)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "暖纸面",
+        "tonalRamp": [
+          "oklch(15.00% 0.00693 88.64)",
+          "oklch(26.43% 0.00693 88.64)",
+          "oklch(37.86% 0.00693 88.64)",
+          "oklch(49.29% 0.00693 88.64)",
+          "oklch(60.71% 0.00693 88.64)",
+          "oklch(72.14% 0.00693 88.64)",
+          "oklch(83.57% 0.00693 88.64)",
+          "oklch(95.00% 0.00693 88.64)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "暖画布",
+        "tonalRamp": [
+          "oklch(15.00% 0.00986 87.47)",
+          "oklch(26.43% 0.00986 87.47)",
+          "oklch(37.86% 0.00986 87.47)",
+          "oklch(49.29% 0.00986 87.47)",
+          "oklch(60.71% 0.00986 87.47)",
+          "oklch(72.14% 0.00986 87.47)",
+          "oklch(83.57% 0.00986 87.47)",
+          "oklch(95.00% 0.00986 87.47)"
+        ]
+      },
+      "orange": {
+        "role": "secondary",
+        "displayName": "陶土橙",
+        "tonalRamp": [
+          "oklch(15.00% 0.12741 42.01)",
+          "oklch(26.43% 0.12741 42.01)",
+          "oklch(37.86% 0.12741 42.01)",
+          "oklch(49.29% 0.12741 42.01)",
+          "oklch(60.71% 0.12741 42.01)",
+          "oklch(72.14% 0.12741 42.01)",
+          "oklch(83.57% 0.12741 42.01)",
+          "oklch(95.00% 0.12741 42.01)"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "柔和分区",
+        "tonalRamp": [
+          "oklch(15.00% 0.01107 89.72)",
+          "oklch(26.43% 0.01107 89.72)",
+          "oklch(37.86% 0.01107 89.72)",
+          "oklch(49.29% 0.01107 89.72)",
+          "oklch(60.71% 0.01107 89.72)",
+          "oklch(72.14% 0.01107 89.72)",
+          "oklch(83.57% 0.01107 89.72)",
+          "oklch(95.00% 0.01107 89.72)"
+        ]
+      },
+      "risk": {
+        "role": "secondary",
+        "displayName": "深暖警示色",
+        "tonalRamp": [
+          "oklch(15.00% 0.12117 36.52)",
+          "oklch(26.43% 0.12117 36.52)",
+          "oklch(37.86% 0.12117 36.52)",
+          "oklch(49.29% 0.12117 36.52)",
+          "oklch(60.71% 0.12117 36.52)",
+          "oklch(72.14% 0.12117 36.52)",
+          "oklch(83.57% 0.12117 36.52)",
+          "oklch(95.00% 0.12117 36.52)"
+        ]
+      },
+      "track": {
+        "role": "neutral",
+        "displayName": "浅绿轨道",
+        "tonalRamp": [
+          "oklch(15.00% 0.01479 132.48)",
+          "oklch(26.43% 0.01479 132.48)",
+          "oklch(37.86% 0.01479 132.48)",
+          "oklch(49.29% 0.01479 132.48)",
+          "oklch(60.71% 0.01479 132.48)",
+          "oklch(72.14% 0.01479 132.48)",
+          "oklch(83.57% 0.01479 132.48)",
+          "oklch(95.00% 0.01479 132.48)"
+        ]
+      },
+      "metric": {
+        "role": "neutral",
+        "displayName": "摘要底色",
+        "tonalRamp": [
+          "oklch(15.00% 0.00823 91.48)",
+          "oklch(26.43% 0.00823 91.48)",
+          "oklch(37.86% 0.00823 91.48)",
+          "oklch(49.29% 0.00823 91.48)",
+          "oklch(60.71% 0.00823 91.48)",
+          "oklch(72.14% 0.00823 91.48)",
+          "oklch(83.57% 0.00823 91.48)",
+          "oklch(95.00% 0.00823 91.48)"
+        ]
+      },
+      "group": {
+        "role": "neutral",
+        "displayName": "分组浅绿",
+        "tonalRamp": [
+          "oklch(15.00% 0.00508 145.54)",
+          "oklch(26.43% 0.00508 145.54)",
+          "oklch(37.86% 0.00508 145.54)",
+          "oklch(49.29% 0.00508 145.54)",
+          "oklch(60.71% 0.00508 145.54)",
+          "oklch(72.14% 0.00508 145.54)",
+          "oklch(83.57% 0.00508 145.54)",
+          "oklch(95.00% 0.00508 145.54)"
+        ]
+      },
+      "group-hover": {
+        "role": "neutral",
+        "displayName": "分组悬停",
+        "tonalRamp": [
+          "oklch(15.00% 0.01022 145.49)",
+          "oklch(26.43% 0.01022 145.49)",
+          "oklch(37.86% 0.01022 145.49)",
+          "oklch(49.29% 0.01022 145.49)",
+          "oklch(60.71% 0.01022 145.49)",
+          "oklch(72.14% 0.01022 145.49)",
+          "oklch(83.57% 0.01022 145.49)",
+          "oklch(95.00% 0.01022 145.49)"
+        ]
+      },
+      "group-progress": {
+        "role": "primary",
+        "displayName": "沉稳进度绿",
+        "tonalRamp": [
+          "oklch(15.00% 0.05003 168.44)",
+          "oklch(26.43% 0.05003 168.44)",
+          "oklch(37.86% 0.05003 168.44)",
+          "oklch(49.29% 0.05003 168.44)",
+          "oklch(60.71% 0.05003 168.44)",
+          "oklch(72.14% 0.05003 168.44)",
+          "oklch(83.57% 0.05003 168.44)",
+          "oklch(95.00% 0.05003 168.44)"
+        ]
+      },
+      "badge": {
+        "role": "neutral",
+        "displayName": "暖提示底色",
+        "tonalRamp": [
+          "oklch(15.00% 0.02774 70.95)",
+          "oklch(26.43% 0.02774 70.95)",
+          "oklch(37.86% 0.02774 70.95)",
+          "oklch(49.29% 0.02774 70.95)",
+          "oklch(60.71% 0.02774 70.95)",
+          "oklch(72.14% 0.02774 70.95)",
+          "oklch(83.57% 0.02774 70.95)",
+          "oklch(95.00% 0.02774 70.95)"
+        ]
+      },
+      "green-badge": {
+        "role": "neutral",
+        "displayName": "绿色提示底色",
+        "tonalRamp": [
+          "oklch(15.00% 0.01237 137.78)",
+          "oklch(26.43% 0.01237 137.78)",
+          "oklch(37.86% 0.01237 137.78)",
+          "oklch(49.29% 0.01237 137.78)",
+          "oklch(60.71% 0.01237 137.78)",
+          "oklch(72.14% 0.01237 137.78)",
+          "oklch(83.57% 0.01237 137.78)",
+          "oklch(95.00% 0.01237 137.78)"
+        ]
+      },
+      "green-badge-text": {
+        "role": "neutral",
+        "displayName": "绿色提示文字",
+        "tonalRamp": [
+          "oklch(15.00% 0.06051 157.96)",
+          "oklch(26.43% 0.06051 157.96)",
+          "oklch(37.86% 0.06051 157.96)",
+          "oklch(49.29% 0.06051 157.96)",
+          "oklch(60.71% 0.06051 157.96)",
+          "oklch(72.14% 0.06051 157.96)",
+          "oklch(83.57% 0.06051 157.96)",
+          "oklch(95.00% 0.06051 157.96)"
+        ]
+      },
+      "gray-badge": {
+        "role": "neutral",
+        "displayName": "中性提示底色",
+        "tonalRamp": [
+          "oklch(15.00% 0.01276 86.83)",
+          "oklch(26.43% 0.01276 86.83)",
+          "oklch(37.86% 0.01276 86.83)",
+          "oklch(49.29% 0.01276 86.83)",
+          "oklch(60.71% 0.01276 86.83)",
+          "oklch(72.14% 0.01276 86.83)",
+          "oklch(83.57% 0.01276 86.83)",
+          "oklch(95.00% 0.01276 86.83)"
+        ]
+      },
+      "button-hover": {
+        "role": "neutral",
+        "displayName": "常规按钮悬停",
+        "tonalRamp": [
+          "oklch(15.00% 0.01441 84.58)",
+          "oklch(26.43% 0.01441 84.58)",
+          "oklch(37.86% 0.01441 84.58)",
+          "oklch(49.29% 0.01441 84.58)",
+          "oklch(60.71% 0.01441 84.58)",
+          "oklch(72.14% 0.01441 84.58)",
+          "oklch(83.57% 0.01441 84.58)",
+          "oklch(95.00% 0.01441 84.58)"
+        ]
+      },
+      "button-active": {
+        "role": "neutral",
+        "displayName": "常规按钮按下",
+        "tonalRamp": [
+          "oklch(15.00% 0.01361 134.90)",
+          "oklch(26.43% 0.01361 134.90)",
+          "oklch(37.86% 0.01361 134.90)",
+          "oklch(49.29% 0.01361 134.90)",
+          "oklch(60.71% 0.01361 134.90)",
+          "oklch(72.14% 0.01361 134.90)",
+          "oklch(83.57% 0.01361 134.90)",
+          "oklch(95.00% 0.01361 134.90)"
+        ]
+      },
+      "primary-hover": {
+        "role": "neutral",
+        "displayName": "主要按钮悬停",
+        "tonalRamp": [
+          "oklch(15.00% 0.05053 185.98)",
+          "oklch(26.43% 0.05053 185.98)",
+          "oklch(37.86% 0.05053 185.98)",
+          "oklch(49.29% 0.05053 185.98)",
+          "oklch(60.71% 0.05053 185.98)",
+          "oklch(72.14% 0.05053 185.98)",
+          "oklch(83.57% 0.05053 185.98)",
+          "oklch(95.00% 0.05053 185.98)"
+        ]
+      },
+      "refresh-hover": {
+        "role": "neutral",
+        "displayName": "刷新按钮悬停",
+        "tonalRamp": [
+          "oklch(15.00% 0.04891 178.12)",
+          "oklch(26.43% 0.04891 178.12)",
+          "oklch(37.86% 0.04891 178.12)",
+          "oklch(49.29% 0.04891 178.12)",
+          "oklch(60.71% 0.04891 178.12)",
+          "oklch(72.14% 0.04891 178.12)",
+          "oklch(83.57% 0.04891 178.12)",
+          "oklch(95.00% 0.04891 178.12)"
+        ]
+      },
+      "refresh-border": {
+        "role": "neutral",
+        "displayName": "刷新按钮边线",
+        "tonalRamp": [
+          "oklch(15.00% 0.03737 172.61)",
+          "oklch(26.43% 0.03737 172.61)",
+          "oklch(37.86% 0.03737 172.61)",
+          "oklch(49.29% 0.03737 172.61)",
+          "oklch(60.71% 0.03737 172.61)",
+          "oklch(72.14% 0.03737 172.61)",
+          "oklch(83.57% 0.03737 172.61)",
+          "oklch(95.00% 0.03737 172.61)"
+        ]
+      },
+      "mark": {
+        "role": "secondary",
+        "displayName": "橙色短标",
+        "tonalRamp": [
+          "oklch(15.00% 0.14257 43.66)",
+          "oklch(26.43% 0.14257 43.66)",
+          "oklch(37.86% 0.14257 43.66)",
+          "oklch(49.29% 0.14257 43.66)",
+          "oklch(60.71% 0.14257 43.66)",
+          "oklch(72.14% 0.14257 43.66)",
+          "oklch(83.57% 0.14257 43.66)",
+          "oklch(95.00% 0.14257 43.66)"
+        ]
+      },
+      "subtitle": {
+        "role": "neutral",
+        "displayName": "标题栏辅助文字",
+        "tonalRamp": [
+          "oklch(15.00% 0.02874 155.22)",
+          "oklch(26.43% 0.02874 155.22)",
+          "oklch(37.86% 0.02874 155.22)",
+          "oklch(49.29% 0.02874 155.22)",
+          "oklch(60.71% 0.02874 155.22)",
+          "oklch(72.14% 0.02874 155.22)",
+          "oklch(83.57% 0.02874 155.22)",
+          "oklch(95.00% 0.02874 155.22)"
+        ]
+      },
+      "holiday": {
+        "role": "neutral",
+        "displayName": "倒计时底色",
+        "tonalRamp": [
+          "oklch(15.00% 0.03213 81.00)",
+          "oklch(26.43% 0.03213 81.00)",
+          "oklch(37.86% 0.03213 81.00)",
+          "oklch(49.29% 0.03213 81.00)",
+          "oklch(60.71% 0.03213 81.00)",
+          "oklch(72.14% 0.03213 81.00)",
+          "oklch(83.57% 0.03213 81.00)",
+          "oklch(95.00% 0.03213 81.00)"
+        ]
+      },
+      "holiday-text": {
+        "role": "neutral",
+        "displayName": "倒计时文字",
+        "tonalRamp": [
+          "oklch(15.00% 0.08069 54.77)",
+          "oklch(26.43% 0.08069 54.77)",
+          "oklch(37.86% 0.08069 54.77)",
+          "oklch(49.29% 0.08069 54.77)",
+          "oklch(60.71% 0.08069 54.77)",
+          "oklch(72.14% 0.08069 54.77)",
+          "oklch(83.57% 0.08069 54.77)",
+          "oklch(95.00% 0.08069 54.77)"
+        ]
+      },
+      "queue-border": {
+        "role": "neutral",
+        "displayName": "待办边线",
+        "tonalRamp": [
+          "oklch(15.00% 0.01286 86.83)",
+          "oklch(26.43% 0.01286 86.83)",
+          "oklch(37.86% 0.01286 86.83)",
+          "oklch(49.29% 0.01286 86.83)",
+          "oklch(60.71% 0.01286 86.83)",
+          "oklch(72.14% 0.01286 86.83)",
+          "oklch(83.57% 0.01286 86.83)",
+          "oklch(95.00% 0.01286 86.83)"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "主要按钮文字",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "正文",
+        "purpose": "生产页面的系统字体与等宽数字。"
+      },
+      "title": {
+        "displayName": "页面标题",
+        "purpose": "标题栏内的模块名称。"
+      },
+      "section": {
+        "displayName": "分区标题",
+        "purpose": "阶段、完成进度与待办标题。"
+      },
+      "metadata": {
+        "displayName": "元数据",
+        "purpose": "字段、筛选、数量与来源信息。"
+      },
+      "stage-date": {
+        "displayName": "阶段日期",
+        "purpose": "七阶段标记下方的日期。"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "button-background",
+        "value": "background 0.16s",
+        "purpose": "常规按钮背景颜色的短状态过渡。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact",
+        "value": "800px"
+      },
+      {
+        "name": "mobile",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "主要按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "从生产模块有效按钮样式提取；焦点和禁用状态保留。",
+      "html": "<button class=\"ds-primary\">确认处理</button>",
+      "css": ".ds-primary{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;cursor:pointer;transition:background 0.16s;background:#173b39;color:white;border-color:#173b39;}.ds-primary:hover{background:#285550;}.ds-primary:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-primary:disabled{opacity:0.55;cursor:default;}"
+    },
+    {
+      "name": "常规按钮",
+      "kind": "button",
+      "refersTo": "button-default",
+      "description": "从生产模块有效按钮样式提取；焦点和禁用状态保留。",
+      "html": "<button class=\"ds-default\">下一页</button>",
+      "css": ".ds-default{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;cursor:pointer;transition:background 0.16s;background:#fffdf8;color:#173b39;}.ds-default:hover{background:#eee9df;}.ds-default:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-default:disabled{opacity:0.55;cursor:default;}.ds-default:active{background:#e2e8df;}"
+    },
+    {
+      "name": "文字入口",
+      "kind": "button",
+      "refersTo": "button-link",
+      "description": "从生产模块有效按钮样式提取；焦点和禁用状态保留。",
+      "html": "<button class=\"ds-link\">查看完整日历</button>",
+      "css": ".ds-link{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;cursor:pointer;transition:background 0.16s;background:transparent;border:0;color:#ab522d;padding:4px 0;font-size:12px;text-decoration:underline;text-underline-offset:3px;}.ds-link:hover{color:#173b39;}.ds-link:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-link:disabled{opacity:0.55;cursor:default;}"
+    },
+    {
+      "name": "标题栏刷新",
+      "kind": "button",
+      "description": "从生产模块有效按钮样式提取；焦点和禁用状态保留。",
+      "html": "<div class=\"ds-header-context\"><button class=\"ds-refresh\">刷新数据</button></div>",
+      "css": ".ds-refresh{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;cursor:pointer;transition:background 0.16s;background:transparent;color:#fffdf8;border-color:#69877d;}.ds-refresh:hover{background:#315a51;}.ds-refresh:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-refresh:disabled{opacity:0.55;cursor:default;}.ds-header-context{background:#173b39;padding:16px;}"
+    },
+    {
+      "name": "商品搜索",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "按 SPU、负责人或分类搜索；使用系统字体及可见焦点。",
+      "html": "<input class=\"ds-search\" type=\"search\" placeholder=\"搜索 SPU、负责人、分类\" aria-label=\"搜索商品\">",
+      "css": ".ds-search{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;color:#173b39;background:#fffdf8;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;max-width:100%;}.ds-search::placeholder{color:#586e65;}.ds-search:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}"
+    },
+    {
+      "name": "汇总维度切换",
+      "kind": "nav",
+      "description": "站点、分类、负责人三种汇总维度；当前值用 aria-pressed 标记。",
+      "html": "<div class=\"ds-switch\" role=\"group\" aria-label=\"进度汇总维度\"><button aria-pressed=\"false\">站点</button><button aria-pressed=\"true\">分类</button><button aria-pressed=\"false\">负责人</button></div>",
+      "css": ".ds-switch{display:flex;gap:4px;}.ds-switch button{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;border:1px solid #ded8cc;border-radius:7px;min-height:36px;padding:6px 12px;cursor:pointer;transition:background 0.16s;font-size:12px;min-height:32px;padding:4px 10px;background:#fffdf8;color:#173b39;}.ds-switch button:hover{background:#eee9df;}.ds-switch button:active{background:#e2e8df;}.ds-switch button[aria-pressed='true']{background:#173b39;color:#fffdf8;border-color:#173b39;}.ds-switch button:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}"
+    },
+    {
+      "name": "状态徽标",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "颜色与文字并用，表达提醒、正常和资料状态。",
+      "html": "<span class=\"ds-badge\">库存提醒</span> <span class=\"ds-badge ds-badge-green\">正常跟进</span> <span class=\"ds-badge ds-badge-gray\">资料待核对</span>",
+      "css": ".ds-badge{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;display:inline-block;padding:2px 7px;background:#fff0df;color:#913c24;font-size:11px;border-radius:4px;white-space:nowrap;}.ds-badge-green{background:#eaf0e8;color:#315a43;}.ds-badge-gray{background:#eeeae1;color:#586e65;}"
+    },
+    {
+      "name": "摘要单元",
+      "kind": "card",
+      "refersTo": "metric",
+      "description": "五项摘要中的单元；数字是示例排版，不是实时指标。",
+      "html": "<div class=\"ds-metric\"><span>目标完成率</span><strong>40.0%</strong></div>",
+      "css": ".ds-metric{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;background:#f8f6f0;padding:12px 14px;color:#173b39;}.ds-metric span{font-size:12px;color:#586e65;display:block;}.ds-metric strong{font-size:22px;display:block;margin-top:4px;}@media(max-width:600px){.ds-metric{padding:10px;}.ds-metric span{font-size:11px;}.ds-metric strong{font-size:20px;}}"
+    },
+    {
+      "name": "可下钻分组",
+      "kind": "card",
+      "refersTo": "group",
+      "description": "英文分类与目标进度相邻；展示值仅用于组件排版预览。",
+      "html": "<button class=\"ds-group\" aria-label=\"查看 bodystocking 商品\"><div class=\"ds-group-title\"><strong>bodystocking</strong><span>40.0%</span></div><div class=\"ds-group-track\"><i style=\"width:40%\"></i></div><div class=\"ds-group-values\"><span>已完成 <b>400</b> / 1,000</span><span>还差 <b>600</b> 件</span></div></button>",
+      "css": ".ds-group{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;padding:12px 14px;border:0;background:#f0f3f0;border-radius:8px;text-align:left;color:#173b39;cursor:pointer;transition:background 0.16s;min-width:280px;}.ds-group:hover{background:#e6ece6;}.ds-group:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-group-title{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:7px;}.ds-group-title strong{font-size:14px;overflow-wrap:anywhere;}.ds-group-title span{font-size:12px;color:#586e65;}.ds-group-track{height:4px;background:#e3e9df;border-radius:3px;overflow:hidden;}.ds-group-track i{display:block;height:100%;max-width:100%;background:#507768;border-radius:3px;}.ds-group-values{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-top:7px;color:#586e65;}.ds-group-values b{color:#173b39;font-weight:600;}"
+    },
+    {
+      "name": "当前日历阶段",
+      "kind": "custom",
+      "description": "取七阶段中当前阶段的样式片段；时间经过不代表任务完成。",
+      "html": "<div class=\"ds-stage-preview\"><ol class=\"ds-stages\"><li aria-current=\"step\"><b>3</b><span>检查与预估</span><small>9/16—9/30</small></li></ol><p class=\"ds-stage-note\">6/15 天 · 仅表示时间经过，不代表任务完成</p></div>",
+      "css": ".ds-stage-preview{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;background:#fffdf8;padding:16px;color:#173b39;}.ds-stages{list-style:none;margin:0;padding:0;}.ds-stages li{font-size:12px;font-weight:600;}.ds-stages b{display:block;width:23px;height:23px;text-align:center;border-radius:50%;background:#173b39;color:white;border:1px solid #ded8cc;outline:4px solid #e3e9df;font-weight:500;margin-bottom:10px;}.ds-stages small{display:block;margin-top:3px;font-size:10px;color:#586e65;}.ds-stage-note{font-size:11px;color:#586e65;margin-top:18px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "延续啤酒服运营通知",
+    "overview": "本文件记录正式万圣节模块的既有视觉实现：深绿标题、暖纸色内容、浅绿分组与克制橙色。它延续用户批准的紧凑运营通知方向，不定义其他看板或整个应用的样式。\n\n以清楚的日期、数字、当前负责人和建议动作为阅读主体。七阶段时间轴接在筛选之后，完整商品、排期和来源通过弹窗按需展开；保留生产应用的 Ant Design Modal 行为。视觉规则以同目录 `style.css` 和 `index.vue` 的有效样式为依据，原型中未被生产组件使用的原生 `dialog` 样式不是生产弹窗规范。",
+    "keyCharacteristics": [
+      "单一暖纸面板，深绿标题与细线分区。",
+      "五项摘要、六项分组和八条主区待办保持紧凑密度。",
+      "英文分类、当前归属与库存字段直接相邻。",
+      "日历进度、销售进度和处理确认使用各自明确的文字。"
+    ],
+    "rules": [
+      {
+        "name": "The State Rule",
+        "body": "颜色之外始终保留状态文字；日历经过、销售完成率与处理确认不能互相替代。",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do 保留批准的深绿、暖纸色、紧凑层级和顶部七阶段顺序。",
+      "Do 把当前归属、数据范围、库存字段与动作条件放在对应信息附近。",
+      "Do 用文字区分日历时间、销售进度和持久化确认。",
+      "Do 保留键盘焦点、局部横向滚动和按需展开的完整来源。"
+    ],
+    "donts": [
+      "Don't 把旧原型的刷新重置确认规则复制到生产模块。",
+      "Don't 将确认状态说成真实调价、广告或消息已经执行。",
+      "Don't 为简化摘要而把缺失值填零、混用目标范围或重复累加共享库存。",
+      "Don't 将未被生产组件使用的原型样式宣称为正式弹窗规范。"
+    ]
+  }
+}

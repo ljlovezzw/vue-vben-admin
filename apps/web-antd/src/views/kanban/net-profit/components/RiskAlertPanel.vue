@@ -19,15 +19,16 @@ const severityConfig = {
   medium: { color: 'orange', label: '关注' },
 } as const;
 
-const typeLabels: Record<NetProfitRiskAlert['type'], string> = {
+const typeLabels: Partial<Record<NetProfitRiskAlert['type'], string>> = {
   continuous_loss: '连续亏损',
   low_gross_margin: '毛利缓冲不足',
-  low_net_margin: '净利率偏低',
   low_roi_high_investment: '高投入低回报',
   negative_gross_profit: '负毛利',
 };
 
-const alerts = computed(() => props.data ?? []);
+const alerts = computed(() =>
+  (props.data ?? []).filter((alert) => alert.type !== 'low_net_margin'),
+);
 
 function formatMetric(key: string, value: number | string) {
   if (typeof value === 'string') return value;

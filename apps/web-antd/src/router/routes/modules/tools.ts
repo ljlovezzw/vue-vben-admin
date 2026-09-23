@@ -17,6 +17,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/kanban/tools/upload/index.vue'),
         meta: {
           icon: 'lucide:package-open',
+          keepAlive: true,
           title: '自动传图',
         },
       },

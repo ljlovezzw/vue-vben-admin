@@ -2,12 +2,7 @@ import type { AdCvrOptimizationSuggestion } from '#/api/kanban/types';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  executionBlockReason,
-  mergeSelection,
-  readBatchContexts,
-  summarizeSelection,
-} from './batch-selection';
+import { executionBlockReason, readBatchContexts } from './batch-selection';
 
 const row = (id: string, extra: Partial<AdCvrOptimizationSuggestion> = {}) =>
   ({
@@ -47,14 +42,6 @@ describe('batch selection', () => {
     ).rejects.toThrow('missing live bid');
     expect(seen).toEqual([1, 2, 3]);
   });
-  it('retains other pages, deduplicates and caps selection at 200', () => {
-    const current = Array.from({ length: 150 }, (_, n) => row(String(n)));
-    const next = Array.from({ length: 150 }, (_, n) => row(String(n + 100)));
-    const result = mergeSelection(current, next);
-    expect(result).toHaveLength(200);
-    expect(result[0]?.suggestion_id).toBe('0');
-    expect(result.at(-1)?.suggestion_id).toBe('199');
-  });
   it('blocks uncertain writes, incomplete data, human advice and converting negatives', () => {
     for (const extra of [
       { execution_status: 'needs_review' },
@@ -70,18 +57,5 @@ describe('batch selection', () => {
         row('x', { execution_status: 'failed', execution_has_write: false }),
       ),
     ).toBe('');
-  });
-  it('counts distinct resources without adding nested spend as savings', () => {
-    const summary = summarizeSelection([
-      row('1', { orders: 2 }),
-      row('2'),
-      row('3', { profile_id: 'other' }),
-    ]);
-    expect(summary).toEqual({
-      blocked: 0,
-      campaigns: 2,
-      groups: 2,
-      convertingClosures: 1,
-    });
   });
 });

@@ -78,10 +78,9 @@ function Test-ReleaseActive {
     }
     $expectedIndexPath = Join-Path $ReleasePath 'index.html'
     $expectedIndex = Get-Content -LiteralPath $expectedIndexPath -Raw
-    $entryPattern = '/jse/[^"'']+\.js'
-    $liveEntry = [regex]::Match($response.Content, $entryPattern).Value
-    $expectedEntry = [regex]::Match($expectedIndex, $entryPattern).Value
-    if (-not ($liveEntry -and $expectedEntry -and $liveEntry -eq $expectedEntry)) {
+    # A route-level isolated release can keep the same Vue entry file.
+    # Compare the HTML itself so an unreloaded Nginx cannot pass as active.
+    if ($response.Content -cne $expectedIndex) {
       return $false
     }
     $expectedToolPath = Join-Path $ReleasePath 'tools\upload-tool.html'
