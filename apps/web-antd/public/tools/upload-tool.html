@@ -522,6 +522,41 @@
       min-width: 382px;
     }
 
+    .parent-asin-option {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .parent-asin-option:has(input:focus-visible) {
+      border-color: #8fb0ff;
+      box-shadow: 0 0 0 4px rgba(29,78,216,.10);
+    }
+
+    .parent-asin-option input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: var(--primary);
+    }
+
+    .parent-asin-option-copy {
+      display: grid;
+      gap: 1px;
+      line-height: 1.25;
+    }
+
+    .parent-asin-option-copy strong { font-size: 13px; }
+    .parent-asin-option-copy small { color: var(--muted); font-size: 11px; }
+
     .upload-kind-controls .field { min-width: 150px; }
     .upload-kind-controls .holiday-field { min-width: min(220px, 100%); }
     .upload-kind-controls .control { min-height: 42px; }
@@ -1501,6 +1536,13 @@
               <h2>选择上传ASIN</h2>
             </div>
             <div class="upload-kind-controls">
+              <label class="parent-asin-option" for="includeParentAsin">
+                <input id="includeParentAsin" type="checkbox" aria-describedby="includeParentAsinHint" />
+                <span class="parent-asin-option-copy">
+                  <strong>包含父 ASIN</strong>
+                  <small id="includeParentAsinHint">默认仅包含子 ASIN</small>
+                </span>
+              </label>
               <div class="field">
                 <label for="uploadType">上传类型</label>
                 <select class="control" id="uploadType">
@@ -1865,6 +1907,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       shopSelection: document.getElementById("shopSelection"),
       shopSelectionText: document.getElementById("shopSelectionText"),
       spu: document.getElementById("spuInput"),
+      includeParentAsin: document.getElementById("includeParentAsin"),
       listingSelection: document.getElementById("listingSelection"),
       aPlusZip: document.getElementById("aPlusZipName"),
       brandZip: document.getElementById("brandZipName"),
@@ -2803,6 +2846,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         .filter((group) => group.asins.length);
     }
 
+    function uploadAsinsForGroup(group, includeParentAsin = els.includeParentAsin.checked) {
+      const candidates = [
+        ...group.asins,
+        ...(includeParentAsin ? [group.parentAsin] : []),
+      ];
+      return [...new Set(candidates.map((value) => String(value || "").trim()).filter(Boolean))];
+    }
+
     function applyListingColorFilter() {
       const visibleKeys = new Set(visibleListingGroups().map((group) => group.key));
       state.selectedListingKeys.forEach((key) => {
@@ -2860,15 +2911,23 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function renderListingSelection() {
       const groups = selectedListingGroups();
-      const asinCount = groups.reduce((total, group) => total + group.asins.length, 0);
+      const asinCount = groups.reduce(
+        (total, group) => total + uploadAsinsForGroup(group).length,
+        0,
+      );
+      const includesParentAsin = els.includeParentAsin.checked;
       els.listingSelection.classList.toggle("selected", Boolean(groups.length));
       if (!groups.length) {
         els.listingSelection.textContent = "未选择";
       } else if (groups.length === 1) {
         const group = groups[0];
-        els.listingSelection.textContent = `${group.shop} / ${group.parentAsin} / ${group.asins.length} 个子 ASIN`;
+        els.listingSelection.textContent = includesParentAsin
+          ? `${group.shop} / ${group.parentAsin} / ${asinCount} 个 ASIN（含父 ASIN）`
+          : `${group.shop} / ${group.parentAsin} / ${asinCount} 个子 ASIN`;
       } else {
-        els.listingSelection.textContent = `已选 ${groups.length} 个店铺 / 父 ASIN 组合，共 ${asinCount} 个子 ASIN`;
+        els.listingSelection.textContent = includesParentAsin
+          ? `已选 ${groups.length} 个店铺 / 父 ASIN 组合，共 ${asinCount} 个 ASIN（含父 ASIN）`
+          : `已选 ${groups.length} 个店铺 / 父 ASIN 组合，共 ${asinCount} 个子 ASIN`;
       }
       const keywordSignature = groups.length ? keywordContextSignature(groups) : "";
       if (keywordSignature !== state.imageKeywordContextKey) {
@@ -2906,11 +2965,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
       if (groups.length === 1) {
         const group = groups[0];
-        els.asinSummary.textContent = `${group.shop} / ${group.parentAsin} 下子 ASIN（${group.asins.length}）：${group.asins.join("，")}`;
+        const asins = uploadAsinsForGroup(group);
+        els.asinSummary.textContent = els.includeParentAsin.checked
+          ? `${group.shop} / ${group.parentAsin} 下 ASIN（${asins.length}，含父 ASIN）：${asins.join("，")}`
+          : `${group.shop} / ${group.parentAsin} 下子 ASIN（${asins.length}）：${asins.join("，")}`;
         return;
       }
       els.asinSummary.textContent = groups
-        .map((group) => `${group.shop} / ${group.parentAsin}（${group.asins.length}）`)
+        .map((group) => {
+          const asinCount = uploadAsinsForGroup(group).length;
+          return `${group.shop} / ${group.parentAsin}（${asinCount}${els.includeParentAsin.checked ? "，含父 ASIN" : ""}）`;
+        })
         .join("；");
     }
 
@@ -6821,7 +6886,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         shop: group.shop,
         spu,
         parentAsin: group.parentAsin,
-        asins: structuredClone(group.asins),
+        asins: uploadAsinsForGroup(group),
         sidMsku: structuredClone(group.sidMsku || []),
         ...category,
       }));
@@ -7133,6 +7198,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         render();
       });
       els.uploadFeishuTask.addEventListener("click", uploadFeishuTask);
+      els.includeParentAsin.addEventListener("change", () => {
+        renderListingSelection();
+        renderAsinSummary();
+      });
       els.uploadType.addEventListener("change", () => {
         selectedUploadCategory();
         if (els.uploadType.value === "holiday") els.holidayName.focus();

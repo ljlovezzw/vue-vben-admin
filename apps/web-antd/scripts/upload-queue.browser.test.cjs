@@ -143,6 +143,33 @@ async function settle(page, id, error = '', pending = false) {
   await page.evaluate(args => queueTest.settle(...args), [id, error, pending]);
 }
 
+test('parent ASIN option is off by default and appends a unique parent ASIN when enabled', async t => {
+  const { page, writes } = await createHarness(t);
+  const includeParentAsin = page.locator('#includeParentAsin');
+  assert.equal(await includeParentAsin.isChecked(), false);
+  assert.equal(await page.locator('#includeParentAsinHint').textContent(), '默认仅包含子 ASIN');
+
+  const defaultAsins = await page.evaluate(() =>
+    uploadAsinsForGroup({ asins: ['B0CHILD001', 'B0CHILD002'], parentAsin: 'B0PARENT01' }),
+  );
+  assert.deepEqual(defaultAsins, ['B0CHILD001', 'B0CHILD002']);
+
+  await includeParentAsin.check();
+  const includedAsins = await page.evaluate(() => ({
+    standard: uploadAsinsForGroup({
+      asins: ['B0CHILD001', 'B0CHILD002'],
+      parentAsin: 'B0PARENT01',
+    }),
+    deduplicated: uploadAsinsForGroup({
+      asins: ['B0CHILD001', 'B0PARENT01'],
+      parentAsin: 'B0PARENT01',
+    }),
+  }));
+  assert.deepEqual(includedAsins.standard, ['B0CHILD001', 'B0CHILD002', 'B0PARENT01']);
+  assert.deepEqual(includedAsins.deduplicated, ['B0CHILD001', 'B0PARENT01']);
+  assert.equal(writes.length, 0);
+});
+
 test('two tasks run independently, a third waits, failures retain files and successes retain lightweight results', { timeout: 30_000 }, async t => {
   const { page, writes } = await createHarness(t);
   await enqueue(page, 'QUEUE-A');
@@ -207,6 +234,7 @@ test('submit persists original sources and frees the form before compression or 
   const { page } = await createHarness(t);
   const saved = await page.evaluate(async () => {
     els.spu.value = 'FORM-SOURCE';
+    els.includeParentAsin.checked = true;
     state.queriedSpu = 'FORM-SOURCE';
     selectedListingGroups = () => state.queriedSpu === 'FORM-SOURCE'
       ? [{ shop: 'TEST-US', parentAsin: 'FORM-PARENT', asins: ['FORM-CHILD'], sidMsku: [], rows: [] }]
@@ -228,9 +256,11 @@ test('submit persists original sources and frees the form before compression or 
     const drafts = await listUploadDrafts();
     return { id: drafts[0]?.id, formSpu: els.spu.value, unlocked: !state.feishuTaskInFlight && !els.uploadFeishuTask.disabled,
       saved: Boolean(drafts[0]), transportCount: queueTest.calls.length,
-      jobs: state.uploadJobs.size, message: els.feishuTaskStatus.textContent };
+      jobs: state.uploadJobs.size, message: els.feishuTaskStatus.textContent,
+      asins: drafts[0]?.metadataList?.[0]?.asins };
   });
   assert.equal(saved.saved, true);
+  assert.deepEqual(saved.asins, ['FORM-CHILD', 'FORM-PARENT']);
   assert.equal(saved.formSpu, '');
   assert.equal(saved.unlocked, true);
   assert.equal(saved.transportCount, 0);
