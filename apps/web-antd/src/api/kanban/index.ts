@@ -59,7 +59,9 @@ import type {
   TargetTrackerOverview,
 } from './types';
 
-import { requestClient, silentRequestClient } from '#/api/request';
+import { quietRequestClient, requestClient, silentRequestClient } from '#/api/request';
+
+import { retryQueryBusy } from './query-busy-retry';
 
 export * from './ad-cvr-optimization';
 
@@ -458,8 +460,16 @@ export async function fetchKanbanProductDetailMeta(
 
 export async function fetchKanbanProductDetailRows(
   params: KanbanProductDetailRowsParams = {},
+  signal?: AbortSignal,
 ): Promise<KanbanProductDetailRows> {
-  return requestClient.get('/kanban/monitor/product-detail/rows', { params });
+  return retryQueryBusy(
+    () =>
+      quietRequestClient.get<KanbanProductDetailRows>(
+        '/kanban/monitor/product-detail/rows',
+        { params, signal },
+      ),
+    { signal },
+  );
 }
 
 export function downloadKanbanProductDetail(

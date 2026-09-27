@@ -15,6 +15,7 @@ const apiScope =
   entryRouteName === 'KanbanDailyAdOptimization' ? 'daily' : 'legacy';
 const routeFilters = shallowRef({
   projectTags: [] as string[],
+  responsible: '',
   snapshotDate: '',
 });
 watch(
@@ -29,14 +30,17 @@ watch(
       apiScope === 'daily' && typeof query.snapshotDate === 'string'
         ? query.snapshotDate
         : '';
+    const responsible =
+      typeof query.responsible === 'string' ? query.responsible.trim() : '';
     const previous = routeFilters.value;
     if (
+      previous.responsible === responsible &&
       previous.snapshotDate === snapshotDate &&
       previous.projectTags.length === projectTags.length &&
       previous.projectTags.every((tag, index) => tag === projectTags[index])
     )
       return;
-    routeFilters.value = { projectTags, snapshotDate };
+    routeFilters.value = { projectTags, responsible, snapshotDate };
   },
   { deep: true, immediate: true },
 );
@@ -52,6 +56,7 @@ void resumeAdCvrExecutionTask(apiScope);
     <TaskWorkbench
       :scope="apiScope"
       :project-tags="routeFilters.projectTags"
+      :responsible="routeFilters.responsible"
       :snapshot-date="routeFilters.snapshotDate"
     />
   </div>

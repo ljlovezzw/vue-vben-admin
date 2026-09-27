@@ -129,6 +129,7 @@ let productResizeHoverCell: HTMLElement | null = null;
 let productScrollSyncing = false;
 let productDetailMetaRequestSeq = 0;
 let productDetailRowsRequestSeq = 0;
+let productDetailRowsAbortController: AbortController | null = null;
 let productResizeSuppressClickUntil = 0;
 let productResizeSuppressSortUntil = 0;
 let productResizeMoved = false;
@@ -625,6 +626,9 @@ async function loadProductDetailRows() {
     return;
   }
   const requestSeq = ++productDetailRowsRequestSeq;
+  productDetailRowsAbortController?.abort();
+  const abortController = new AbortController();
+  productDetailRowsAbortController = abortController;
   productDetailRowsInFlight.value = rowsRequestKey;
   productDetailRowsLoading.value = true;
   try {
@@ -634,7 +638,7 @@ async function loadProductDetailRows() {
       pageSize: productDetailPagination.pageSize ?? 15,
       sortField: productDetailSort.field || undefined,
       sortOrder: productDetailSort.order || undefined,
-    });
+    }, abortController.signal);
     if (requestSeq !== productDetailRowsRequestSeq) return;
     productDetailPageRows.value = rowsResult.rows;
     productDetailSummary.value = rowsResult.summary ?? {};
@@ -653,7 +657,16 @@ async function loadProductDetailRows() {
       };
     }
     void refreshProductScrollSync();
+  } catch (error) {
+    if (requestSeq === productDetailRowsRequestSeq && !abortController.signal.aborted) {
+      const response = (error as {
+        response?: { data?: { detail?: string } };
+      })?.response;
+      message.error(response?.data?.detail || '新品明细加载失败，请稍后重试');
+    }
   } finally {
+    if (productDetailRowsAbortController === abortController)
+      productDetailRowsAbortController = null;
     if (productDetailRowsInFlight.value === rowsRequestKey)
       productDetailRowsInFlight.value = '';
     if (requestSeq === productDetailRowsRequestSeq)
@@ -1931,6 +1944,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  productDetailRowsAbortController?.abort();
   stopProductColumnResize();
   unbindProductScrollSync();
 });

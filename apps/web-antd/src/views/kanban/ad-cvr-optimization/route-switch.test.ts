@@ -28,6 +28,7 @@ interface Request {
   instance: number;
   mountedScope: string;
   projectTags: string[];
+  responsible: string;
   scope: string;
   snapshotDate: string;
 }
@@ -42,6 +43,7 @@ vi.mock('./TaskWorkbench.vue', () => ({
   default: defineComponent({
     props: {
       projectTags: { type: Array, required: true },
+      responsible: { type: String, required: true },
       scope: { type: String, required: true },
       snapshotDate: { type: String, required: true },
     },
@@ -49,12 +51,13 @@ vi.mock('./TaskWorkbench.vue', () => ({
       const instance = ++mocks.nextInstance;
       const mountedScope = props.scope;
       watch(
-        () => [props.scope, props.projectTags, props.snapshotDate],
+        () => [props.scope, props.projectTags, props.responsible, props.snapshotDate],
         () => {
           mocks.requests.push({
             instance,
             mountedScope,
             projectTags: [...props.projectTags] as string[],
+            responsible: props.responsible as string,
             scope: props.scope,
             snapshotDate: props.snapshotDate,
           });
@@ -237,6 +240,7 @@ describe('advertising route switching with real Transition and KeepAlive', () =>
       expect(visible()).toEqual({
         instance: monthly,
         projectTags: ['月度款'],
+        responsible: '',
         scope: 'legacy',
         snapshotDate: '',
       });
@@ -244,6 +248,7 @@ describe('advertising route switching with real Transition and KeepAlive', () =>
       expect(visible()).toEqual({
         instance: daily,
         projectTags: ['雨靴'],
+        responsible: '',
         scope: 'daily',
         snapshotDate: '2026-09-17',
       });
@@ -273,6 +278,7 @@ describe('advertising route switching with real Transition and KeepAlive', () =>
     expect(visible()).toEqual({
       instance: daily,
       projectTags: ['圣诞'],
+      responsible: '',
       scope: 'daily',
       snapshotDate: '2026-09-18',
     });
@@ -287,11 +293,13 @@ describe('advertising route switching with real Transition and KeepAlive', () =>
     expect(calls(daily)).toHaveLength(dailyBefore);
     await open(MONTHLY, {
       projectTags: ['啤酒服'],
+      responsible: '黄馥虹',
       snapshotDate: '2098-01-01',
     });
     expect(visible()).toEqual({
       instance: monthly,
       projectTags: ['啤酒服'],
+      responsible: '黄馥虹',
       scope: 'legacy',
       snapshotDate: '',
     });

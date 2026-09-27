@@ -131,6 +131,14 @@ export const requestClient = createRequestClient(apiURL, {
   responseReturn: 'data',
 });
 
+// Keeps authentication/refresh handling while allowing a caller to retry a
+// transient response before showing one final error to the user.
+export const quietRequestClient = createRequestClient(
+  apiURL,
+  { responseReturn: 'data' },
+  { showErrorMessage: false },
+);
+
 export const silentRequestClient = createRequestClient(
   apiURL,
   {

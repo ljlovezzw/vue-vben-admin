@@ -48,6 +48,31 @@ vi.mock('./TaskActionParameters.vue', () => ({
 describe('workbench checkbox to batch adoption', () => {
   let app: App | undefined;
   let host: HTMLDivElement;
+  it('loads a responsible deep link before policy and ignores saved queue filters', async () => {
+    localStorage.setItem(
+      'p3-task-filters:legacy:tester',
+      JSON.stringify({ responsible: '其他人', site: 'US', search: '旧搜索' }),
+    );
+    mocks.policy.mockImplementation(() => new Promise(() => {}));
+    mocks.queue.mockResolvedValue({
+      items: [],
+      snapshot: { date: '2026-09-02', version: 'v', status: 'succeeded' },
+      summary: { total: 0, today: 0, urgent: 0, blocked: 0, observe: 0, failed: 0 },
+      options: { responsibles: ['黄馥虹'], sites: ['CA'] },
+      pagination: { page: 1, total: 0 },
+    });
+    host = document.createElement('div');
+    document.body.append(host);
+    app = createApp(Workbench, { scope: 'legacy', responsible: '黄馥虹' });
+    app.mount(host);
+    await vi.waitFor(() => expect(mocks.queue).toHaveBeenCalledOnce());
+    expect(mocks.queue.mock.calls[0]?.[0]).toMatchObject({
+      responsible: '黄馥虹',
+      site: undefined,
+      search: '',
+    });
+    localStorage.removeItem('p3-task-filters:legacy:tester');
+  });
   it('clears monthly evidence when daily has no published snapshot', async () => {
     const props = reactive({
       scope: 'legacy' as 'daily' | 'legacy',

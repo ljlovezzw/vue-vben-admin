@@ -415,8 +415,9 @@
     }
 
     .shop-options {
-      max-height: 132px;
+      max-height: min(360px, 55vh);
       overflow: auto;
+      overscroll-behavior: contain;
       padding: 6px;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -838,8 +839,46 @@
 
     .rule-card.gallery-card {
       border-color: #0f9f9a;
-      border-left-width: 7px;
     }
+
+    .gallery-slot-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .gallery-slot {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid #cbd9ed;
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .gallery-slot.is-selected { border-color: #2563eb; background: #f8fbff; }
+    .gallery-slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 13px; font-weight: 700; }
+    .gallery-slot-head input { width: 16px; height: 16px; margin: 0; accent-color: #2563eb; }
+    .gallery-slot.main .gallery-slot-head { color: #b45309; }
+    .gallery-slot-picker {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      min-height: 150px;
+      border: 1px dashed #b8c9de;
+      border-radius: 4px;
+      background: #fff;
+      color: #334155;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .gallery-slot-picker:hover, .gallery-slot-picker:focus-visible { border-color: #2563eb; outline: 2px solid #bfdbfe; }
+    .gallery-slot-picker.is-readonly { cursor: default; background: #f8fafc; }
+    .gallery-slot-picker.is-readonly:hover { border-color: #b8c9de; outline: 0; }
+    .gallery-slot-picker img { width: 100%; height: 150px; object-fit: contain; }
+    .gallery-slot-picker .plus { font-size: 26px; line-height: 1; }
+    .gallery-slot-name { margin-top: 7px; min-height: 18px; color: #64748b; font-size: 11px; overflow-wrap: anywhere; }
+    .gallery-slot-clear { margin-top: 5px; padding: 0; border: 0; background: none; color: #b42318; cursor: pointer; font-size: 12px; }
 
     .rule-card.drag-source {
       opacity: .45;
@@ -1494,6 +1533,7 @@
     }
 
     @media (max-width: 860px) {
+      .gallery-slot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       body { padding: 14px; }
       .grid, .grid-5, .map-row { grid-template-columns: 1fr; }
       .platform-pair-grid { grid-template-columns: 1fr; }
@@ -1662,15 +1702,15 @@
                   <span class="asset-panel-title-text">主图 橱窗图 合规文件上传</span>
                   <span class="asset-panel-count" id="gallerySectionCount">0 个文件</span>
                 </span>
-                <span class="sub">按显示顺序上传,5张橱窗图最佳</span>
+                <span class="sub">按位置选择本次要更新的图片；未选择的位置保持原图</span>
               </span>
             </button>
             <div class="gallery-naming-guide">
               <strong>图片命名（两种写法均可）：</strong>
-              <code id="galleryNamingExample">LLW000423_BL.jpg / LLW000423_BL_1.jpg  # 主图 / Swatch
+              <code id="galleryNamingExample">LLW000423_BL.jpg / LLW000423_BL_1.jpg  # 主图
 LLW000423_BL(1).jpg / LLW000423_BL_2.jpg
 LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
-LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
+主图会同步用于 Swatch</code>
             </div>
             <div class="actions asset-panel-actions">
               <button
@@ -1693,8 +1733,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           <div class="panel-body" id="galleryPanelBody">
             <div class="dropzone" id="galleryDrop">
               <div>
-                <strong>点击选择文件夹或拖入</strong>
-                <span>多色支持上传多个文件夹，根据图片命名颜色缩写自动识别颜色；仅支持 JPG/JPEG，图片必须小于 10MB</span>
+                <strong>点击选择文件夹或拖入，也可在下方逐个图片位添加</strong>
+                <span>主图可选，选中后同步用于 Swatch；副图 1–8 可单独选择。仅支持 JPG/JPEG，小于 10MB</span>
               </div>
             </div>
             <input class="hidden" id="galleryBulkInput" type="file" multiple webkitdirectory directory accept=".jpg,.jpeg,image/jpeg" />
@@ -2948,6 +2988,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
       renderImageKeywordPanel();
       renderListingColorFilters();
+      renderGallery();
     }
 
     function renderAsinSummary() {
@@ -4059,6 +4100,9 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
       if (kind === "brand") {
         return (width, height) => {
+          if (context.assetType === "brandMedia" && height < 453) {
+            return dimensionError(width, height, "品牌故事媒介图片最小高度为453px");
+          }
           if (height > 5000) {
             return dimensionError(width, height, "品牌故事媒体图片最大高度为5000px");
           }
@@ -4179,7 +4223,15 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const usedHeroFiles = new Set(
         [heroFiles.mobile, heroFiles.desktop].filter(Boolean),
       );
-      const mediaFiles = images.filter((file) => !usedHeroFiles.has(file));
+      const mediaFiles = [];
+      for (const file of images.filter((item) => !usedHeroFiles.has(item))) {
+        const validation = await validateImageAsset(file, { kind: "brand", assetType: "brandMedia" });
+        if (validation.level === "error") {
+          ignored.push({ file, reason: validation.message });
+        } else {
+          mediaFiles.push(file);
+        }
+      }
 
       return {
         heroFiles,
@@ -4237,7 +4289,32 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         kind: "gallery",
         order,
         role,
+        selected: true,
       };
+    }
+
+    const GALLERY_SLOT_SPECS = [
+      { key: "main", label: "主图", role: "main", order: null },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        key: `other${index + 1}`, label: `副图${index + 1}`, role: "other", order: index + 1,
+      })),
+      { key: "swatch", label: "Swatch（同主图）", role: "swatch", order: null },
+    ];
+
+    function gallerySlotKey(item) {
+      return item.role === "swatch" ? "swatch" : item.order === null ? "main" : `other${item.order}`;
+    }
+
+    function ensureGalleryGroup(color) {
+      const normalized = String(color || "").trim().toUpperCase();
+      if (!normalized) return null;
+      let group = state.gallery.find((entry) => String(entry.color || "").toUpperCase() === normalized);
+      if (!group) {
+        const baseName = `${spuPrefix()}_${normalized}`;
+        group = { baseName, color: normalized, folderName: `${baseName}_`, id: uid("gallery"), items: [] };
+        state.gallery.push(group);
+      }
+      return group;
     }
 
     function galleryInputEntries(files) {
@@ -4260,9 +4337,8 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       if (!isImageFile(file)) {
         return { ignored: true, reason: "非图片文件", file };
       }
-      if (!String(file.name || "").includes("LLW") || !String(file.name || "").includes("_")) {
-        return { ignored: true, reason: "请检查文件名命名规范：文件名需包含 LLW 和下划线", file };
-      }
+      const currentSpu = String(els.spu.value || "").normalize("NFKC").trim();
+      if (!currentSpu) return { ignored: true, reason: "请先填写 SPU，再导入橱窗图", file };
       const imageValidation = await validateImageAsset(file, { kind: "gallery" });
       if (imageValidation.level === "error") {
         return { ignored: true, reason: imageValidation.message, file };
@@ -4272,9 +4348,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         .normalize("NFKC")
         .replace(/\.[^.]+$/, "")
         .trim();
-      const orderedMatch = stem.match(/^(.*?)[(（]\s*(\d+)\s*[)）]$/);
+      const swatchMatch = stem.match(/^(.+)_swatch$/i);
+      const orderedMatch = swatchMatch ? null : stem.match(/^(.*?)[(（]\s*(\d+)\s*[)）]$/);
       const sequenceMatch = orderedMatch ? null : stem.match(/^(.+_[^_]+)_(\d+)$/);
-      const baseName = String(orderedMatch?.[1] || sequenceMatch?.[1] || stem)
+      const baseName = String(swatchMatch?.[1] || orderedMatch?.[1] || sequenceMatch?.[1] || stem)
         .trim()
         .replace(/[_-]+$/, "");
       const sequence = sequenceMatch ? Number(sequenceMatch[2]) : null;
@@ -4293,19 +4370,21 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         return { ignored: true, reason: "文件名或括号序号无效", file };
       }
 
-      const colorMatch = baseName.match(/_([^_]+)$/);
-      const pathParts = relativePath.split("/").filter(Boolean);
-      const parentName = pathParts.length > 1
-        ? pathParts[pathParts.length - 2].replace(/[_-]+$/, "")
-        : "";
-      const parentColorMatch = parentName.match(/_([^_]+)$/);
-      const color = String(colorMatch?.[1] || parentColorMatch?.[1] || "默认").trim();
+      const spuPrefixText = `${currentSpu}_`;
+      if (!baseName.toUpperCase().startsWith(spuPrefixText.toUpperCase())) {
+        return { ignored: true, reason: `文件名应以当前 SPU ${currentSpu}_ 开头`, file };
+      }
+      const color = baseName.slice(spuPrefixText.length).trim().toUpperCase();
+      if (!/^[A-Z0-9_-]{1,32}$/.test(color)) {
+        return { ignored: true, reason: "文件名中的颜色代码无效", file };
+      }
 
       return {
         baseName,
         color,
         file,
         order,
+        role: swatchMatch ? "swatch" : order === null ? "main" : "other",
         relativePath,
       };
     }
@@ -4343,13 +4422,15 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             (left.order ?? 0) - (right.order ?? 0) ||
             fileNameCollator.compare(left.relativePath, right.relativePath)
           );
-          const mainCandidates = candidates.filter((item) => item.order === null);
-          const orderedCandidates = candidates.filter((item) => item.order !== null);
+          const mainCandidates = candidates.filter((item) => item.role === "main");
+          const swatchCandidates = candidates.filter((item) => item.role === "swatch");
+          const orderedCandidates = candidates.filter((item) => item.role === "other");
           const seenOrders = new Set();
           const items = [];
-          if (mainCandidates[0]) {
+          const primaryCandidate = mainCandidates[0] || swatchCandidates[0];
+          if (primaryCandidate) {
             items.push(makeGalleryItem({
-              file: mainCandidates[0].file,
+              file: primaryCandidate.file,
               order: null,
               role: "main",
             }));
@@ -4360,7 +4441,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
               reason: `${group.color} 颜色存在重复主图`,
             });
           });
+          swatchCandidates.slice(mainCandidates.length ? 0 : 1).forEach((item) => ignored.push({
+            file: item.file, reason: `${group.color} 的 Swatch 随主图同步，独立文件未使用`,
+          }));
           orderedCandidates.forEach((item) => {
+            if (item.order > 8) {
+              ignored.push({ file: item.file, reason: `${group.color} 副图最多 8 张` });
+              return;
+            }
             if (seenOrders.has(item.order)) {
               ignored.push({
                 file: item.file,
@@ -4381,7 +4469,6 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             folderName: `${group.baseName}_`,
             id: uid("gallery"),
             items,
-            missingMain: mainCandidates.length === 0,
           };
         })
         .sort((left, right) =>
@@ -4406,15 +4493,12 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         ignored: assignment.ignored,
         imageCount: assignment.imageCount,
         total: assignment.total,
-        missingMainColors: assignment.groups
-          .filter((group) => group.missingMain)
-          .map((group) => group.color),
       };
       render();
     }
 
     function galleryTargetName(group, item) {
-      const suffix = item.order === null ? "" : `(${item.order})`;
+      const suffix = item.role === "swatch" ? "_swatch" : item.order === null ? "" : `(${item.order})`;
       return `${group.baseName}${suffix}${extOf(item.file, ".jpg")}`;
     }
 
@@ -4497,6 +4581,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         kind: component.kind === "gallery" ? "gallery" : component.type === "brandHero" || component.type === "brandMedia" ? "brand" : "aPlus",
         platform: slot.platform,
         role: slot.role,
+        assetType: component.type,
       });
       if (validation.level === "error") return validation;
       return basic;
@@ -4865,51 +4950,158 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
 
     function renderGallery() {
       els.galleryRules.innerHTML = "";
-      if (!state.gallery.length) {
+      const visibleColors = [...new Set(selectedListingGroups()
+        .flatMap((group) => group.rows.map((row) => mskuColorCode(mskuOf(row))))
+        .filter(Boolean))];
+      const groups = [
+        ...state.gallery,
+        ...visibleColors.filter((color) => !state.gallery.some((group) =>
+          String(group.color || "").toUpperCase() === color)).map((color) => ({
+          color, baseName: `${spuPrefix()}_${color}`,
+          folderName: `${spuPrefix()}_${color}_`, items: [],
+        })),
+      ];
+      if (!groups.length) {
         const empty = document.createElement("div");
         empty.className = "notice warn";
-        empty.textContent = "当前没有橱窗图，请拖入完整文件夹生成颜色分组和排序";
+        empty.textContent = "请先选择 Listing 颜色，然后在图片位中添加本次要更新的图片";
         els.galleryRules.appendChild(empty);
         return;
       }
 
-      state.gallery.forEach((group) => {
+      groups.forEach((group) => {
         const card = document.createElement("section");
         card.className = "rule-card gallery-card";
         card.innerHTML = `
           <div class="rule-head">
             <div>
               <div class="rule-title-line">
-                <span class="group-index">${group.color}</span>
-                <h3 class="rule-title">颜色 ${group.color}</h3>
+                <span class="group-index">${escapeHtml(group.color)}</span>
+                <h3 class="rule-title">颜色 ${escapeHtml(group.color)}</h3>
               </div>
-              <div class="mini">${group.folderName} · ${group.items.length} 个文件${group.missingMain ? " · 缺少主图 / Swatch" : ""}</div>
+              <div class="mini">${escapeHtml(group.folderName)} · 已选 ${group.items.filter((item) => item.selected && item.file).length} 个位置 · 未选位置保持原图</div>
             </div>
-            <button class="icon-btn delete-button" type="button" title="删除该颜色">×</button>
+            ${group.id ? '<button class="icon-btn delete-button" type="button" title="清空该颜色本次图片">×</button>' : ''}
           </div>
         `;
-        card.querySelector(".delete-button").addEventListener("click", () => {
+        card.querySelector(".delete-button")?.addEventListener("click", () => {
           state.gallery = state.gallery.filter((item) => item.id !== group.id);
           render();
         });
 
-        group.items.forEach((item) => {
-          const target = galleryTargetName(group, item);
-          const roleLabel = item.order === null
-            ? "主图 + Swatch"
-            : `排序 ${item.order}`;
-          const row = document.createElement("div");
-          row.className = "map-row gallery-row";
-          row.innerHTML = `
-            <div class="field preview-here"><label>预览</label><div class="source">${roleLabel}</div></div>
-            <div class="field"><label>颜色 / 排序</label><div class="source">${group.color} · ${roleLabel}</div></div>
-            <div class="field"><label>ZIP 内文件名</label><div class="target" title="${group.folderName}/${target}">${group.folderName}/${target}</div></div>
-          `;
-          row.querySelector(".preview-here").appendChild(
-            createPreview(group, item, JPEG_ACCEPT),
-          );
-          card.appendChild(row);
+        const grid = document.createElement("div");
+        grid.className = "gallery-slot-grid";
+        GALLERY_SLOT_SPECS.forEach((spec) => {
+          if (spec.key === "swatch") {
+            const mainItem = group.items.find((candidate) => gallerySlotKey(candidate) === "main");
+            const slot = document.createElement("div");
+            slot.className = "gallery-slot";
+            slot.classList.toggle("is-selected", Boolean(mainItem?.selected && mainItem?.file));
+            const head = document.createElement("label");
+            head.className = "gallery-slot-head";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = Boolean(mainItem?.selected && mainItem?.file);
+            checkbox.disabled = true;
+            checkbox.setAttribute("aria-label", `${group.color} Swatch 随主图同步`);
+            head.append(checkbox, document.createTextNode(spec.label));
+            slot.appendChild(head);
+            const preview = document.createElement("div");
+            preview.className = "gallery-slot-picker is-readonly";
+            if (mainItem?.file && mainItem.selected) {
+              const img = document.createElement("img");
+              img.src = previewUrlForFile(mainItem.file);
+              img.alt = `${group.color} Swatch 与主图相同`;
+              preview.appendChild(img);
+            } else {
+              preview.textContent = "随主图同步";
+            }
+            slot.appendChild(preview);
+            const name = document.createElement("div");
+            name.className = "gallery-slot-name";
+            name.textContent = mainItem?.selected && mainItem.file ? mainItem.file.name : "本次不更新";
+            slot.appendChild(name);
+            grid.appendChild(slot);
+            return;
+          }
+          const item = group.items.find((candidate) => gallerySlotKey(candidate) === spec.key);
+          const slot = document.createElement("div");
+          slot.className = `gallery-slot ${spec.key === "main" ? "main" : ""}`;
+          slot.classList.toggle("is-selected", Boolean(item?.selected));
+          const head = document.createElement("label");
+          head.className = "gallery-slot-head";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = Boolean(item?.selected);
+          checkbox.setAttribute("aria-label", `${group.color} ${spec.label} 本次更新`);
+          checkbox.addEventListener("change", () => {
+            const mutable = ensureGalleryGroup(group.color);
+            if (!mutable) return;
+            let target = mutable.items.find((candidate) => gallerySlotKey(candidate) === spec.key);
+            if (!target) {
+              target = makeGalleryItem({ file: null, role: spec.role, order: spec.order });
+              mutable.items.push(target);
+            }
+            target.selected = checkbox.checked;
+            render();
+          });
+          head.append(checkbox, document.createTextNode(spec.key === "main" ? `★ ${spec.label}` : spec.label));
+          slot.appendChild(head);
+          const picker = document.createElement("button");
+          picker.type = "button";
+          picker.className = "gallery-slot-picker";
+          picker.setAttribute("aria-label", `${group.color} ${spec.label} 选择图片`);
+          if (item?.file) {
+            const img = document.createElement("img");
+            img.src = previewUrlForFile(item.file);
+            img.alt = `${group.color} ${spec.label} 预览`;
+            picker.appendChild(img);
+          } else {
+            const plus = document.createElement("span");
+            plus.className = "plus";
+            plus.textContent = "+";
+            picker.appendChild(plus);
+          }
+          const input = document.createElement("input");
+          input.className = "hidden";
+          input.type = "file";
+          input.accept = JPEG_ACCEPT;
+          input.addEventListener("change", async () => {
+            const file = input.files?.[0];
+            if (!file) return;
+            const validation = await validateImageAsset(file, { kind: "gallery" });
+            if (validation.level === "error") { alert(`${file.name}：${validation.message}`); return; }
+            const mutable = ensureGalleryGroup(group.color);
+            let target = mutable.items.find((candidate) => gallerySlotKey(candidate) === spec.key);
+            if (!target) {
+              target = makeGalleryItem({ file, role: spec.role, order: spec.order });
+              mutable.items.push(target);
+            }
+            target.file = file;
+            target.selected = true;
+            render();
+          });
+          picker.addEventListener("click", () => input.click());
+          slot.append(picker, input);
+          const name = document.createElement("div");
+          name.className = "gallery-slot-name";
+          name.textContent = item?.file?.name || "未选择图片";
+          slot.appendChild(name);
+          if (item?.file) {
+            const clear = document.createElement("button");
+            clear.type = "button";
+            clear.className = "gallery-slot-clear";
+            clear.textContent = "移除本次图片";
+            clear.addEventListener("click", () => {
+              const mutable = ensureGalleryGroup(group.color);
+              mutable.items = mutable.items.filter((candidate) => gallerySlotKey(candidate) !== spec.key);
+              render();
+            });
+            slot.appendChild(clear);
+          }
+          grid.appendChild(slot);
         });
+        card.appendChild(grid);
         els.galleryRules.appendChild(card);
       });
     }
@@ -4939,7 +5131,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
                 <span class="group-index">${groupLabel}</span>
                 <h3 class="rule-title">${component.title}</h3>
               </div>
-              <div class="mini">${component.type === "carousel" ? `手机端、电脑端最多 ${APLUS_CAROUSEL_IMAGE_COUNT} 张，可空，序号沿用前面图片组计数，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "输出手机端和电脑端两张图"} · 已选 ${selectedCount}/${component.slots.length}</div>
+              <div class="mini">${component.type === "carousel" ? `手机端、电脑端最多 ${APLUS_CAROUSEL_IMAGE_COUNT} 组，每组需两端配对，输出为 _序号-轮播序号` : component.type === "video" ? "输出 SPU.mp4 和 视频封面.jpg，不占用图片组序号" : "手机端和电脑端图片需配对"} · 已选 ${selectedCount}/${component.slots.length}</div>
             </div>
             <div class="group-tools">
               <button class="icon-btn collapse-button" type="button" title="${component.collapsed ? "展开图片组" : "收起图片组"}" aria-label="${component.collapsed ? "展开图片组" : "收起图片组"}">${component.collapsed ? "▸" : "▾"}</button>
@@ -5083,7 +5275,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           <div class="rule-head">
             <div>
               <h3 class="rule-title">${component.title}</h3>
-              <div class="mini">${component.type === "brandHero" ? "固定输出品牌故事_手机端 / 品牌故事_电脑端" : "默认重命名为 SPU-序号，也可在基础设置里切换为保留原文件名"}</div>
+              <div class="mini">${component.type === "brandHero" ? "固定输出品牌故事_手机端 / 品牌故事_电脑端" : "媒介图片高度至少 453px；默认重命名为 SPU-序号，也可保留原文件名"}</div>
             </div>
             <button class="icon-btn" type="button" title="删除">×</button>
           </div>
@@ -5151,10 +5343,12 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const root = galleryRoot();
       return state.gallery.flatMap((group) =>
         group.items
-          .filter((item) => item.file)
+          .filter((item) => item.selected && item.file && item.role !== "swatch")
           .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
           .map((item) => ({
             file: item.file,
+            galleryColor: String(group.color || "").toUpperCase(),
+            gallerySlot: gallerySlotKey(item),
             isImage: true,
             validationContext: { kind: "gallery" },
             path: `${root}/${group.folderName}/${galleryTargetName(group, item)}`,
@@ -5199,12 +5393,29 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
             aiGeneratedPerson: Boolean(slot.aiGeneratedPerson),
             file: slot.file,
             isImage: isImageFlagSlot(slot),
-            validationContext: { kind: "brand", platform: slot.platform, role: slot.role },
+            validationContext: { kind: "brand", platform: slot.platform, role: slot.role, assetType: component.type },
             path: `${root}/${targetForSlot(slot, 1, index)}`,
           });
         });
       });
       return files;
+    }
+
+    function currentAPlusPairValidationErrors() {
+      const errors = [];
+      activeAPlusComponents().forEach((component, componentIndex) => {
+        if (component.type !== "full" && component.type !== "carousel") return;
+        const mobileSlots = component.slots.filter((slot) => slot.platform === "手机端");
+        const desktopSlots = component.slots.filter((slot) => slot.platform === "电脑端");
+        for (let index = 0; index < Math.max(mobileSlots.length, desktopSlots.length); index += 1) {
+          const hasMobile = Boolean(mobileSlots[index]?.file);
+          const hasDesktop = Boolean(desktopSlots[index]?.file);
+          if (hasMobile === hasDesktop) continue;
+          const groupLabel = component.type === "carousel" ? `第 ${index + 1} 组` : "";
+          errors.push(`A+ 模块 ${componentIndex + 1}（${component.title}）${groupLabel}缺少${hasMobile ? "电脑端" : "手机端"}图片，请补齐后再提交`);
+        }
+      });
+      return errors;
     }
 
     function currentAPlusValidationErrors() {
@@ -5219,13 +5430,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           errors.push(`${component.title} / ${label}：${result.message}`);
         });
       });
-      return [...new Set(errors)];
+      return [...new Set([...currentAPlusPairValidationErrors(), ...errors])];
     }
 
     function currentGalleryValidationErrors() {
       return state.gallery
-        .filter((group) => group.missingMain || !group.items.some((item) => item.order === null))
-        .map((group) => `颜色 ${group.color} 缺少无括号的主图 / Swatch 文件`);
+        .flatMap((group) => group.items
+          .filter((item) => item.selected && !item.file && item.role !== "swatch")
+          .map((item) => `颜色 ${group.color} 的 ${GALLERY_SLOT_SPECS.find((spec) => spec.key === gallerySlotKey(item))?.label || gallerySlotKey(item)} 已勾选但未添加图片`));
     }
 
     function mskuColorCode(msku) {
@@ -5246,17 +5458,17 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           .filter(Boolean),
       );
       if (!requiredColors.size) return [];
-      const availableColors = new Set(
+      const selectedColors = new Set(
         state.gallery
-          .filter((group) => group.items.some((item) => item.file && item.order === null))
+          .filter((group) => group.items.some((item) => item.file && item.selected))
           .map((group) => String(group.color || "").trim().toUpperCase())
           .filter(Boolean),
       );
-      const missingColors = [...requiredColors]
-        .filter((color) => !availableColors.has(color))
+      const extraColors = [...selectedColors]
+        .filter((color) => !requiredColors.has(color))
         .sort((left, right) => left.localeCompare(right, "en"));
-      return missingColors.length
-        ? [`已选 Listing 仍缺少这些 MSKU 颜色图片：${missingColors.join("、")}`]
+      return extraColors.length
+        ? [`图片颜色未在已选 Listing 中找到：${extraColors.join("、")}`]
         : [];
     }
 
@@ -5270,10 +5482,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       const color = selectedColors[0] || "BL";
       const stem = `${spu}_${color}`;
       els.galleryNamingExample.textContent = [
-        `${stem}.jpg / ${stem}_1.jpg  # 主图 / Swatch`,
+        `${stem}.jpg / ${stem}_1.jpg  # 主图`,
         `${stem}(1).jpg / ${stem}_2.jpg`,
         `${stem}(2).jpg / ${stem}_3.jpg`,
-        `${stem}(3).jpg / ${stem}_4.jpg`,
+        `主图同步用于 Swatch`,
       ].join("\n");
     }
 
@@ -5339,6 +5551,22 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       ];
     }
 
+    function withGalleryPatchJson(entries, root) {
+      const manifest = {
+        version: 1,
+        mode: "patch",
+        slots: entries.map((entry) => ({
+          color: entry.galleryColor,
+          slot: entry.gallerySlot,
+          path: entry.path,
+        })),
+      };
+      return [...entries, {
+        file: new Blob([JSON.stringify(manifest)], { type: "application/json" }),
+        path: `${root}/gallery-patch.json`,
+      }];
+    }
+
     function renderGalleryPool() {
       const result = state.galleryAutoAssignResult;
       if (!result) {
@@ -5347,9 +5575,6 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
         return;
       }
       const warnings = [];
-      if (result.missingMainColors?.length) {
-        warnings.push(`缺少主图 / Swatch：${result.missingMainColors.join("、")}`);
-      }
       if (result.ignored?.length) {
         warnings.push(
           `忽略 ${result.ignored.length} 个文件：${result.ignored
@@ -5360,7 +5585,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       els.galleryPool.classList.remove("hidden");
       els.galleryPool.classList.toggle("warn", warnings.length > 0);
       els.galleryPool.textContent =
-        `已按 ${state.gallery.length} 个颜色生成排序，共 ${result.imageCount} 张图片` +
+        `已按 ${state.gallery.length} 个颜色分配位置，共 ${result.imageCount} 张图片` +
         (warnings.length ? `；${warnings.join("；")}` : "，全部匹配成功");
     }
 
@@ -5682,7 +5907,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           root,
           type !== "gallery",
         );
-        zip = await buildZip(preparedEntries);
+        zip = await buildZip(type === "gallery" ? withGalleryPatchJson(preparedEntries, root) : preparedEntries);
       } catch (error) {
         alert(`图片详情写入失败：\n${error.message}`);
         return;
@@ -5982,9 +6207,10 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       }
     }
 
-    async function buildUploadZip(entries, root, { includeImageFlags = true, keywordMetadata } = {}) {
+    async function buildUploadZip(entries, root, { includeImageFlags = true, includeGalleryPatch = false, keywordMetadata } = {}) {
       if (!entries.length) return null;
-      const sourceEntries = await preparedZipEntries(entries, root, includeImageFlags, keywordMetadata);
+      const preparedEntries = await preparedZipEntries(entries, root, includeImageFlags, keywordMetadata);
+      const sourceEntries = includeGalleryPatch ? withGalleryPatchJson(preparedEntries, root) : preparedEntries;
       const [zip, sourceFingerprint] = await Promise.all([
         buildZip(sourceEntries),
         sourceFilesFingerprint(sourceEntries),
@@ -6763,7 +6989,7 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
       if (!source) return;
       job.phase("preparing", "本地副本已保存，正在打包图片；可以继续添加任务");
       const options = { keywordMetadata: source.keywordMetadata };
-      const galleryZip = await buildUploadZip(source.galleryFiles, source.galleryRoot, { ...options, includeImageFlags: false });
+      const galleryZip = await buildUploadZip(source.galleryFiles, source.galleryRoot, { ...options, includeImageFlags: false, includeGalleryPatch: true });
       assertUploadJobCurrent(job);
       const aplusZip = await buildUploadZip(source.aPlusFiles, source.aPlusRoot, options);
       assertUploadJobCurrent(job);
@@ -6941,6 +7167,14 @@ LLW000423_BL(3).jpg / LLW000423_BL_4.jpg</code>
           "warn",
         );
         setFeishuTaskInFlight(false);
+        return;
+      }
+      const aPlusPairErrors = currentAPlusPairValidationErrors();
+      if (aPlusPairErrors.length) {
+        const message = `A+ 电脑端与手机端图片未配对：\n${aPlusPairErrors.join("\n")}`;
+        setFeishuTaskStatus(message, "warn");
+        setFeishuTaskInFlight(false);
+        alert(message);
         return;
       }
       const aPlusValidationErrors = currentAPlusValidationErrors();

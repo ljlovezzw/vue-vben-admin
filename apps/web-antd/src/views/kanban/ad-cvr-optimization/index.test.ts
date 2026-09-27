@@ -16,6 +16,7 @@ vi.mock('./TaskWorkbench.vue', () => ({
     props: {
       scope: { type: String, required: true },
       projectTags: { type: Array, required: true },
+      responsible: { type: String, required: true },
       snapshotDate: { type: String, required: true },
     },
     setup: (props) => () => h('main', JSON.stringify(props)),
@@ -48,6 +49,7 @@ describe('advertising workbench entry', () => {
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'legacy',
       projectTags: [],
+      responsible: '',
       snapshotDate: '',
     });
     expect(host.querySelectorAll('main')).toHaveLength(1);
@@ -57,11 +59,12 @@ describe('advertising workbench entry', () => {
 
   it('retains the daily scope and filters while another cached route is active', async () => {
     route.name = 'KanbanDailyAdOptimization';
-    route.query = { projectTags: ['雨靴', null], snapshotDate: '2026-09-17' };
+    route.query = { projectTags: ['雨靴', null], responsible: '黄馥虹', snapshotDate: '2026-09-17' };
     app.mount(host);
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'daily',
       projectTags: ['雨靴'],
+      responsible: '黄馥虹',
       snapshotDate: '2026-09-17',
     });
     expect(mocks.resume).toHaveBeenCalledExactlyOnceWith('daily');
@@ -72,18 +75,29 @@ describe('advertising workbench entry', () => {
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'daily',
       projectTags: ['雨靴'],
+      responsible: '黄馥虹',
       snapshotDate: '2026-09-17',
     });
     expect(mocks.resume).toHaveBeenCalledExactlyOnceWith('daily');
 
     route.name = 'KanbanDailyAdOptimization';
-    route.query = { projectTags: '啤酒服', snapshotDate: '2026-09-18' };
+    route.query = { projectTags: '啤酒服', responsible: '李婷', snapshotDate: '2026-09-18' };
     await nextTick();
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'daily',
       projectTags: ['啤酒服'],
+      responsible: '李婷',
       snapshotDate: '2026-09-18',
     });
     expect(mocks.resume).toHaveBeenCalledExactlyOnceWith('daily');
+  });
+
+  it('uses the overview responsible on first render and updates it on same-route navigation', async () => {
+    route.query = { responsible: '黄馥虹' };
+    app.mount(host);
+    expect(JSON.parse(host.textContent || '{}').responsible).toBe('黄馥虹');
+    route.query = { responsible: '李婷' };
+    await nextTick();
+    expect(JSON.parse(host.textContent || '{}').responsible).toBe('李婷');
   });
 });

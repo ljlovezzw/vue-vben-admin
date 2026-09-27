@@ -76,10 +76,11 @@ type TaskRow = AdCvrTaskPackageDetail['items'][number];
 const props = withDefaults(
   defineProps<{
     projectTags?: string[];
+    responsible?: string;
     scope: AdCvrOptimizationScope;
     snapshotDate?: string;
   }>(),
-  { projectTags: () => [], snapshotDate: '' },
+  { projectTags: () => [], responsible: '', snapshotDate: '' },
 );
 const stages: Array<{ key: AdCvrTaskStage; label: string; note: string }> = [
   { key: 'color', label: '颜色', note: '先判断整色表现' },
@@ -166,7 +167,7 @@ const queuePanelRef = ref<HTMLElement>();
 const queuePanelStyle = useQueueDock(workbenchGridRef, queuePanelRef);
 const filters = reactive({
   site: undefined as string | undefined,
-  responsible: undefined as string | undefined,
+  responsible: (props.responsible || undefined) as string | undefined,
   search: '',
   assignment: 'all',
   taskStatus: 'all',
@@ -210,6 +211,12 @@ function restoreFilters() {
       filters.taskStatus = String(saved.taskStatus);
   } catch {
     /* Storage may be disabled; filtering still works. */
+  }
+  if (props.responsible) {
+    // A dashboard deep link takes precedence over saved workbench preferences.
+    filters.site = undefined;
+    filters.search = '';
+    filters.responsible = props.responsible;
   }
 }
 watch(
@@ -1171,7 +1178,7 @@ async function policyUpdated(value: AdCvrTaskPolicy) {
   if (selected.value) void loadDetail();
 }
 watch(
-  () => [props.scope, props.projectTags, props.snapshotDate],
+  () => [props.scope, props.projectTags, props.responsible, props.snapshotDate],
   () => {
     ++queueSequence;
     ++detailSequence;
@@ -1204,16 +1211,31 @@ watch(
     queuePage.value = 1;
     useLatest.value = false;
     policy.value = undefined;
-    void loadPolicy().then(() => {
-      restoreFilters();
-      if (view.value === 'execution') void loadTasks();
-      return loadQueue(false);
-    });
+    if (props.responsible) {
+      filters.site = undefined;
+      filters.search = '';
+      filters.responsible = props.responsible;
+      void loadQueue(false);
+      void loadPolicy().then(() => {
+        if (view.value === 'execution') void loadTasks();
+      });
+    } else {
+      void loadPolicy().then(() => {
+        restoreFilters();
+        if (view.value === 'execution') void loadTasks();
+        return loadQueue(false);
+      });
+    }
   },
   { deep: true },
 );
 onMounted(async () => {
   window.addEventListener('resize', positionActionBar);
+  if (props.responsible) {
+    void loadPolicy();
+    await loadQueue(false);
+    return;
+  }
   await loadPolicy();
   restoreFilters();
   await loadQueue(false);
