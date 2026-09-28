@@ -632,13 +632,16 @@ async function loadProductDetailRows() {
   productDetailRowsInFlight.value = rowsRequestKey;
   productDetailRowsLoading.value = true;
   try {
-    const rowsResult = await fetchKanbanProductDetailRows({
-      ...productDetailRequestParams(),
-      page: productDetailPagination.current ?? 1,
-      pageSize: productDetailPagination.pageSize ?? 15,
-      sortField: productDetailSort.field || undefined,
-      sortOrder: productDetailSort.order || undefined,
-    }, abortController.signal);
+    const rowsResult = await fetchKanbanProductDetailRows(
+      {
+        ...productDetailRequestParams(),
+        page: productDetailPagination.current ?? 1,
+        pageSize: productDetailPagination.pageSize ?? 15,
+        sortField: productDetailSort.field || undefined,
+        sortOrder: productDetailSort.order || undefined,
+      },
+      abortController.signal,
+    );
     if (requestSeq !== productDetailRowsRequestSeq) return;
     productDetailPageRows.value = rowsResult.rows;
     productDetailSummary.value = rowsResult.summary ?? {};
@@ -658,10 +661,15 @@ async function loadProductDetailRows() {
     }
     void refreshProductScrollSync();
   } catch (error) {
-    if (requestSeq === productDetailRowsRequestSeq && !abortController.signal.aborted) {
-      const response = (error as {
-        response?: { data?: { detail?: string } };
-      })?.response;
+    if (
+      requestSeq === productDetailRowsRequestSeq &&
+      !abortController.signal.aborted
+    ) {
+      const response = (
+        error as {
+          response?: { data?: { detail?: string } };
+        }
+      )?.response;
       message.error(response?.data?.detail || '新品明细加载失败，请稍后重试');
     }
   } finally {

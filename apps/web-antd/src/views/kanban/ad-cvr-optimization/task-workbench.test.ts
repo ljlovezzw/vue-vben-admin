@@ -57,7 +57,14 @@ describe('workbench checkbox to batch adoption', () => {
     mocks.queue.mockResolvedValue({
       items: [],
       snapshot: { date: '2026-09-02', version: 'v', status: 'succeeded' },
-      summary: { total: 0, today: 0, urgent: 0, blocked: 0, observe: 0, failed: 0 },
+      summary: {
+        total: 0,
+        today: 0,
+        urgent: 0,
+        blocked: 0,
+        observe: 0,
+        failed: 0,
+      },
       options: { responsibles: ['黄馥虹'], sites: ['CA'] },
       pagination: { page: 1, total: 0 },
     });

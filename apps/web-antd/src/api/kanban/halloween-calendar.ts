@@ -10,6 +10,12 @@ export type StockField =
   | 'total'
   | 'working';
 export type StockValues = Record<StockField, null | number>;
+export interface HalloweenSalesPeriod {
+  actual: null | number;
+  due: null | number;
+  previous: null | number;
+  target: null | number;
+}
 export interface HalloweenInventoryRecord extends StockValues {
   id: number;
   refreshed: null | string;
@@ -19,6 +25,7 @@ export interface HalloweenInventoryRecord extends StockValues {
   warehouse: string;
 }
 export interface HalloweenRow {
+  salesPeriods?: HalloweenSalesPeriod[];
   action: string;
   actionKey: string;
   actual: null | number;

@@ -2810,6 +2810,7 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
         const shops = Array.isArray(payload?.data?.shops) ? payload.data.shops : [];
         state.shopOptions = [...new Set([
           ...state.shopOptions,
+          "Trauvienne-US",
           ...shops.map((shop) => String(shop || "").trim()).filter(Boolean),
         ])].sort((left, right) => left.localeCompare(right, "zh-CN"));
         state.shopOptionsLoaded = true;

@@ -59,7 +59,11 @@ describe('advertising workbench entry', () => {
 
   it('retains the daily scope and filters while another cached route is active', async () => {
     route.name = 'KanbanDailyAdOptimization';
-    route.query = { projectTags: ['雨靴', null], responsible: '黄馥虹', snapshotDate: '2026-09-17' };
+    route.query = {
+      projectTags: ['雨靴', null],
+      responsible: '黄馥虹',
+      snapshotDate: '2026-09-17',
+    };
     app.mount(host);
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'daily',
@@ -81,7 +85,11 @@ describe('advertising workbench entry', () => {
     expect(mocks.resume).toHaveBeenCalledExactlyOnceWith('daily');
 
     route.name = 'KanbanDailyAdOptimization';
-    route.query = { projectTags: '啤酒服', responsible: '李婷', snapshotDate: '2026-09-18' };
+    route.query = {
+      projectTags: '啤酒服',
+      responsible: '李婷',
+      snapshotDate: '2026-09-18',
+    };
     await nextTick();
     expect(JSON.parse(host.textContent || '{}')).toEqual({
       scope: 'daily',

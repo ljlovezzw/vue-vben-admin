@@ -1,0 +1,2505 @@
+# Graph Report - vue-vben-admin  (2026-09-28)
+
+## Corpus Check
+- 1092 files · ~431,788 words
+- Verdict: corpus is large enough that graph structure adds value.
+- Unclassified: 35 file(s) not represented in the graph (top: .css 16, (none) 9, .scss 4)
+
+## Summary
+- 8611 nodes · 12639 edges · 516 communities (447 shown, 52 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 165 edges (avg confidence: 0.85)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `fb03f5cb`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
+## Community Hubs (Navigation)
+- kanban/types.ts
+- analytics/index.vue
+- TaskWorkbench.vue
+- shipping/index.vue
+- preferences-drawer.vue
+- asin360/index.vue
+- ProductDetailTable.vue
+- search-term-report/index.vue
+- preferences/src/types.ts
+- config/index.vue
+- monitor/index.vue
+- types/src/index.ts
+- christmas-calendar/index.vue
+- net-profit/index.vue
+- ant-design-vue
+- FormSchema
+- user-dropdown.vue
+- RequestClient
+- request.ts
+- halloween-calendar/index.vue
+- component/index.ts
+- targets/index.vue
+- routes/core.ts
+- form-ui/package.json
+- menu-ui/package.json
+- resize.vue
+- keyword-reverse/index.vue
+- locales/src/index.ts
+- vben-layout.vue
+- layout-sidebar.vue
+- ad-automation/index.vue
+- ads/index.vue
+- usePreferences
+- stylelint-config/package.json
+- shared/package.json
+- shadcn-ui/src/ui/index.ts
+- shadcn-ui/src/components/index.ts
+- spus/index.vue
+- package.json
+- hooks/package.json
+- useTabbarStore
+- Kanban 前端开发与进度说明
+- packages/preferences/src/index.ts
+- vben-use-form.vue
+- layout-ui/package.json
+- popup-ui/package.json
+- tabs-ui/package.json
+- plugins/package.json
+- CompactAdMonitor.vue
+- alert.vue
+- FormApi
+- ui/select/index.ts
+- svg/index.ts
+- prepare-net-profit-no-margin-isolated.cjs
+- use-vxe-grid.vue
+- collapsible-params.vue
+- ad-campaign-detail/index.vue
+- basic.vue
+- devDependencies
+- form-field.vue
+- packages/icons/src/index.ts
+- components/menu.vue
+- DrawerApi
+- common-ui/package.json
+- cropper.vue
+- form-ui/src/index.ts
+- exports
+- composables/package.json
+- AdMetricTrendPanel.vue
+- compilerOptions
+- iframe-router-view.vue
+- typings/src/index.ts
+- form-ui/src/types.ts
+- prepare-halloween-progress-isolated.cjs
+- ad-cvr-optimization.ts
+- vite-config/package.json
+- @core/preferences/package.json
+- modal.vue
+- shadcn-ui/src/index.ts
+- dependencies
+- styles/package.json
+- web-antd/package.json
+- ResponsibleCampaignDrilldownModal.vue
+- commitlint-config/package.json
+- tailwind-config/package.json
+- design/package.json
+- ui/tree/tree.vue
+- common-ui/src/components/index.ts
+- layouts/package.json
+- stores/package.json
+- prepare-shipping-insurance-isolated.cjs
+- components/sub-menu.vue
+- basic/layout.vue
+- prepare-christmas-calendar-isolated.cjs
+- prepare-halloween-card-isolated.cjs
+- model.ts
+- typings/package.json
+- SheetContent.vue
+- icon-picker.vue
+- beer-dress-calendar/index.vue
+- dialog/index.ts
+- accessible.ts
+- turbo-run/package.json
+- loadDetail
+- oxlint-config/src/configs/index.ts
+- base/icons/package.json
+- composables/src/index.ts
+- shadcn-ui/package.json
+- useTabs
+- request/package.json
+- tasks
+- prepare-halloween-compact-isolated.cjs
+- prepare-halloween-time-isolated.cjs
+- prepare-halloween-trim2-isolated.cjs
+- prepare-halloween-trim-isolated.cjs
+- prepare-halloween-yoy-isolated.cjs
+- dependencies
+- TaskAccuracyReview.vue
+- shipping-location/index.vue
+- access/package.json
+- api-component.vue
+- about.vue
+- TaskReviews.vue
+- StageSalesProgress.vue
+- slider-translate-captcha/index.vue
+- fallback.vue
+- piexif.js
+- vitest
+- eslint-config/package.json
+- oxfmt-config/package.json
+- vite-config/src/typing.ts
+- form-render/form.vue
+- breadcrumb/breadcrumb.vue
+- form/index.ts
+- ToggleGroup.vue
+- prepare-upload-resilience-isolated.cjs
+- Design System: 万圣节运营日历
+- plugins/index.ts
+- dependencies
+- dependencies
+- locales/package.json
+- types/package.json
+- prepare-christmas-scope-20260923.cjs
+- TaskPolicySettings.vue
+- 圣诞款来货分配 ERP 前端
+- UploadTaskNotice.vue
+- tsdown
+- search-panel.vue
+- utils/package.json
+- application.ts
+- helper.d.ts
+- tiptap/types.ts
+- prepare-christmas-card-link-20260923.cjs
+- prepare-upload-recovery-isolated.cjs
+- upload-multi-notice.browser.test.cjs
+- execution-task.ts
+- task-selection.ts
+- SpuTable.vue
+- PortfolioMatrix.vue
+- reportColumnDisplayWidth
+- formatMoney
+- Product: 万圣节运营日历
+- oxlint-config/package.json
+- node-utils/package.json
+- tsconfig/package.json
+- constants/vben.ts
+- drawer.vue
+- slider-rotate-captcha/index.vue
+- authentication.vue
+- tiptap.vue
+- packages/preferences/package.json
+- vsh/package.json
+- upload-notice-isolated.browser.test.cjs
+- loadProductDetailRows
+- downloadReportCsv
+- productMetricRawValue
+- formatProductDetailValue
+- P3 广告任务工作台：局部界面记录
+- dependencies
+- base/icons/src/index.ts
+- menu-item.vue
+- use-menu-context.ts
+- input.vue
+- alert-dialog/index.ts
+- number-field/index.ts
+- ui/pin-input/index.ts
+- slider-captcha/index.vue
+- loadModuleData
+- route-switch.test.ts
+- refreshProductScrollSync
+- exportCsv
+- devDependencies
+- constants/package.json
+- app.d.ts
+- sub-menu-content.vue
+- pagination/index.ts
+- layout/breadcrumb.vue
+- prepare-christmas-card-link-fixed-20260923.cjs
+- shipping-insurance-route.test.cjs
+- upload-task-shell.js
+- upload-queue.browser.test.cjs
+- use-tabs-drag.ts
+- loadOverview
+- startProductColumnResize
+- convert.ts
+- download.ts
+- ModalApi
+- accordion/index.ts
+- ui/breadcrumb/index.ts
+- tabs/index.ts
+- json-viewer/index.vue
+- sidebar.vue
+- packages/icons/package.json
+- test-upload-tool-validation.cjs
+- upload-recovery.test.cjs
+- acknowledgeInAppNotification
+- aggregateDailyRows
+- interopDefault
+- node-utils/src/index.ts
+- StorageManager
+- util.test.ts
+- scrollbar.vue
+- segmented.vue
+- ui/tooltip/index.ts
+- use-access.ts
+- loading/directive.ts
+- icons/index.ts
+- dashboardResponsibleScopeActive
+- formatMoneyWan
+- compilerOptions
+- dependencies
+- env.ts
+- Stack
+- checkbox.vue
+- context-menu.vue
+- card/index.ts
+- layout/tabbar.vue
+- switch-item.vue
+- exports
+- useTiptapToolbar
+- loadReportData
+- overviewParams
+- HealthPanels.vue
+- columns
+- compilerOptions
+- dependencies
+- inference.ts
+- use-modal.ts
+- components.json
+- dependencies
+- count-to-animator.vue
+- input-password.vue
+- spinner/spinner.vue
+- PopoverContent.vue
+- point-selection-captcha/index.vue
+- count-to.vue
+- ellipsis-text.vue
+- check-updates.vue
+- widget.vue
+- builtin.vue
+- toolbar.ts
+- check-circular/index.ts
+- upload/index.vue
+- FacetSelect.vue
+- formatNumber
+- readNullableNumber
+- eslint-config/src/index.ts
+- dependencies
+- compilerOptions
+- utils/date.ts
+- dropdown-menu.vue
+- HoverCard.vue
+- ResizableHandle.vue
+- captcha/types.ts
+- blocks/index.ts
+- timezone.ts
+- Product
+- loadInAppCardNotifications
+- scheduleNotificationPoll
+- pnpm.ts
+- avatar.ts
+- RadioGroup.vue
+- notification.vue
+- general.vue
+- plugins-context.ts
+- check-dep/index.ts
+- upload-host.browser.test.cjs
+- form.ts
+- loadData
+- compact-ad-monitor-summary.ts
+- tsconfig.node.json
+- eslint-config/src/configs/index.ts
+- importmap.ts
+- scripts
+- IStorageCache
+- globalShareState
+- StateHandler
+- tree.test.ts
+- back-top.vue
+- DialogContent.vue
+- shadcn-ui/tsconfig.json
+- custom.vue
+- layout/copyright.vue
+- layout/header.vue
+- publint/index.ts
+- loadSection
+- web-antd/tsconfig.json
+- defineConfig
+- tsconfig.build.json
+- ui/context-menu/index.ts
+- ui/dropdown-menu/index.ts
+- useTabsViewScroll
+- tippy/index.ts
+- hooks/tsconfig.json
+- utils/tsconfig.json
+- vsh/src/index.ts
+- @vben/vsh
+- deploy-production.ps1
+- scripts
+- TaskActionParameters.vue
+- expandTreeNode
+- pollSyncStatus
+- ProductMetricFillInfo
+- buildReportParams
+- defaultDashboardOwnerGroupId
+- metricCell
+- syncFieldPreference
+- commitlint-config/index.mjs
+- cspell.json
+- web-app.json
+- dom.ts
+- ScrollArea.vue
+- exports
+- point-selection-captcha-card.vue
+- animation.vue
+- ECharts Plugin
+- setup.ts
+- build-local-docker-image.sh
+- @vben/turbo-run
+- fetchKanbanProductDetailRows
+- ratio
+- formatDetailValue
+- productItems
+- keywordText
+- eslint-config/tsconfig.json
+- oxfmt-config/tsconfig.json
+- tailwindcss.ts
+- oxlint-config/tsconfig.json
+- monorepo.ts
+- node-utils/tsconfig.json
+- tailwind-config/tsconfig.json
+- vite-config/tsconfig.json
+- constants/tsconfig.json
+- design/tsconfig.json
+- base/icons/tsconfig.json
+- diff.ts
+- shared/tsconfig.json
+- basic.d.ts
+- typings/tsconfig.json
+- composables/tsconfig.json
+- @core/preferences/tsconfig.json
+- form-ui/tsconfig.json
+- layout-ui/tsconfig.json
+- menu-ui/tsconfig.json
+- popup-ui/tsconfig.json
+- tabs-ui/tsconfig.json
+- access/tsconfig.json
+- slider-captcha-action.vue
+- common-ui/tsconfig.json
+- theme-button.vue
+- layouts/tsconfig.json
+- VXE Table Plugin
+- plugins/tsconfig.json
+- request/tsconfig.json
+- packages/icons/tsconfig.json
+- locales/tsconfig.json
+- packages/preferences/tsconfig.json
+- styles/tsconfig.json
+- types/tsconfig.json
+- turbo-run/tsconfig.json
+- dependencies
+- code-workspace/index.ts
+- vsh/tsconfig.json
+- calendarEvent
+- isProductMetricColumn
+- syncDashboardCountryDraft
+- syncReportFilterDraft
+- queue-layout.ts
+- trafficDistributionInfo
+- eslint-config/src/configs/unicorn.ts
+- dependencies
+- oxlint-config/src/index.ts
+- 用法
+- src/vue-router.d.ts
+- useNamespace
+- badge.ts
+- ContextMenuCheckboxItem.vue
+- ContextMenuContent.vue
+- ContextMenuItem.vue
+- ContextMenuRadioItem.vue
+- ContextMenuSubContent.vue
+- DropdownMenuCheckboxItem.vue
+- DropdownMenuContent.vue
+- DropdownMenuRadioItem.vue
+- DropdownMenuSubContent.vue
+- Input.vue
+- Textarea.vue
+- slider-captcha-bar.vue
+- icons.ts
+- 用法
+- usePagination
+- motion/index.ts
+- Motion Plugin
+- 用法
+- stores/tsconfig.json
+- 用法
+- 用法
+- 用法
+- clean.mjs
+- patchRoute
+- author
+- repository
+- navigateTo
+- periodRangeLabel
+- nullableRatio
+- task-labels.ts
+- overviewCompareRows
+- repository
+- repository
+- repository
+- UNICODE
+- spinner.ts
+- repository
+- inject-metadata.ts
+- author
+- use-menu-scroll.ts
+- repository
+- ContextMenu.vue
+- ContextMenuRadioGroup.vue
+- ContextMenuSub.vue
+- ContextMenuSubTrigger.vue
+- DropdownMenu.vue
+- DropdownMenuItem.vue
+- DropdownMenuLabel.vue
+- DropdownMenuRadioGroup.vue
+- DropdownMenuSub.vue
+- DropdownMenuSubTrigger.vue
+- Separator.vue
+- Sheet.vue
+- slider-captcha-content.vue
+- repository
+- repository
+- launch.json
+- upload-frame-host.js
+- Asin360AsinAllRow
+- isDashboardOwnerDraftAllSelected
+- isResponsibleOwnerDraftAllSelected
+- finish-review.md
+- oxfmt-config/src/index.ts
+- path.ts
+- engines
+- typings/vue-router.d.ts
+- collapse-transition.vue
+- ContextMenuSeparator.vue
+- ContextMenuTrigger.vue
+- DropdownMenuSeparator.vue
+- layout
+- @vben/plugins
+- fetchAsin360StoreOptions
+- locales/README.md
+- asin360.ts
+- dashboard.ts
+- _core/README.md
+- comparisonDeltaText
+- formatMoney
+- formatSignedMoney
+- isDashboardOwnerGroupChecked
+- isDashboardResponsibleChecked
+- isDashboardUngroupedChecked
+- isReportColumnDraftChecked
+- isReportColumnGroupAllSelected
+- isReportColumnPinned
+- isReportFilterDraftAllSelected
+- isResponsibleOwnerChecked
+- isResponsibleOwnerGroupChecked
+- isResponsibleUngroupedChecked
+- sortTreeRows
+- build.mjs
+- inject-app-loading/README.md
+- base/README.md
+- use-simple-locale/README.md
+- @core/README.md
+- menu-ui/README.md
+- ui-kit/README.md
+- ContextMenuPortal.vue
+- effects/README.md
+- shim-pinia.d.ts
+- env.d.ts
+- {
+  getPreferences,
+  getCustomPreferences,
+  getInitialCustomPreferences,
+  getPreferencesExtension,
+  updatePreferences,
+  updateCustomPreferences,
+  resetPreferences,
+  clearCache,
+  initPreferences,
+}
+
+## God Nodes (most connected - your core abstractions)
+1. `vitest` - 53 edges
+2. `ant-design-vue` - 48 edges
+3. `FormApi` - 38 edges
+4. `preferences` - 34 edges
+5. `PreferenceManager` - 29 edges
+6. `compilerOptions` - 28 edges
+7. `usePreferences()` - 28 edges
+8. `RequestClient` - 25 edges
+9. `useAccessStore` - 25 edges
+10. `MenuRecordRaw` - 23 edges
+
+## Surprising Connections (you probably didn't know these)
+- `ComponentPropsMap` --references--> `ApiComponentSharedProps`  [EXTRACTED]
+  apps/web-antd/src/adapter/component/index.ts → packages/effects/common-ui/src/components/api-component/types.ts
+- `useVbenVxeGrid()` --calls--> `UseVbenVxeGrid`  [EXTRACTED]
+  apps/web-antd/src/adapter/vxe-table.ts → packages/effects/plugins/src/vxe-table/use-vxe-grid.ts
+- `createRequestClient()` --calls--> `authenticateResponseInterceptor()`  [EXTRACTED]
+  apps/web-antd/src/api/request.ts → packages/effects/request/src/request-client/preset-interceptors.ts
+- `createRequestClient()` --calls--> `RequestClient`  [EXTRACTED]
+  apps/web-antd/src/api/request.ts → packages/effects/request/src/request-client/request-client.ts
+- `setupI18n()` --calls--> `setupI18n()`  [EXTRACTED]
+  apps/web-antd/src/locales/index.ts → packages/locales/src/i18n.ts
+
+## Import Cycles
+- 3-file cycle: `apps/web-antd/src/api/core/auth.ts -> apps/web-antd/src/api/request.ts -> apps/web-antd/src/api/core/index.ts -> apps/web-antd/src/api/core/auth.ts`
+- 3-file cycle: `apps/web-antd/src/api/core/index.ts -> apps/web-antd/src/api/core/menu.ts -> apps/web-antd/src/api/request.ts -> apps/web-antd/src/api/core/index.ts`
+- 3-file cycle: `apps/web-antd/src/api/core/index.ts -> apps/web-antd/src/api/core/user.ts -> apps/web-antd/src/api/request.ts -> apps/web-antd/src/api/core/index.ts`
+
+## Communities (516 total, 52 thin omitted)
+
+### Community 0 - "kanban/types.ts"
+Cohesion: 0.02
+Nodes (111): AdAutomationParams, AdCampaignDrilldownParams, AdMonitorOverviewParams, AnalyticsOverviewParams, AnalyticsReportParams, Asin360OverviewParams, Asin360SectionParams, BeerDressCalendarParams (+103 more)
+
+### Community 1 - "analytics/index.vue"
+Cohesion: 0.02
+Nodes (93): activeDashboardOwnerGroupId, activeDashboardOwnerMembers, activeResponsibleCount, activeResponsibleOwnerGroupId, activeResponsibleOwnerMembers, adCvr, adMonitorBaseParams, adMonitorFollowSummary (+85 more)
+
+### Community 2 - "TaskWorkbench.vue"
+Cohesion: 0.02
+Nodes (95): actionBarStyle, assignmentOptions, baselineLoading, baselines, bucket, bulkAdoptOpen, bulkDecisionOpen, bulkScopeLabel (+87 more)
+
+### Community 3 - "shipping/index.vue"
+Cohesion: 0.03
+Nodes (83): exportShippingWorkspace(), exportTodayShippingWorkspace(), fetchShippingAllocationMeta(), fetchShippingWorkspace(), fetchShippingWorkspaceBootstrap(), fetchShippingWorkspaceSimulation(), saveShippingWorkspace(), simulateShippingAllocation() (+75 more)
+
+### Community 4 - "preferences-drawer.vue"
+Cohesion: 0.02
+Nodes (91): activeTab, appColorGrayMode, appColorWeakMode, appContentCompact, appDynamicTitle, appEnableCheckUpdates, appEnableCopyPreferences, appEnableStickyPreferencesNavigationBar (+83 more)
+
+### Community 5 - "asin360/index.vue"
+Cohesion: 0.02
+Nodes (87): Asin360BriefLogRow, adColumns, adEfficiencyMetric, adTimeDim, adTrafficTimeDim, afterSaleAnalysis, afterSaleAsinOption, afterSaleAsinRows (+79 more)
+
+### Community 6 - "ProductDetailTable.vue"
+Cohesion: 0.03
+Nodes (67): AlertLevel, BaseProductDetailParams, draggingProductColumnKey, effectiveProductCountries, effectiveProductDepartments, effectiveProductResponsibles, fbaInventoryCache, fbaInventoryColumnLabels (+59 more)
+
+### Community 7 - "search-term-report/index.vue"
+Cohesion: 0.04
+Nodes (74): createSearchTermReportTask(), downloadSearchTermReport(), downloadSearchTermReportChunk(), fetchSearchTermReportCampaigns(), fetchSearchTermReportOptions(), fetchSearchTermReportParentAsins(), fetchSearchTermReportTask(), SearchTermReportCampaignRow (+66 more)
+
+### Community 8 - "preferences/src/types.ts"
+Cohesion: 0.05
+Nodes (38): defaultPreferences, BUILT_IN_THEME_PRESETS, BuiltinThemePreset, DEFAULT_TIME_ZONE_OPTIONS, PreferenceManager, preferencesManager, STORAGE_KEYS, AnyCustomPreferencesField (+30 more)
+
+### Community 9 - "config/index.vue"
+Cohesion: 0.04
+Nodes (64): createConfigUser(), deleteOperationGroup(), fetchConfigLoginLogs(), fetchConfigOverview(), saveCategoryConfig(), saveOperationGroup(), updateConfigUserAuth(), CategoryConfigRow (+56 more)
+
+### Community 10 - "monitor/index.vue"
+Cohesion: 0.04
+Nodes (59): fetchKanbanOverview(), fetchKanbanProductDetailFbaInventory(), fetchSpuDailyMetrics(), KanbanDailyMetric, KanbanFbaInventorySkuBreakdown, KanbanFbaInventorySkuRow, KanbanOverview, activeTab (+51 more)
+
+### Community 11 - "types/src/index.ts"
+Cohesion: 0.06
+Nodes (38): ExRouteRecordRaw, MenuRecordBadgeRaw, MenuRecordRaw, badgeClass, badgeStyle, Props, isDot, Props (+30 more)
+
+### Community 12 - "christmas-calendar/index.vue"
+Cohesion: 0.04
+Nodes (55): ChristmasOverview, ChristmasPhase, ChristmasRow, ChristmasStock, confirmChristmasAction(), fetchChristmasOverview(), allRows, browseKind (+47 more)
+
+### Community 13 - "net-profit/index.vue"
+Cohesion: 0.03
+Nodes (55): NetProfitDetails, NetProfitGroupRow, NetProfitSyncStatus, activeTab, activeTabKey, breakdownMap, breakEven, breakEvenColumns (+47 more)
+
+### Community 14 - "ant-design-vue"
+Cohesion: 0.04
+Nodes (53): KanbanTrendPoint, NetProfitCostDriverData, NetProfitRiskAlert, NetProfitTrendData, NetProfitWaterfallData, option, props, chartUpdateOptions (+45 more)
+
+### Community 15 - "FormSchema"
+Cohesion: 0.05
+Nodes (44): FormSchema, useVbenForm(), emit, [Form, formApi], handleSubmit(), Props, router, emit (+36 more)
+
+### Community 16 - "user-dropdown.vue"
+Cohesion: 0.04
+Nodes (38): createIconifyIcon(), breadcrumbs, Props, route, router, keys, keyword, [Modal, modalApi] (+30 more)
+
+### Community 17 - "RequestClient"
+Cohesion: 0.08
+Nodes (24): DownloadRequestConfig, FileDownloader, defaultRequestInterceptorConfig, defaultResponseInterceptorConfig, InterceptorManager, safeJoinUrl(), SSE, FileUploader (+16 more)
+
+### Community 18 - "request.ts"
+Cohesion: 0.07
+Nodes (42): AuthApi, feishuLoginApi(), FeishuLoginParams, getAccessCodesApi(), loginApi(), LoginParams, LoginResult, logoutApi() (+34 more)
+
+### Community 19 - "halloween-calendar/index.vue"
+Cohesion: 0.04
+Nodes (46): confirmHalloweenAction(), fetchHalloweenOverview(), calendarProgress(), activePhaseIndex, allRows, browseKind, browsePage, browsePages (+38 more)
+
+### Community 20 - "component/index.ts"
+Cohesion: 0.04
+Nodes (29): AdapterUploadProps, AutoComplete, Button, Cascader, Checkbox, CheckboxGroup, DatePicker, Divider (+21 more)
+
+### Community 21 - "targets/index.vue"
+Cohesion: 0.04
+Nodes (44): fetchTargetTrackerOverview(), TargetTrackerAlert, TargetTrackerOperatorPeriodRow, TargetTrackerOperatorRow, TargetTrackerOverview, loadData(), loading, monthGapOption (+36 more)
+
+### Community 22 - "routes/core.ts"
+Cohesion: 0.05
+Nodes (27): resetRoutes(), router, BasicLayout(), coreRoutes, fallbackNotFoundRoute, accessRoutes, coreRouteNames, dynamicRouteFiles (+19 more)
+
+### Community 23 - "form-ui/package.json"
+Cohesion: 0.04
+Nodes (45): bugs, dependencies, @vben-core/composables, @vben-core/icons, @vben-core/shadcn-ui, @vben-core/shared, @vben-core/typings, vee-validate (+37 more)
+
+### Community 24 - "menu-ui/package.json"
+Cohesion: 0.04
+Nodes (45): bugs, dependencies, qs, @vben-core/composables, @vben-core/design, @vben-core/icons, @vben-core/shadcn-ui, @vben-core/shared (+37 more)
+
+### Community 25 - "resize.vue"
+Cohesion: 0.06
+Nodes (42): active, aspectFactor, bodyDown(), bodyDrag, bodyMove(), bodyUp(), bottom, calcDragLimitation() (+34 more)
+
+### Community 26 - "keyword-reverse/index.vue"
+Cohesion: 0.05
+Nodes (37): fetchKeywordReverse(), KeywordReverseColumn, KeywordReverseResult, AMAZON_MARKETPLACE_DOMAINS, asinInput, drawerOpen, fieldDescriptions, handleTableChange() (+29 more)
+
+### Community 27 - "locales/src/index.ts"
+Cohesion: 0.08
+Nodes (31): loadAntdLocale(), loadDayjsLocale(), loadMessages(), loadThirdPartyMessage(), localesMap, modules, LanguageOption, SUPPORT_LANGUAGES (+23 more)
+
+### Community 28 - "vben-layout.vue"
+Cohesion: 0.05
+Nodes (40): useLayout(), {
+  arrivedState,
+  directions,
+  isScrolling,
+  y: scrollY,
+}, contentRef, contentStyle, {
+  currentLayout,
+  isFullContent,
+  isHeaderMixedNav,
+  isHeaderNav,
+  isMixedNav,
+  isSidebarMixedNav,
+}, emit, footerWidth, getSidebarWidth (+32 more)
+
+### Community 29 - "layout-sidebar.vue"
+Cohesion: 0.05
+Nodes (37): Props, style, logoStyle, Props, slots, style, asideRef, calcMenuWidthStyle() (+29 more)
+
+### Community 30 - "ad-automation/index.vue"
+Cohesion: 0.06
+Nodes (35): fetchAdAutomationAnalysis(), fetchAdAutomationCampaigns(), AdAutomationAnalysis, AdAutomationCampaignRow, AdAutomationHourRow, AdAutomationPlacementRow, routes, actionLabel() (+27 more)
+
+### Community 31 - "ads/index.vue"
+Cohesion: 0.06
+Nodes (30): AdMonitorOverview, AdMonitorStatus, AdResponsibleRow, columns, countrySiteMap, countrySites(), dateRange, drilldownOpen (+22 more)
+
+### Community 32 - "usePreferences"
+Cohesion: 0.06
+Nodes (27): { isDark }, { tokens }, tokenTheme, antdLocale, usePreferences(), useContentMaximize(), useAntdDesignTokens(), useElementPlusDesignTokens() (+19 more)
+
+### Community 33 - "stylelint-config/package.json"
+Cohesion: 0.05
+Nodes (41): bugs, dependencies, stylelint-config-recess-order, stylelint-scss, @stylistic/stylelint-plugin, devDependencies, postcss, postcss-html (+33 more)
+
+### Community 34 - "shared/package.json"
+Cohesion: 0.06
+Nodes (32): bugs, devDependencies, @types/lodash.clonedeep, @types/nprogress, files, homepage, dayjs, license (+24 more)
+
+### Community 35 - "shadcn-ui/src/ui/index.ts"
+Cohesion: 0.08
+Nodes (26): ActionButtonOptions, CustomRenderType, isDisabled, Props, ValueType, VbenButtonGroupProps, VbenButtonProps, btnDefaultProps (+18 more)
+
+### Community 36 - "shadcn-ui/src/components/index.ts"
+Cohesion: 0.05
+Nodes (21): imageStyle, Props, rootStyle, text, collapsed, props, { isFullscreen, toggle }, delegatedProps (+13 more)
+
+### Community 37 - "spus/index.vue"
+Cohesion: 0.07
+Nodes (37): createSpu(), fetchSpuDetail(), fetchSpuManagerOptions(), fetchSpuManagerOverview(), updateSpu(), SpuManagerOptions, SpuManagerOverview, SpuManagerRow (+29 more)
+
+### Community 38 - "package.json"
+Cohesion: 0.05
+Nodes (40): bugs, homepage, oxfmt, oxlint, rimraf, tailwindcss, @vben/oxlint-config, vite (+32 more)
+
+### Community 39 - "hooks/package.json"
+Cohesion: 0.05
+Nodes (37): bugs, dependencies, @vben-core/composables, @vben/preferences, @vben/stores, @vben/types, @vben/utils, vue (+29 more)
+
+### Community 40 - "useTabbarStore"
+Cohesion: 0.07
+Nodes (27): useRefresh(), refresh(), { getCachedTabs, getExcludeCachedTabs, renderRouteView }, { getEnabledTransition, getTransitionName }, { keepAlive }, tabbarStore, transformComponent(), useLayoutHook() (+19 more)
+
+### Community 41 - "Kanban 前端开发与进度说明"
+Cohesion: 0.05
+Nodes (39): 10. 后续优化建议, 11. 下一轮建议顺序, 1. 项目定位, 2026-09-11 公共请求与测试审计, 2026-09-14 广告优化分段加载（已发布）, 2026-09-17 P3 广告任务工作台（开发验证，未发布）, 2026-09-18 P3 冗余代码清理（未发布）, 2026-09-20 P3 工作台已发布 (+31 more)
+
+### Community 42 - "packages/preferences/src/index.ts"
+Cohesion: 0.08
+Nodes (23): initComponentAdapter(), withDefaultPlaceholder(), bootstrap(), setupI18n(), initApplication(), overridesPreferences, preferencesExtension, WebAntdPreferencesExtension (+15 more)
+
+### Community 43 - "vben-use-form.vue"
+Cohesion: 0.08
+Nodes (32): actionWrapperClass, collapsed, handleReset(), handleSubmit(), resetButtonOptions, [rootProps, form], submitButtonOptions, { $t } (+24 more)
+
+### Community 44 - "layout-ui/package.json"
+Cohesion: 0.05
+Nodes (39): bugs, dependencies, @vben-core/composables, @vben-core/icons, @vben-core/shadcn-ui, @vben-core/shared, @vben-core/typings, vue (+31 more)
+
+### Community 45 - "popup-ui/package.json"
+Cohesion: 0.05
+Nodes (39): bugs, dependencies, @vben-core/composables, @vben-core/icons, @vben-core/shadcn-ui, @vben-core/shared, @vben-core/typings, vue (+31 more)
+
+### Community 46 - "tabs-ui/package.json"
+Cohesion: 0.05
+Nodes (39): bugs, dependencies, @vben-core/composables, @vben-core/design, @vben-core/icons, @vben-core/shadcn-ui, @vben-core/typings, vue (+31 more)
+
+### Community 47 - "plugins/package.json"
+Cohesion: 0.06
+Nodes (37): bugs, homepage, echarts, @vben-core/design, @vben-core/form-ui, @vben-core/popup-ui, @vben-core/shadcn-ui, @vben-core/shared (+29 more)
+
+### Community 48 - "CompactAdMonitor.vue"
+Cohesion: 0.06
+Nodes (27): fetchAdMonitorOverview(), columns, countryText, dateRange, departmentText, drilldownOpen, drilldownParams, drilldownResponsible (+19 more)
+
+### Community 49 - "alert.vue"
+Cohesion: 0.09
+Nodes (31): useSimpleLocale, getMessages(), Locale, messages, AlertContext, AlertProps, BeforeCloseScope, components (+23 more)
+
+### Community 50 - "FormApi"
+Cohesion: 0.12
+Nodes (4): resolveFieldNamePath(), FormApi, getDefaultState(), FormActions
+
+### Community 51 - "ui/select/index.ts"
+Cohesion: 0.06
+Nodes (26): emits, forwarded, props, delegatedProps, emits, forwarded, props, delegatedProps (+18 more)
+
+### Community 52 - "svg/index.ts"
+Cohesion: 0.07
+Nodes (32): getRedirectUri(), handleLogin(), handleQrCodeLogin(), [Modal, modalApi], Props, route, {
+  auth: { dingding: dingdingAuthConfig },
+}, useAppConfig() (+24 more)
+
+### Community 53 - "prepare-net-profit-no-margin-isolated.cjs"
+Cohesion: 0.08
+Nodes (35): active, activeByStem, activeConfig, activeConfigPath, activeEntry, activeEntryBody, activeGraph, activeModule() (+27 more)
+
+### Community 54 - "use-vxe-grid.vue"
+Cohesion: 0.08
+Nodes (33): useForwardPriorityValues(), usePriorityValue(), usePriorityValues(), injectPluginsOptions(), extendProxyOption(), extendProxyOptions(), extendsDefaultFormatter(), createVirtualComponent() (+25 more)
+
+### Community 55 - "collapsible-params.vue"
+Cohesion: 0.07
+Nodes (28): delegatedProps, emits, forwarded, open, { b }, bodyStyle, collapsibleRefs, collapsibleRows (+20 more)
+
+### Community 56 - "ad-campaign-detail/index.vue"
+Cohesion: 0.06
+Nodes (29): fetchAdCampaignDetailMeta(), AdCampaignDetailField, AdCampaignDetailMetricRow, activeSection, adGroupId, campaignId, campaignTrend, ChartTooltipItem (+21 more)
+
+### Community 57 - "basic.vue"
+Cohesion: 0.06
+Nodes (25): InAppCardNotification, InAppCardNotificationHistory, accessStore, ackLoadingId, activeBeerDressCalendarNotification, activeInAppCardNotification, authStore, avatar (+17 more)
+
+### Community 58 - "devDependencies"
+Cohesion: 0.06
+Nodes (35): devDependencies, @changesets/changelog-github, @changesets/cli, cross-env, cspell, happy-dom, is-ci, lefthook (+27 more)
+
+### Community 59 - "form-field.vue"
+Cohesion: 0.07
+Nodes (30): collapseOpen, {
+  colon,
+  commonComponentProps,
+  component,
+  componentProps,
+  dependencies,
+  description,
+  disabled,
+  disabledOnChangeListener,
+  disabledOnInputListener,
+  emptyStateValue,
+  fieldName,
+  formFieldProps,
+  hide,
+  label,
+  labelClass,
+  labelWidth,
+  modelPropName,
+  renderComponentContent,
+  rules,
+  help,
+  collapsible,
+  defaultCollapsed = false,
+}, compact, { componentBindEventMap, componentMap, isVertical }, componentRefMap, computedHelp, computedProps, createComponentProps() (+22 more)
+
+### Community 60 - "packages/icons/src/index.ts"
+Cohesion: 0.06
+Nodes (24): accessStore, date, [Form, { form, validate, getFieldComponentRef }], hour, { locale }, { lockScreenPassword }, meridiem, minute (+16 more)
+
+### Community 61 - "components/menu.vue"
+Cohesion: 0.08
+Nodes (28): activePath, { b, is }, calcMenuItemWidth(), calcSliceIndex(), close(), closeMenu(), debounce(), emit (+20 more)
+
+### Community 62 - "DrawerApi"
+Cohesion: 0.11
+Nodes (13): DrawerApi, CloseIconPlacement, DrawerApiOptions, DrawerPlacement, DrawerProps, DrawerState, ExtendedDrawerApi, Props (+5 more)
+
+### Community 63 - "common-ui/package.json"
+Cohesion: 0.06
+Nodes (33): bugs, devDependencies, @types/json-bigint, @types/qrcode, @vue/test-utils, homepage, @vben/constants, @vben-core/design (+25 more)
+
+### Community 64 - "cropper.vue"
+Cohesion: 0.08
+Nodes (30): adjustCropperToAspectRatio(), bgImageRef, calculateImageFitSize(), containerHeight, containerRef, containerWidth, createCropper(), CROPPER_CONSTANTS (+22 more)
+
+### Community 65 - "form-ui/src/index.ts"
+Cohesion: 0.13
+Nodes (16): useVbenVxeGrid(), BaseFormComponentType, ExtendedFormApi, getDefaultState(), VxeGridApi, ExtendedVxeGridApi, SeparatorOptions, ToolbarConfigOptions (+8 more)
+
+### Community 66 - "exports"
+Cohesion: 0.07
+Nodes (33): default, development, production, types, default, development, production, types (+25 more)
+
+### Community 67 - "composables/package.json"
+Cohesion: 0.06
+Nodes (32): bugs, dependencies, reka-ui, sortablejs, @vben-core/shared, vue, @vueuse/core, devDependencies (+24 more)
+
+### Community 68 - "AdMetricTrendPanel.vue"
+Cohesion: 0.08
+Nodes (29): fetchAdMonitorTrend(), AdMonitorTrend, AdTrendMetrics, AdTrendPoint, addMetric(), axisValue(), chartColors, chartUpdateOptions (+21 more)
+
+### Community 69 - "compilerOptions"
+Cohesion: 0.06
+Nodes (31): compilerOptions, allowSyntheticDefaultImports, composite, esModuleInterop, experimentalDecorators, forceConsistentCasingInFileNames, inlineSources, isolatedModules (+23 more)
+
+### Community 70 - "iframe-router-view.vue"
+Cohesion: 0.09
+Nodes (19): getAllMenusApi(), appName, logo, logoDark, AuthPageLayout(), BasicLayout(), IFrameView(), forbiddenComponent() (+11 more)
+
+### Community 71 - "typings/src/index.ts"
+Cohesion: 0.11
+Nodes (23): TabDefinition, active, contentRef, emit, onMouseDown(), Props, style, tabRef (+15 more)
+
+### Community 72 - "form-ui/src/types.ts"
+Cohesion: 0.08
+Nodes (29): resolveValueByFieldName(), useDependencies(), Props, ArrayToStringFields, Breakpoints, ComponentProps, CustomParamsRenderType, FieldMappingTime (+21 more)
+
+### Community 73 - "prepare-halloween-progress-isolated.cjs"
+Cohesion: 0.09
+Nodes (28): active, adapt(), assert, build, candidate, config, css, cssFiles (+20 more)
+
+### Community 74 - "ad-cvr-optimization.ts"
+Cohesion: 0.09
+Nodes (29): AdCvrSnapshotTiming, AdCvrTaskHistory, AdCvrTaskLease, AdCvrTaskPackage, AdCvrTaskPreview, AdCvrTaskStage, fetchAdCvrOptimizationOperationContext(), fetchAdCvrOptimizationOverview() (+21 more)
+
+### Community 75 - "vite-config/package.json"
+Cohesion: 0.07
+Nodes (29): bugs, exports, files, homepage, dayjs, @vben/node-utils, vite, @vitejs/plugin-vue (+21 more)
+
+### Community 76 - "@core/preferences/package.json"
+Cohesion: 0.07
+Nodes (29): bugs, dependencies, @vben-core/shared, @vben-core/typings, vue, @vueuse/core, exports, files (+21 more)
+
+### Community 77 - "modal.vue"
+Cohesion: 0.07
+Nodes (20): {
+  appendToMain,
+  bordered,
+  cancelText,
+  centered,
+  class: modalClass,
+  closable,
+  closeOnClickModal,
+  closeOnPressEscape,
+  confirmDisabled,
+  confirmLoading,
+  confirmText,
+  contentClass,
+  description,
+  destroyOnClose,
+  draggable,
+  overflow,
+  footer: showFooter,
+  footerClass,
+  fullscreen,
+  fullscreenButton,
+  header,
+  headerClass,
+  loading: showLoading,
+  modal,
+  openAutoFocus,
+  overlayBlur,
+  showCancelButton,
+  showConfirmButton,
+  submitting,
+  title,
+  titleTooltip,
+  animationType,
+  zIndex,
+}, components, contentRef, dialogRef, { dragging, transform }, firstOpened, footerRef, getAppendTo (+12 more)
+
+### Community 78 - "shadcn-ui/src/index.ts"
+Cohesion: 0.12
+Nodes (14): Props, defaultValue, Props, Props, AnalysisOverviewItem, WorkbenchProjectItem, WorkbenchQuickNavItem, WorkbenchTodoItem (+6 more)
+
+### Community 79 - "dependencies"
+Cohesion: 0.07
+Nodes (30): dependencies, echarts, @tiptap/core, @tiptap/extension-document, @tiptap/extension-highlight, @tiptap/extension-image, @tiptap/extension-link, @tiptap/extension-placeholder (+22 more)
+
+### Community 80 - "styles/package.json"
+Cohesion: 0.07
+Nodes (29): default, types, default, types, bugs, dependencies, @vben-core/design, default (+21 more)
+
+### Community 81 - "web-antd/package.json"
+Cohesion: 0.07
+Nodes (28): bugs, homepage, imports, dayjs, echarts, pinia, @vben/constants, @vben/hooks (+20 more)
+
+### Community 82 - "ResponsibleCampaignDrilldownModal.vue"
+Cohesion: 0.10
+Nodes (20): fetchAdCampaignDrilldown(), AdCampaignDrilldown, AdCampaignDrilldownRow, campaignFilters, campaignFilterValue(), columns, compareNullableNumber(), compareText() (+12 more)
+
+### Community 83 - "commitlint-config/package.json"
+Cohesion: 0.07
+Nodes (28): bugs, dependencies, @commitlint/cli, @commitlint/config-conventional, commitlint-plugin-function-rules, cz-git, czg, @vben/node-utils (+20 more)
+
+### Community 84 - "tailwind-config/package.json"
+Cohesion: 0.07
+Nodes (28): bugs, dependencies, @iconify/tailwind4, tailwindcss, @tailwindcss/typography, tw-animate-css, exports, ./theme (+20 more)
+
+### Community 85 - "design/package.json"
+Cohesion: 0.07
+Nodes (28): default, development, production, bugs, dependencies, @iconify/json, exports, ./bem (+20 more)
+
+### Community 86 - "ui/tree/tree.vue"
+Cohesion: 0.11
+Nodes (19): checkAll(), emits, expanded, expandNodes(), flatten(), flattenData, getItemByValue(), InnerFlattenItem (+11 more)
+
+### Community 87 - "common-ui/src/components/index.ts"
+Cohesion: 0.09
+Nodes (15): delegatedProps, delegatedSlots, leftPanelRef, props, slots, ColPageProps, { autoContentHeight = false, heightOffset = 0 }, contentStyle (+7 more)
+
+### Community 88 - "layouts/package.json"
+Cohesion: 0.07
+Nodes (28): bugs, exports, homepage, @vben/constants, @vben-core/composables, @vben-core/design, @vben-core/form-ui, @vben-core/popup-ui (+20 more)
+
+### Community 89 - "stores/package.json"
+Cohesion: 0.07
+Nodes (28): bugs, dependencies, pinia, pinia-plugin-persistedstate, secure-ls, @vben-core/preferences, @vben-core/shared, @vben-core/typings (+20 more)
+
+### Community 90 - "prepare-shipping-insurance-isolated.cjs"
+Cohesion: 0.07
+Nodes (25): activeConfig, appRoot, base, baseFiles, bridgeText, crypto, cssMatches, deployRoot (+17 more)
+
+### Community 91 - "components/sub-menu.vue"
+Cohesion: 0.08
+Nodes (23): active, { b, is }, contentProps, currentLevel, handleMouseleave(), isFirstLevel, isTopLevelMenuSubmenu, item (+15 more)
+
+### Community 92 - "basic/layout.vue"
+Cohesion: 0.08
+Nodes (21): accessStore, clearPreferencesAndLogout(), clickLogo(), emit, {
+  extraActiveMenu,
+  extraMenus,
+  handleDefaultSelect,
+  handleMenuMouseEnter,
+  handleMixedMenuSelect,
+  handleSideMouseLeave,
+  sidebarExtraVisible,
+}, {
+  handleMenuSelect,
+  handleMenuOpen,
+  headerActive,
+  headerMenus,
+  sidebarActive,
+  sidebarMenus,
+  mixHeaderMenus,
+  sidebarVisible,
+}, headerSlots, headerTheme (+13 more)
+
+### Community 93 - "prepare-christmas-calendar-isolated.cjs"
+Cohesion: 0.08
+Nodes (25): active, activeEntry, activeText, assert, build, buildEntry, buildText, builtChristmas (+17 more)
+
+### Community 94 - "prepare-halloween-card-isolated.cjs"
+Cohesion: 0.09
+Nodes (24): active, assert, basenames, candidate, config, crypto, entry(), findFile() (+16 more)
+
+### Community 95 - "model.ts"
+Cohesion: 0.11
+Nodes (25): HalloweenInventoryRecord, StockField, StockValues, actionCount, browseRows, dataCount, detailStock, groups (+17 more)
+
+### Community 96 - "typings/package.json"
+Cohesion: 0.07
+Nodes (26): bugs, dependencies, vue, vue-router, exports, ./vue-router, files, homepage (+18 more)
+
+### Community 97 - "SheetContent.vue"
+Cohesion: 0.09
+Nodes (18): SheetVariants, props, contentRef, delegatedProps, emits, forwarded, isAppendToBody(), onAnimationEnd() (+10 more)
+
+### Community 98 - "icon-picker.vue"
+Cohesion: 0.09
+Nodes (19): ComponentPropsMap, attrs, close(), currentList, currentSelect, emit, getBindAttrs, handleClick() (+11 more)
+
+### Community 99 - "beer-dress-calendar/index.vue"
+Cohesion: 0.09
+Nodes (21): confirmBeerDressCalendarAction(), fetchBeerDressCalendarOverview(), BeerDressCalendarAction, BeerDressCalendarOverview, carryover, confirmAction(), confirmingKey, dailyDemand() (+13 more)
+
+### Community 100 - "dialog/index.ts"
+Cohesion: 0.08
+Nodes (17): emits, forwarded, props, props, delegatedProps, forwardedProps, props, props (+9 more)
+
+### Community 101 - "accessible.ts"
+Cohesion: 0.14
+Nodes (14): generateAccessible(), generateRoutes(), mergeRoutesByName(), generateMenus(), convertRoutes(), generateRoutesByBackend(), menuHasVisibleWithForbidden(), normalizeViewPath() (+6 more)
+
+### Community 102 - "turbo-run/package.json"
+Cohesion: 0.08
+Nodes (23): @clack/prompts, bin, turbo-run, dependencies, cac, @clack/prompts, @vben/node-utils, exports (+15 more)
+
+### Community 103 - "loadDetail"
+Cohesion: 0.13
+Nodes (25): bulkAdoptAdCvrTaskDecisions(), fetchAdCvrTaskPackages(), reconcileAdCvrExecution(), saveAdCvrTaskDecision(), transferAdCvrTasks(), adoptCurrentPage(), bulkAdoptRows, canEdit() (+17 more)
+
+### Community 104 - "oxlint-config/src/configs/index.ts"
+Cohesion: 0.12
+Nodes (12): command, comments, ignores, importPluginConfig, javascript, node, overrides, plugins (+4 more)
+
+### Community 105 - "base/icons/package.json"
+Cohesion: 0.08
+Nodes (24): bugs, dependencies, @iconify/vue, lucide-vue-next, vue, exports, files, homepage (+16 more)
+
+### Community 106 - "composables/src/index.ts"
+Cohesion: 0.10
+Nodes (16): useLayoutContentStyle(), useLayoutFooterStyle(), useLayoutHeaderStyle(), SCROLL_FIXED_CLASS, useScrollLock(), { contentElement, overlayStyle }, Props, style (+8 more)
+
+### Community 107 - "shadcn-ui/package.json"
+Cohesion: 0.08
+Nodes (24): bugs, exports, files, homepage, lucide-vue-next, reka-ui, @vben-core/composables, @vben-core/design (+16 more)
+
+### Community 108 - "useTabs"
+Cohesion: 0.12
+Nodes (19): useTabs(), closeAllTabs(), closeLeftTabs(), closeOtherTabs(), closeRightTabs(), closeTabByKey(), openTabInNewWindow(), pinTab() (+11 more)
+
+### Community 109 - "request/package.json"
+Cohesion: 0.08
+Nodes (24): bugs, dependencies, axios, qs, @vben/locales, @vben/utils, devDependencies, axios-mock-adapter (+16 more)
+
+### Community 110 - "tasks"
+Cohesion: 0.08
+Nodes (24): dependsOn, outputs, dependsOn, outputs, cache, dependsOn, outputs, persistent (+16 more)
+
+### Community 111 - "prepare-halloween-compact-isolated.cjs"
+Cohesion: 0.12
+Nodes (22): active, adapt(), assert, config, css, cssFiles, entry, exportsOf() (+14 more)
+
+### Community 112 - "prepare-halloween-time-isolated.cjs"
+Cohesion: 0.12
+Nodes (22): active, adapt(), assert, config, css, cssFiles, entry, exportsOf() (+14 more)
+
+### Community 113 - "prepare-halloween-trim2-isolated.cjs"
+Cohesion: 0.12
+Nodes (22): active, adapt(), assert, config, css, cssFiles, entry, exportsOf() (+14 more)
+
+### Community 114 - "prepare-halloween-trim-isolated.cjs"
+Cohesion: 0.12
+Nodes (22): active, adapt(), assert, config, css, cssFiles, entry, exportsOf() (+14 more)
+
+### Community 115 - "prepare-halloween-yoy-isolated.cjs"
+Cohesion: 0.12
+Nodes (22): active, adapt(), assert, config, css, cssFiles, entry, exportsOf() (+14 more)
+
+### Community 116 - "dependencies"
+Cohesion: 0.08
+Nodes (24): dependencies, ant-design-vue, dayjs, echarts, @fontsource-variable/inter, pinia, @vben/access, @vben/common-ui (+16 more)
+
+### Community 117 - "TaskAccuracyReview.vue"
+Cohesion: 0.10
+Nodes (20): AdCvrAccuracyRow, AdCvrAccuracySample, fetchAdCvrAccuracy(), saveAdCvrAccuracy(), mocks, mount(), action, error (+12 more)
+
+### Community 118 - "shipping-location/index.vue"
+Cohesion: 0.09
+Nodes (18): fetchShippingLocationFinderBootstrap(), ShippingLocationFinderBootstrap, ShippingLocationFinderItem, ShippingLocationModeEstimate, routes, bestEstimate(), bootstrap, codeInput (+10 more)
+
+### Community 119 - "access/package.json"
+Cohesion: 0.08
+Nodes (23): bugs, dependencies, @vben/preferences, @vben/stores, @vben/types, @vben/utils, vue, exports (+15 more)
+
+### Community 120 - "api-component.vue"
+Cohesion: 0.13
+Nodes (20): attrs, bindProps, componentRef, emit, emitChange(), fetchApi(), getOptions, handleFetchForVisible() (+12 more)
+
+### Community 121 - "about.vue"
+Cohesion: 0.12
+Nodes (14): AboutProps, dependenciesItems, DescriptionItem, devDependenciesItems, Props, vbenDescriptionItems, emit, handleChange() (+6 more)
+
+### Community 122 - "TaskReviews.vue"
+Cohesion: 0.10
+Nodes (19): acknowledgeAdCvrTaskReview(), AdCvrOptimizationScope, AdCvrTaskReview, fetchAdCvrTaskReviews(), metrics, PerformanceReview, acknowledge(), confirmRow (+11 more)
+
+### Community 123 - "StageSalesProgress.vue"
+Cohesion: 0.18
+Nodes (16): HalloweenOverview, HalloweenRow, HalloweenSalesPeriod, phaseSales, seasonSales, compactGap(), compactYoy(), trendTone() (+8 more)
+
+### Community 124 - "slider-translate-captcha/index.vue"
+Cohesion: 0.13
+Nodes (21): canvasOpr, checkPass(), draw(), drawPiece(), emit, getRandomNumberByRange(), handleDragBarMove(), handleDragEnd() (+13 more)
+
+### Community 125 - "fallback.vue"
+Cohesion: 0.12
+Nodes (13): descText, fallbackIcon, FallbackProps, Icon403, Icon404, Icon500, IconHello, IconOffline (+5 more)
+
+### Community 126 - "piexif.js"
+Cohesion: 0.21
+Nodes (15): copy(), _dict_to_bytes(), ExifReader(), _get_thumbnail(), getExifSeg(), that, mergeSegments(), nStr() (+7 more)
+
+### Community 127 - "vitest"
+Cohesion: 0.12
+Nodes (11): basePolicy, mocks, mocks, capitalizeFirstLetter(), kebabToCamelCase(), toCamelCase(), toLowerCaseFirstLetter(), loadScript() (+3 more)
+
+### Community 128 - "eslint-config/package.json"
+Cohesion: 0.10
+Nodes (20): bugs, exports, files, homepage, @vben/oxlint-config, license, main, module (+12 more)
+
+### Community 129 - "oxfmt-config/package.json"
+Cohesion: 0.09
+Nodes (21): bugs, dependencies, oxfmt, exports, files, homepage, oxfmt, license (+13 more)
+
+### Community 130 - "vite-config/src/typing.ts"
+Cohesion: 0.11
+Nodes (16): ApplicationOptions, ApplicationPluginOptions, ArchiverPluginOptions, CommonPluginOptions, ConditionPlugin, HtmlPluginOptions, IImportMap, LibraryOptions (+8 more)
+
+### Community 131 - "form-render/form.vue"
+Cohesion: 0.14
+Nodes (17): [injectRenderFormProps, provideFormRenderProps], useFormContext(), useExpandable(), computedSchema, emits, formCollapsed, formComponent, formComponentProps (+9 more)
+
+### Community 132 - "breadcrumb/breadcrumb.vue"
+Cohesion: 0.14
+Nodes (15): { breadcrumbs, showIcon }, emit, handleClick(), Props, emit, handleClick(), Props, emit (+7 more)
+
+### Community 133 - "form/index.ts"
+Cohesion: 0.14
+Nodes (12): { error, formDescriptionId, formItemId, formMessageId }, { formDescriptionId }, props, id, props, { formItemId }, props, { formMessageId, name } (+4 more)
+
+### Community 134 - "ToggleGroup.vue"
+Cohesion: 0.12
+Nodes (16): delegatedProps, emits, forwarded, props, ToggleGroupVariants, context, delegatedProps, forwardedProps (+8 more)
+
+### Community 135 - "prepare-upload-resilience-isolated.cjs"
+Cohesion: 0.10
+Nodes (18): active, app, assert, base, before, candidate, changed, crypto (+10 more)
+
+### Community 136 - "Design System: 万圣节运营日历"
+Cohesion: 0.10
+Nodes (20): Colors, Components, Design System: 万圣节运营日历, Do:, Do's and Don'ts, Don't:, Elevation & Depth, Layout (+12 more)
+
+### Community 137 - "plugins/index.ts"
+Cohesion: 0.19
+Nodes (16): viteArchiverPlugin(), viteExtraAppConfigPlugin(), viteHtmlPlugin(), viteImportMapPlugin(), loadApplicationPlugins(), loadCommonPlugins(), loadConditionPlugins(), loadLibraryPlugins() (+8 more)
+
+### Community 138 - "dependencies"
+Cohesion: 0.10
+Nodes (21): dependencies, json-bigint, qrcode, tippy.js, @vben/constants, @vben-core/design, @vben-core/form-ui, @vben-core/popup-ui (+13 more)
+
+### Community 139 - "dependencies"
+Cohesion: 0.10
+Nodes (21): dependencies, @vben/constants, @vben-core/composables, @vben-core/design, @vben-core/form-ui, @vben-core/layout-ui, @vben-core/menu-ui, @vben-core/popup-ui (+13 more)
+
+### Community 140 - "locales/package.json"
+Cohesion: 0.10
+Nodes (20): bugs, dependencies, @intlify/core-base, @vben-core/composables, vue, vue-i18n, exports, homepage (+12 more)
+
+### Community 141 - "types/package.json"
+Cohesion: 0.10
+Nodes (20): bugs, dependencies, @vben-core/typings, vue, vue-router, exports, ./global, types (+12 more)
+
+### Community 142 - "prepare-christmas-scope-20260923.cjs"
+Cohesion: 0.10
+Nodes (19): assert, before, candidate, config, entryMatch, entryScript, fs, index (+11 more)
+
+### Community 143 - "TaskPolicySettings.vue"
+Cohesion: 0.12
+Nodes (19): AdCvrTaskPolicy, AdCvrTaskPolicyUpdate, updateAdCvrTaskPolicy(), archivedDates, canSave, confirmOpen, dirty, draft (+11 more)
+
+### Community 144 - "圣诞款来货分配 ERP 前端"
+Cohesion: 0.10
+Nodes (19): 10. 浏览器回归清单, 11. 尚未实现, 1. 页面定位, 2. 文件位置, 3.1 总控看板, 3.2 今日到货分配, 3.3 来货数据, 3.4 SKU 渠道计划 (+11 more)
+
+### Community 145 - "UploadTaskNotice.vue"
+Cohesion: 0.12
+Nodes (17): accessStore, currentOwner, handleMessage(), hiddenCount, identityTargets, isolatedBridgeInstalled(), isUploadFrame(), notices (+9 more)
+
+### Community 146 - "tsdown"
+Cohesion: 0.10
+Nodes (3): loadingAssets, rootDir, tsdown
+
+### Community 147 - "search-panel.vue"
+Cohesion: 0.14
+Nodes (18): activeIndex, code, createSearchReg(), emit, handleClose(), handleDown(), handleEnter(), handleSearch (+10 more)
+
+### Community 148 - "utils/package.json"
+Cohesion: 0.10
+Nodes (19): bugs, dependencies, @vben-core/shared, @vben-core/typings, vue-router, exports, homepage, @vben-core/shared (+11 more)
+
+### Community 149 - "application.ts"
+Cohesion: 0.18
+Nodes (14): createCssOptions(), defineApplicationConfig(), getCommonConfig(), defineConfig(), defineLibraryConfig(), defaultImportmapOptions, getDefaultPwaOptions(), DefineApplicationOptions (+6 more)
+
+### Community 150 - "helper.d.ts"
+Cohesion: 0.11
+Nodes (18): AnyFunction, AnyNormalFunction, AnyPromiseFunction, DeepPartial, DeepReadonly, EmitType, Increment, IntervalHandle (+10 more)
+
+### Community 151 - "tiptap/types.ts"
+Cohesion: 0.13
+Nodes (15): contentMinHeight, previewClass, props, Commands, ImageUploadOptions, @tiptap/core, TipTapPreviewProps, TipTapProps (+7 more)
+
+### Community 152 - "prepare-christmas-card-link-20260923.cjs"
+Cohesion: 0.11
+Nodes (16): active, assert, basic, before, candidate, config, entry, entryMatch (+8 more)
+
+### Community 153 - "prepare-upload-recovery-isolated.cjs"
+Cohesion: 0.12
+Nodes (16): appRoot, base, baseFiles, candidateFiles, changed, config, crypto, deployRoot (+8 more)
+
+### Community 154 - "upload-multi-notice.browser.test.cjs"
+Cohesion: 0.11
+Nodes (14): assert, { chromium }, { createServer }, { descriptor }, fs, { parse, compileScript }, path, script (+6 more)
+
+### Community 155 - "execution-task.ts"
+Cohesion: 0.20
+Nodes (14): AdCvrBatchTask, fetchAdCvrBatchTask(), fetchAdCvrBatchTasks(), submitAdCvrTaskPackage(), AdCvrOptimizationExecutionResult, adCvrExecutionInProgress, executionPhase, poll() (+6 more)
+
+### Community 156 - "task-selection.ts"
+Cohesion: 0.19
+Nodes (12): AdCvrTaskPackageDetail, AdCvrOptimizationSuggestion, EXECUTABLE_ACTIONS, executionBlockReason(), MAX_BATCH_SELECTION, readBatchContexts(), taskBatchCandidates(), taskExecutionBlockReason() (+4 more)
+
+### Community 157 - "SpuTable.vue"
+Cohesion: 0.14
+Nodes (14): KanbanSpuRow, alertMeta, columns, customRow(), dataSource, emit, openRow(), openTableRecord() (+6 more)
+
+### Community 158 - "PortfolioMatrix.vue"
+Cohesion: 0.13
+Nodes (16): NetProfitPortfolioData, NetProfitPortfolioItem, chartUpdateOptions, classifiedItems, formatMoney(), hasClassifiedData, hasData, maxCashIncome (+8 more)
+
+### Community 159 - "reportColumnDisplayWidth"
+Cohesion: 0.12
+Nodes (18): bindReportBodyScroll(), handleReportBodyScroll(), handleReportColumnResizeMove(), handleReportHeaderMouseDownCapture(), handleReportSummaryScroll(), handleReportTableReady(), isReportNumberColumn(), normalizeReportColumnWidth() (+10 more)
+
+### Community 160 - "formatMoney"
+Cohesion: 0.16
+Nodes (18): cellValue(), columnDataIndex(), csvCell(), dataIndexKey(), downloadOverviewDailyRows(), formatCompareValue(), formatFixed(), formatInteger() (+10 more)
+
+### Community 161 - "Product: 万圣节运营日历"
+Cohesion: 0.11
+Nodes (17): 2026-09-22 查看范围与默认筛选, 2026-09-28 精简与状态色, Brand Commitments, Capabilities and Constraints, Evidence on Hand, Operating Context, Platform, Product Principles (+9 more)
+
+### Community 162 - "oxlint-config/package.json"
+Cohesion: 0.11
+Nodes (17): bugs, exports, files, homepage, oxlint, license, main, module (+9 more)
+
+### Community 163 - "node-utils/package.json"
+Cohesion: 0.11
+Nodes (17): bugs, exports, files, homepage, dayjs, rimraf, license, main (+9 more)
+
+### Community 164 - "tsconfig/package.json"
+Cohesion: 0.11
+Nodes (17): bugs, dependencies, @vben/types, vite, files, homepage, @vben/types, vite (+9 more)
+
+### Community 165 - "constants/vben.ts"
+Cohesion: 0.11
+Nodes (15): CSS_VARIABLE_LAYOUT_CONTENT_HEIGHT, CSS_VARIABLE_LAYOUT_CONTENT_WIDTH, CSS_VARIABLE_LAYOUT_FOOTER_HEIGHT, CSS_VARIABLE_LAYOUT_HEADER_HEIGHT, DEFAULT_NAMESPACE, ELEMENT_ID_MAIN_CONTENT, VBEN_ANT_PREVIEW_URL, VBEN_ANTDV_NEXT_PREVIEW_URL (+7 more)
+
+### Community 166 - "drawer.vue"
+Cohesion: 0.11
+Nodes (11): {
+  appendToMain,
+  cancelText,
+  class: drawerClass,
+  closable,
+  closeIconPlacement,
+  closeOnClickModal,
+  closeOnPressEscape,
+  confirmLoading,
+  confirmText,
+  contentClass,
+  description,
+  destroyOnClose,
+  footer: showFooter,
+  footerClass,
+  header: showHeader,
+  headerClass,
+  loading: showLoading,
+  modal,
+  openAutoFocus,
+  overlayBlur,
+  placement,
+  showCancelButton,
+  showConfirmButton,
+  submitting,
+  title,
+  titleTooltip,
+  zIndex,
+}, components, getAppendTo, getForceMount, hasOpened, id, isClosed, { isMobile } (+3 more)
+
+### Community 167 - "slider-rotate-captcha/index.vue"
+Cohesion: 0.15
+Nodes (16): checkPass(), emit, getFactorRef, getImgWrapStyleRef, handleDragBarMove(), handleDragEnd(), handleImgOnLoad(), imgCls (+8 more)
+
+### Community 168 - "authentication.vue"
+Cohesion: 0.15
+Nodes (10): { authPanelCenter, authPanelLeft, authPanelRight, isDark }, logoSrc, Props, Props, showColor, showLanguage, showLayout, showTheme (+2 more)
+
+### Community 169 - "tiptap.vue"
+Cohesion: 0.12
+Nodes (15): {
+  applyPaletteColor,
+  canRunAction,
+  canRunMenuItem,
+  clearPaletteColor,
+  getActionIndicatorColor,
+  getMenuItemClass,
+  getPaletteCurrentColor,
+  getPaletteSwatchClass,
+  getToolbarButtonClass,
+  isMenuItemActive,
+  runAction,
+  runMenuItem,
+}, blobUrlTracker, contentMaxHeight, contentMinHeight, editor, emit, handleMenuItemClick(), menuOpenState (+7 more)
+
+### Community 170 - "packages/preferences/package.json"
+Cohesion: 0.11
+Nodes (17): bugs, dependencies, @vben-core/preferences, @vben-core/typings, exports, homepage, @vben-core/preferences, @vben-core/typings (+9 more)
+
+### Community 171 - "vsh/package.json"
+Cohesion: 0.11
+Nodes (17): circular-dependency-scanner, publint, bin, vsh, exports, ./package.json, files, cac (+9 more)
+
+### Community 172 - "upload-notice-isolated.browser.test.cjs"
+Cohesion: 0.12
+Nodes (15): assert, { chromium }, { createServer }, fs, path, releaseRoot, test, assert (+7 more)
+
+### Community 173 - "loadProductDetailRows"
+Cohesion: 0.15
+Nodes (17): downloadKanbanProductDetail(), fetchKanbanProductDetailMeta(), applyProductColumnConfig(), applyProductCountryFilter(), applyProductDetailFilters(), defaultPinnedProductColumnKeys(), downloadProductDetail(), ensureProductColumnsInitialized() (+9 more)
+
+### Community 174 - "downloadReportCsv"
+Cohesion: 0.12
+Nodes (17): fetchAnalyticsReport(), change(), comparisonClass(), comparisonText(), csvCell(), downloadReportCsv(), formatInteger(), formatPercent() (+9 more)
+
+### Community 175 - "productMetricRawValue"
+Cohesion: 0.17
+Nodes (17): amazonDomain(), amazonParentAsinUrl(), fbaInventoryFor(), fbaInventoryKey(), fbaInventoryRows(), formatProductMoney(), handleFbaInventoryOpen(), isFbaInventoryLoading() (+9 more)
+
+### Community 176 - "formatProductDetailValue"
+Cohesion: 0.19
+Nodes (17): formatCompactNumber(), formatFixedNumber(), formatPercent(), formatProductDetailValue(), formatSignedMetricDelta(), isFbaInventoryColumn(), isLaunchDaysColumn(), isParentAsinColumn() (+9 more)
+
+### Community 177 - "P3 广告任务工作台：局部界面记录"
+Cohesion: 0.12
+Nodes (15): 层级与动作筛选, 已实现的局部规则, 广告 CVR 优化建议：局部界面记录, 建议表列宽交互（2026-09-11）, 执行资格与预算入口, 继承的界面语言, 证据与未覆盖范围, 页面展示的判定口径 (+7 more)
+
+### Community 178 - "dependencies"
+Cohesion: 0.12
+Nodes (17): dependencies, eslint, @eslint/js, eslint-plugin-jsonc, eslint-plugin-n, eslint-plugin-perfectionist, eslint-plugin-pnpm, eslint-plugin-unicorn (+9 more)
+
+### Community 179 - "base/icons/src/index.ts"
+Cohesion: 0.14
+Nodes (6): collapsed, expandOnHover, emit, handleRefresh(), screen, @iconify/vue
+
+### Community 180 - "menu-item.vue"
+Cohesion: 0.12
+Nodes (16): active, { b, e, is }, collapseShowTitle, emit, handleClick(), isHttp, isTopLevelMenuItem, item (+8 more)
+
+### Community 181 - "use-menu-context.ts"
+Cohesion: 0.16
+Nodes (13): createMenuContext(), createSubMenuContext(), menuContextKey, useMenuContext(), useSubMenuContext(), useMenu(), useMenuStyle(), MenuProvider (+5 more)
+
+### Community 182 - "input.vue"
+Cohesion: 0.16
+Nodes (14): btnLoading, btnText, {
+  codeLength = 6,
+  createText = async () => {},
+  disabled = false,
+  handleSendCode = async () => {},
+  loading = false,
+  maxTime = 60,
+}, countdown, emit, handleComplete(), handleSend(), id (+6 more)
+
+### Community 183 - "alert-dialog/index.ts"
+Cohesion: 0.12
+Nodes (11): emits, forwarded, props, props, props, delegatedProps, forwardedProps, props (+3 more)
+
+### Community 184 - "number-field/index.ts"
+Cohesion: 0.12
+Nodes (11): delegatedProps, emits, forwarded, props, props, delegatedProps, forwarded, props (+3 more)
+
+### Community 185 - "ui/pin-input/index.ts"
+Cohesion: 0.12
+Nodes (12): delegatedProps, emits, forwarded, props, delegatedProps, forwardedProps, props, delegatedProps (+4 more)
+
+### Community 186 - "slider-captcha/index.vue"
+Cohesion: 0.21
+Nodes (16): actionRef, barRef, checkPass(), contentRef, emit, getEventPageX(), getOffset(), handleDragMoving() (+8 more)
+
+### Community 187 - "loadModuleData"
+Cohesion: 0.17
+Nodes (16): fetchAsin360Section(), afterSaleRequestKey(), isAbortError(), loadAfterSaleData(), loadModuleData(), onDetailTabChange(), onModuleChange(), onPresetChange() (+8 more)
+
+### Community 188 - "route-switch.test.ts"
+Cohesion: 0.13
+Nodes (8): routes, route, routeFilters, mocks, mocks, mount(), names, Request
+
+### Community 189 - "refreshProductScrollSync"
+Cohesion: 0.23
+Nodes (16): bindProductScrollSync(), handleProductHeaderClickCapture(), handleProductHeaderMouseDownCapture(), handleProductHeaderMouseLeave(), handleProductHeaderMouseMove(), handleProductSummaryScroll(), handleProductTableBodyScroll(), productColumnKeyFromHeaderCell() (+8 more)
+
+### Community 190 - "exportCsv"
+Cohesion: 0.19
+Nodes (16): addTrafficDistributionColumn(), columnOrderValue(), columnWidth(), compareTableColumns(), escapeCsv(), exportCsv(), hasTrafficDistributionData(), isAbaWeekColumn() (+8 more)
+
+### Community 191 - "devDependencies"
+Cohesion: 0.12
+Nodes (16): devDependencies, dayjs, dotenv, @pnpm/workspace.read-manifest, rolldown, rollup-plugin-visualizer, sass, sass-embedded (+8 more)
+
+### Community 192 - "constants/package.json"
+Cohesion: 0.12
+Nodes (15): bugs, dependencies, @vben-core/shared, exports, homepage, @vben-core/shared, license, name (+7 more)
+
+### Community 193 - "app.d.ts"
+Cohesion: 0.12
+Nodes (15): AccessModeType, AuthPageLayoutType, BreadcrumbStyleType, BuiltinThemeType, ContentCompactType, LayoutHeaderMenuAlignType, LayoutHeaderModeType, LayoutType (+7 more)
+
+### Community 194 - "sub-menu-content.vue"
+Cohesion: 0.13
+Nodes (15): Props, { b, e, is }, collapse, getCollapseShowTitle, hiddenTitle, iconArrowStyle, iconComp, isFirstLevel (+7 more)
+
+### Community 195 - "pagination/index.ts"
+Cohesion: 0.12
+Nodes (10): delegatedProps, props, delegatedProps, props, delegatedProps, props, delegatedProps, props (+2 more)
+
+### Community 196 - "layout/breadcrumb.vue"
+Cohesion: 0.12
+Nodes (13): breadcrumbEnable, breadcrumbHideOnlyOne, breadcrumbShowHome, breadcrumbShowIcon, breadcrumbStyleType, disableItem, props, typeItems (+5 more)
+
+### Community 197 - "prepare-christmas-card-link-fixed-20260923.cjs"
+Cohesion: 0.13
+Nodes (14): active, activeIndex, assert, candidate, dist, fs, index, patched (+6 more)
+
+### Community 198 - "shipping-insurance-route.test.cjs"
+Cohesion: 0.13
+Nodes (12): addedRoute, assert, document, fs, links, otherRoute, path, router (+4 more)
+
+### Community 199 - "upload-task-shell.js"
+Cohesion: 0.30
+Nodes (14): addStyles(), appServices(), createCard(), installIdentitySubscriptions(), installRouteBridge(), isUploadFrame(), openDraft(), patchUploadRoute() (+6 more)
+
+### Community 200 - "upload-queue.browser.test.cjs"
+Cohesion: 0.16
+Nodes (11): assert, { chromium }, createHarness(), createPage(), { createServer }, enqueue(), fs, path (+3 more)
+
+### Community 201 - "use-tabs-drag.ts"
+Cohesion: 0.24
+Nodes (10): withPreviewUpload(), initSortable(), injectDragStyle(), useIsMobile(), useSortable(), findParentElement(), useTabsDrag(), init() (+2 more)
+
+### Community 202 - "loadOverview"
+Cohesion: 0.26
+Nodes (15): fetchNetProfitOverview(), addTab(), applyTab(), cloneQuery(), closeTab(), createQuery(), emptyBreakEven(), emptyPivot() (+7 more)
+
+### Community 203 - "startProductColumnResize"
+Cohesion: 0.16
+Nodes (15): buildProductDetailColumn(), handleProductColumnResizeMove(), normalizeProductColumnWidth(), productColumnDisplayWidth(), productColumnGroupKey(), productColumnGroups, productColumnTableGroupKey(), productColumnTableGroupTitle() (+7 more)
+
+### Community 204 - "convert.ts"
+Cohesion: 0.21
+Nodes (8): convertToHsl(), convertToHslCssVar(), convertToRgb(), isValidColor(), ColorItem, generatorColorVariables(), @ctrl/tinycolor, theme-colors
+
+### Community 205 - "download.ts"
+Cohesion: 0.24
+Nodes (12): downloadFileFromBase64(), downloadFileFromBlob(), downloadFileFromBlobPart(), downloadFileFromImageUrl(), downloadFileFromUrl(), DownloadOptions, resolveFileName(), triggerDownload() (+4 more)
+
+### Community 206 - "ModalApi"
+Cohesion: 0.17
+Nodes (3): ModalApi, checkProps(), useVbenModal()
+
+### Community 207 - "accordion/index.ts"
+Cohesion: 0.13
+Nodes (10): emits, forwarded, props, delegatedProps, props, delegatedProps, forwardedProps, props (+2 more)
+
+### Community 208 - "ui/breadcrumb/index.ts"
+Cohesion: 0.13
+Nodes (7): props, props, props, props, props, props, props
+
+### Community 209 - "tabs/index.ts"
+Cohesion: 0.13
+Nodes (10): emits, forwarded, props, delegatedProps, props, delegatedProps, props, delegatedProps (+2 more)
+
+### Community 210 - "json-viewer/index.vue"
+Cohesion: 0.21
+Nodes (12): attrs, bindProps, emit, handleClick(), jsonData, props, JsonViewerAction, JsonViewerProps (+4 more)
+
+### Community 211 - "sidebar.vue"
+Cohesion: 0.13
+Nodes (12): sidebarAutoActivateChild, sidebarButtons, sidebarCollapsed, sidebarCollapsedButton, sidebarCollapsedShowTitle, sidebarDraggable, sidebarEnable, sidebarExpandOnHover (+4 more)
+
+### Community 212 - "packages/icons/package.json"
+Cohesion: 0.13
+Nodes (14): bugs, dependencies, @vben-core/icons, exports, homepage, @vben-core/icons, license, name (+6 more)
+
+### Community 213 - "test-upload-tool-validation.cjs"
+Cohesion: 0.14
+Nodes (10): assert, dimensionSource, fs, galleryParseSource, html, imageDimensionRule, pairSource, path (+2 more)
+
+### Community 214 - "upload-recovery.test.cjs"
+Cohesion: 0.15
+Nodes (10): assert, { createHash, webcrypto }, fs, html, meta, path, runtime(), section() (+2 more)
+
+### Community 215 - "acknowledgeInAppNotification"
+Cohesion: 0.14
+Nodes (14): acknowledgeInAppCardNotification(), fetchInAppCardNotificationHistory(), acknowledgeActiveInAppNotification(), acknowledgeAllInAppNotifications(), acknowledgeInAppNotification(), acknowledgeNotificationHistoryDetail(), handleMakeAll(), handleNoticeClear() (+6 more)
+
+### Community 216 - "aggregateDailyRows"
+Cohesion: 0.22
+Nodes (14): adEffectOption, adTrafficOption, afterSaleTrendOption, aggregateDailyRows(), basicBarOption(), bucketLabel(), hourlyOption, lineBarOption() (+6 more)
+
+### Community 217 - "interopDefault"
+Cohesion: 0.22
+Nodes (9): jsonc(), sortCspellJson(), sortPackageJson(), sortTsconfig(), node(), Awaitable, interopDefault(), eslint-plugin-jsonc (+1 more)
+
+### Community 218 - "node-utils/src/index.ts"
+Cohesion: 0.21
+Nodes (8): formatFile(), getStagedFiles(), generatorContentHash(), chalk, @changesets/git, consola, execa, pkg-types
+
+### Community 219 - "StorageManager"
+Cohesion: 0.20
+Nodes (4): StorageItem, StorageManager, StorageManagerOptions, StorageType
+
+### Community 220 - "util.test.ts"
+Cohesion: 0.19
+Nodes (7): Data, TestClass, TestWithGetterSetter, UserProfile, UserSettings, bindMethods(), getNestedValue()
+
+### Community 221 - "scrollbar.vue"
+Cohesion: 0.15
+Nodes (12): computedShadowClasses, emit, handleScroll(), isAtBottom, isAtLeft, isAtRight, isAtTop, Props (+4 more)
+
+### Community 222 - "segmented.vue"
+Cohesion: 0.18
+Nodes (9): activeTab, getDefaultValue, Props, tabsIndicatorStyle, tabsStyle, delegatedProps, forwardedProps, props (+1 more)
+
+### Community 223 - "ui/tooltip/index.ts"
+Cohesion: 0.14
+Nodes (9): emits, forwarded, props, delegatedProps, emits, forwarded, props, props (+1 more)
+
+### Community 224 - "use-access.ts"
+Cohesion: 0.23
+Nodes (9): { hasAccessByCodes, hasAccessByRoles }, hasAuth, Props, authDirective, isAccessible(), mounted(), useAccess(), hasAccessByCodes() (+1 more)
+
+### Community 225 - "loading/directive.ts"
+Cohesion: 0.14
+Nodes (9): LOADING_INSTANCE_KEY, loadingDirective, loadingDirectiveParams, SPINNER_INSTANCE_KEY, spinningDirective, LoadingProps, props, props (+1 more)
+
+### Community 226 - "icons/index.ts"
+Cohesion: 0.14
+Nodes (3): components, modelValue, PRESET
+
+### Community 227 - "dashboardResponsibleScopeActive"
+Cohesion: 0.19
+Nodes (13): applyDashboardCountryFilter(), dashboardOverviewOwnerScopeMatches(), dashboardResponsibleOptionsForChildren, dashboardResponsibleScopeActive(), dashboardResponsibleScopeForTables(), dashboardSitesFromCountryValues(), isDashboardCountryDraftAllSelected(), reportResponsibleOptions (+5 more)
+
+### Community 228 - "formatMoneyWan"
+Cohesion: 0.23
+Nodes (13): cellText(), completionText(), formatInteger(), formatMoneyWan(), formatPercent(), formatWan(), kpiCards, monthKpiCards (+5 more)
+
+### Community 229 - "compilerOptions"
+Cohesion: 0.15
+Nodes (12): compilerOptions, declaration, jsx, jsxImportSource, lib, moduleResolution, types, useDefineForClassFields (+4 more)
+
+### Community 230 - "dependencies"
+Cohesion: 0.15
+Nodes (13): dependencies, archiver, cheerio, get-port, html-minifier-terser, @intlify/unplugin-vue-i18n, @jspm/generator, nitropack (+5 more)
+
+### Community 231 - "env.ts"
+Cohesion: 0.24
+Nodes (8): getConfigSource(), PluginOptions, getBoolean(), getNumber(), getString(), loadAndConvertEnv(), loadEnv(), dotenv
+
+### Community 233 - "checkbox.vue"
+Cohesion: 0.15
+Nodes (9): checked, emits, forwarded, id, props, delegatedProps, emits, forwarded (+1 more)
+
+### Community 234 - "context-menu.vue"
+Cohesion: 0.18
+Nodes (8): delegatedProps, emits, forwarded, menusView, NATIVE_CONTEXT_SELECTORS, props, triggerRef, IContextMenuItem
+
+### Community 235 - "card/index.ts"
+Cohesion: 0.15
+Nodes (6): props, props, props, props, props, props
+
+### Community 236 - "layout/tabbar.vue"
+Cohesion: 0.15
+Nodes (12): styleItems, tabbarDraggable, tabbarEnable, tabbarMaxCount, tabbarMiddleClickToClose, tabbarPersist, tabbarShowIcon, tabbarShowMaximize (+4 more)
+
+### Community 237 - "switch-item.vue"
+Cohesion: 0.15
+Nodes (9): altView, shortcutKeysEnable, shortcutKeysGlobalSearch, shortcutKeysLockScreen, shortcutKeysLogout, checked, slots, appColorGrayMode (+1 more)
+
+### Community 238 - "exports"
+Cohesion: 0.15
+Nodes (13): default, types, exports, ./echarts, ./motion, ./tiptap, ./vxe-table, default (+5 more)
+
+### Community 239 - "useTiptapToolbar"
+Cohesion: 0.19
+Nodes (7): useTiptapToolbar(), getMenuItemClass(), getPaletteCurrentColor(), getPaletteSwatchClass(), getToolbarButtonClass(), isActionActive(), isMenuItemActive()
+
+### Community 240 - "loadReportData"
+Cohesion: 0.18
+Nodes (12): fetchAnalyticsOverview(), applyReportFilter(), defaultReportColumnKeys(), drillReportOperationGroup(), handleReportTableChange(), loadData(), loadReportData(), normalizeReportDateRangeType() (+4 more)
+
+### Community 241 - "overviewParams"
+Cohesion: 0.21
+Nodes (12): fetchNetProfitBreakEven(), fetchNetProfitDashboard(), fetchNetProfitDetails(), fetchNetProfitPivot(), handlePanelChange(), loadBreakEven(), loadDashboard(), loadPivot() (+4 more)
+
+### Community 242 - "HealthPanels.vue"
+Cohesion: 0.18
+Nodes (9): KanbanCategoryProgress, KanbanFunnel, KanbanStageSummary, categoryColumns, conversionRows, funnelRows, getRate(), props (+1 more)
+
+### Community 243 - "columns"
+Cohesion: 0.20
+Nodes (12): columns, coreEntityLabel(), coreFieldKey(), coreFieldOptions, coreFieldOptionsForSection(), displayRows, groupOptions, isActiveStatus() (+4 more)
+
+### Community 244 - "compilerOptions"
+Cohesion: 0.17
+Nodes (11): compilerOptions, declaration, jsx, lib, moduleResolution, noEmit, useDefineForClassFields, display (+3 more)
+
+### Community 245 - "dependencies"
+Cohesion: 0.17
+Nodes (12): dependencies, clsx, @ctrl/tinycolor, dayjs, defu, es-toolkit, lodash.clonedeep, nprogress (+4 more)
+
+### Community 246 - "inference.ts"
+Cohesion: 0.26
+Nodes (7): getFirstNonNullOrUndefined(), isBoolean(), isEmpty(), isHttpUrl(), isUndefined(), isWindow(), @vue/shared
+
+### Community 247 - "use-modal.ts"
+Cohesion: 0.33
+Nodes (8): ExtendedModalApi, ModalApiOptions, ModalProps, ModalState, Props, DEFAULT_MODAL_PROPS, setDefaultModalProps(), USER_MODAL_INJECT_KEY
+
+### Community 248 - "components.json"
+Cohesion: 0.17
+Nodes (11): aliases, components, utils, $schema, style, tailwind, baseColor, config (+3 more)
+
+### Community 249 - "dependencies"
+Cohesion: 0.17
+Nodes (12): dependencies, class-variance-authority, lucide-vue-next, reka-ui, @vben-core/composables, @vben-core/design, @vben-core/icons, @vben-core/shared (+4 more)
+
+### Community 250 - "count-to-animator.vue"
+Cohesion: 0.23
+Nodes (10): disabled, emit, formatNumber(), outputValue, Props, reset(), run(), source (+2 more)
+
+### Community 251 - "input-password.vue"
+Cohesion: 0.18
+Nodes (9): modelValue, Props, show, slots, checkPasswordStrength(), currentColor, currentStrength, props (+1 more)
+
+### Community 252 - "spinner/spinner.vue"
+Cohesion: 0.17
+Nodes (7): Props, renderSpinner, showSpinner, Props, renderSpinner, showSpinner, timer
+
+### Community 253 - "PopoverContent.vue"
+Cohesion: 0.17
+Nodes (8): emits, forwarded, props, delegatedProps, emits, forwarded, props, props
+
+### Community 254 - "point-selection-captcha/index.vue"
+Cohesion: 0.29
+Nodes (11): useCaptchaPoints(), addPoint(), clearPoints(), { addPoint, clearPoints, points }, clear(), emit, getElementPosition(), handleClick() (+3 more)
+
+### Community 255 - "count-to.vue"
+Cohesion: 0.20
+Nodes (9): currentValue, emit, lastValue, numDec, numMain, props, CountToProps, TransitionPresets (+1 more)
+
+### Community 256 - "ellipsis-text.vue"
+Cohesion: 0.21
+Nodes (11): checkEllipsis(), defaultTooltipMaxWidth, ellipsis, emit, handleExpand(), isEllipsis, isExpand, onExpand() (+3 more)
+
+### Community 257 - "check-updates.vue"
+Cohesion: 0.26
+Nodes (11): checkForUpdates(), currentVersionTag, getVersionTag(), handleNotice(), handleVisibilitychange(), lastVersionTag, Props, start() (+3 more)
+
+### Community 258 - "widget.vue"
+Cohesion: 0.17
+Nodes (11): appPreferencesButtonPosition, positionItems, widgetFullscreen, widgetGlobalSearch, widgetLanguageToggle, widgetLockScreen, widgetNotification, widgetRefresh (+3 more)
+
+### Community 259 - "builtin.vue"
+Cohesion: 0.18
+Nodes (8): builtinThemePresets, colorInput, handleInputChange(), inputValue, modelValue, props, themeColorPrimary, updateThemeColorPrimary
+
+### Community 260 - "toolbar.ts"
+Cohesion: 0.24
+Nodes (10): toolbarGroups, createHeadingMenuItems(), createToolbarGroups(), editorColorPresets, editorHighlightPresets, getHeadingTriggerText(), handleImageAction(), handleLinkAction() (+2 more)
+
+### Community 261 - "check-circular/index.ts"
+Cohesion: 0.21
+Nodes (11): cache, checkCircular(), CheckCircularConfig, CircularDependencyResult, circularScannerCli, CommandOptions, DEFAULT_CONFIG, defineCheckCircularCommand() (+3 more)
+
+### Community 262 - "upload/index.vue"
+Cohesion: 0.24
+Nodes (9): routes, accessStore, focusDraft(), handleMessage(), iframeRef, onFrameLoad(), postAuthToken(), route (+1 more)
+
+### Community 263 - "FacetSelect.vue"
+Cohesion: 0.25
+Nodes (10): allSelected, clearAll(), emit, handleSelectChange(), props, selectAll(), selectionText, selectOptions (+2 more)
+
+### Community 264 - "formatNumber"
+Cohesion: 0.24
+Nodes (11): abaWeekTooltip(), formatCell(), formatDateTime(), formatFlexibleNumber(), formatNumber(), formatShortRankDate(), formatTooltipDateTime(), isTimeColumn() (+3 more)
+
+### Community 265 - "readNullableNumber"
+Cohesion: 0.24
+Nodes (11): applyPairTrend(), bidDisplayInfo(), formatMonthCode(), hasTrendData(), mergeTrendPoint(), normalizeProductItems(), parseJsonMaybe(), parseTrendValue() (+3 more)
+
+### Community 266 - "eslint-config/src/index.ts"
+Cohesion: 0.24
+Nodes (7): perfectionist(), customConfig, restrictedImportIgnores, FlatConfig, FlatConfigPromise, eslint, eslint-plugin-perfectionist
+
+### Community 267 - "dependencies"
+Cohesion: 0.18
+Nodes (11): dependencies, chalk, @changesets/git, consola, dayjs, execa, find-up, @manypkg/get-packages (+3 more)
+
+### Community 268 - "compilerOptions"
+Cohesion: 0.18
+Nodes (10): compilerOptions, composite, lib, moduleResolution, noImplicitAny, types, display, extends (+2 more)
+
+### Community 269 - "utils/date.ts"
+Cohesion: 0.33
+Nodes (9): currentTimezone, Format, formatDate, formatDateTime(), getCurrentTimezone(), getSystemTimezone(), isDate(), isDayjsObject() (+1 more)
+
+### Community 270 - "dropdown-menu.vue"
+Cohesion: 0.31
+Nodes (5): Props, modelValue, Props, DropdownMenuProps, VbenDropdownMenuItem
+
+### Community 271 - "HoverCard.vue"
+Cohesion: 0.18
+Nodes (7): emits, forwarded, props, delegatedProps, forwardedProps, props, props
+
+### Community 272 - "ResizableHandle.vue"
+Cohesion: 0.18
+Nodes (8): delegatedProps, emits, forwarded, props, delegatedProps, emits, forwarded, props
+
+### Community 273 - "captcha/types.ts"
+Cohesion: 0.24
+Nodes (8): CaptchaData, CaptchaPoint, CaptchaVerifyPassingData, PointSelectionCaptchaCardProps, PointSelectionCaptchaProps, SliderRotateCaptchaProps, SliderRotateVerifyPassingData, SliderTranslateCaptchaProps
+
+### Community 274 - "blocks/index.ts"
+Cohesion: 0.18
+Nodes (6): Props, footerEnable, footerFixed, modelValue, items, modelValue
+
+### Community 275 - "timezone.ts"
+Cohesion: 0.22
+Nodes (6): getDefaultTimezoneHandler(), getTimezoneHandler(), TimezoneHandler, useTimezoneStore, AccessState, BasicUserInfo
+
+### Community 276 - "Product"
+Cohesion: 0.20
+Nodes (9): Capabilities and Constraints, Evidence on Hand, Operating Context, Platform, Product, Product Principles, Product Purpose, Stack (+1 more)
+
+### Community 277 - "loadInAppCardNotifications"
+Cohesion: 0.20
+Nodes (10): fetchInAppCardNotifications(), cardContentBlocks(), cardPlainText(), cardTitle(), isNotificationAuthFailure(), loadInAppCardNotifications(), normalizeCardMarkdown(), notificationRequestThrottleKey() (+2 more)
+
+### Community 278 - "scheduleNotificationPoll"
+Cohesion: 0.33
+Nodes (10): acquireNotificationPollOwnership(), bindNotificationListeners(), clearNotificationPollTimer(), handleNotificationVisibilityChange(), readNotificationOwner(), releaseNotificationPollOwnership(), scheduleNotificationPoll(), startNotificationPolling() (+2 more)
+
+### Community 279 - "pnpm.ts"
+Cohesion: 0.22
+Nodes (5): pnpm(), yaml(), eslint-plugin-pnpm, eslint-plugin-yml, yaml-eslint-parser
+
+### Community 280 - "avatar.ts"
+Cohesion: 0.27
+Nodes (5): avatarVariant, AvatarVariants, props, props, props
+
+### Community 281 - "RadioGroup.vue"
+Cohesion: 0.20
+Nodes (7): delegatedProps, emits, forwarded, props, delegatedProps, forwardedProps, props
+
+### Community 282 - "notification.vue"
+Cohesion: 0.33
+Nodes (7): close(), emit, handleClear(), handleMakeAll(), handleViewAll(), [open, toggle], NotificationItem
+
+### Community 283 - "general.vue"
+Cohesion: 0.20
+Nodes (8): appDynamicTitle, appEnableCheckUpdates, appEnableCopyPreferences, appLocale, appWatermark, appWatermarkContent, inputValue, slots
+
+### Community 284 - "plugins-context.ts"
+Cohesion: 0.24
+Nodes (5): VbenPluginsComponentsOptions, VbenPluginsFormOptions, VbenPluginsMessageOptions, VbenPluginsModalOptions, VbenPluginsOptions
+
+### Community 285 - "check-dep/index.ts"
+Cohesion: 0.27
+Nodes (9): depcheck, cleanDepcheckResult(), DEFAULT_CONFIG, defineDepcheckCommand(), DepcheckConfig, DepcheckResult, formatDepcheckResult(), PackageInfo (+1 more)
+
+### Community 286 - "upload-host.browser.test.cjs"
+Cohesion: 0.22
+Nodes (8): assert, { chromium }, { createServer }, fs, path, root, test, vue
+
+### Community 287 - "form.ts"
+Cohesion: 0.28
+Nodes (6): ComponentType, initSetupVbenForm(), VbenFormProps, VbenFormSchema, formSchema, setupVbenForm()
+
+### Community 288 - "loadData"
+Cohesion: 0.28
+Nodes (9): fetchAsin360Overview(), afterSaleDateSummaryType(), afterSaleParams(), loadData(), overviewParams(), overviewRequestKey(), parseList(), rangeParams() (+1 more)
+
+### Community 289 - "compact-ad-monitor-summary.ts"
+Cohesion: 0.31
+Nodes (6): AdMonitorSummary, AdMonitorFollowSummary, mergeAdMonitorFollowSummary(), ratio(), baseSummary, summary
+
+### Community 290 - "tsconfig.node.json"
+Cohesion: 0.22
+Nodes (8): compilerOptions, composite, noEmit, tsBuildInfoFile, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 292 - "importmap.ts"
+Cohesion: 0.22
+Nodes (5): HTML_MINIFY_OPTIONS, pluginOptions, cheerio, html-minifier-terser, @jspm/generator
+
+### Community 293 - "scripts"
+Cohesion: 0.22
+Nodes (9): scripts, build, build:web, deploy:web, dev, dev:web, format, lint (+1 more)
+
+### Community 294 - "IStorageCache"
+Cohesion: 0.22
+Nodes (3): IStorageCache, StorageType, StorageValue
+
+### Community 295 - "globalShareState"
+Cohesion: 0.22
+Nodes (4): ComponentsState, globalShareState, IGlobalSharedState, MessageState
+
+### Community 297 - "tree.test.ts"
+Cohesion: 0.36
+Nodes (7): Node, NodeValue, filterTree(), mapTree(), sortTree(), traverseTreeValues(), TreeConfigOptions
+
+### Community 298 - "back-top.vue"
+Cohesion: 0.36
+Nodes (5): backTopStyle, { handleClick, visible }, Props, BacktopProps, useBackTop()
+
+### Community 299 - "DialogContent.vue"
+Cohesion: 0.28
+Nodes (8): contentRef, delegatedProps, emits, forwarded, isAppendToBody(), onAnimationEnd(), position, props
+
+### Community 300 - "shadcn-ui/tsconfig.json"
+Cohesion: 0.22
+Nodes (8): compilerOptions, paths, exclude, extends, include, @vben/tsconfig/web.json, @vben-core/shadcn-ui/*, $schema
+
+### Community 301 - "custom.vue"
+Cohesion: 0.36
+Nodes (8): emit, handleBooleanUpdate(), handleNumberUpdate(), handleStringUpdate(), handleUpdate(), props, resolvedFields, resolveNumberValue()
+
+### Community 302 - "layout/copyright.vue"
+Cohesion: 0.22
+Nodes (8): copyrightCompanyName, copyrightCompanySiteLink, copyrightDate, copyrightEnable, copyrightIcp, copyrightIcpLink, itemDisabled, props
+
+### Community 303 - "layout/header.vue"
+Cohesion: 0.22
+Nodes (7): headerEnable, headerMenuAlign, headerMenuAlignItems, headerMode, localeItems, selectValue, slots
+
+### Community 304 - "publint/index.ts"
+Cohesion: 0.36
+Nodes (8): CACHE_FILE, definePubLintCommand(), getCacheFile(), getLintFiles(), printResult(), PubLintCommandOptions, readCache(), runPublint()
+
+### Community 305 - "loadSection"
+Cohesion: 0.25
+Nodes (8): fetchAdCampaignDetailSection(), fetchAdCampaignDetailTrend(), applySearch(), changePage(), clearSearch(), handleDateChange(), loadCampaignTrend(), loadSection()
+
+### Community 306 - "web-antd/tsconfig.json"
+Cohesion: 0.25
+Nodes (7): compilerOptions, paths, extends, include, references, $schema, @vben/tsconfig/web-app.json
+
+### Community 307 - "defineConfig"
+Cohesion: 0.29
+Nodes (8): ignores(), typescript(), vue(), defineConfig(), eslint-plugin-vue, @typescript-eslint/eslint-plugin, @typescript-eslint/parser, vue-eslint-parser
+
+### Community 308 - "tsconfig.build.json"
+Cohesion: 0.25
+Nodes (7): compilerOptions, noEmit, rootDir, exclude, extends, $schema, ./tsconfig.json
+
+### Community 309 - "ui/context-menu/index.ts"
+Cohesion: 0.25
+Nodes (4): props, delegatedProps, props, props
+
+### Community 310 - "ui/dropdown-menu/index.ts"
+Cohesion: 0.25
+Nodes (4): props, props, forwardedProps, props
+
+### Community 311 - "useTabsViewScroll"
+Cohesion: 0.43
+Nodes (8): onWheel(), useTabsViewScroll(), calcShowScrollbarButton(), getScrollClientWidth(), handleWheel(), initScrollbar(), scrollDirection(), scrollToActiveIntoView()
+
+### Community 312 - "tippy/index.ts"
+Cohesion: 0.32
+Nodes (5): useTippyDirective(), { isDark }, TippyProps, tippy.js, vue-tippy
+
+### Community 313 - "hooks/tsconfig.json"
+Cohesion: 0.25
+Nodes (7): compilerOptions, types, exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 314 - "utils/tsconfig.json"
+Cohesion: 0.25
+Nodes (7): compilerOptions, types, exclude, extends, include, @vben/tsconfig/library.json, $schema
+
+### Community 315 - "vsh/src/index.ts"
+Cohesion: 0.36
+Nodes (6): version, COMMAND_DESCRIPTIONS, main(), defineLintCommand(), LintCommandOptions, runLint()
+
+### Community 316 - "@vben/vsh"
+Cohesion: 0.25
+Nodes (7): @vben/vsh, 使用方法, 全局安装, 功能特性, 命令列表, 安装, 本地使用
+
+### Community 317 - "deploy-production.ps1"
+Cohesion: 0.43
+Nodes (5): Assert-DeployChildPath(), Remove-DeployPathWithRetry(), Test-ReleaseActive(), Wait-ReleaseActive(), Write-ActiveRootConfig()
+
+### Community 318 - "scripts"
+Cohesion: 0.29
+Nodes (7): scripts, build, build:analyze, deploy:production, dev, preview, typecheck
+
+### Community 319 - "TaskActionParameters.vue"
+Cohesion: 0.43
+Nodes (6): AdCvrTaskParameters, emit, match(), negative(), percentage(), props
+
+### Community 320 - "expandTreeNode"
+Cohesion: 0.33
+Nodes (7): fetchNetProfitGroups(), createTreeNodes(), expandTreeNode(), findTreeNode(), selectExpansionDimension(), setTreeNodeLoading(), treeNodeKey()
+
+### Community 321 - "pollSyncStatus"
+Cohesion: 0.43
+Nodes (7): fetchNetProfitSyncStatus(), startNetProfitSync(), clearSyncPolling(), pollSyncStatus(), restoreSyncStatus(), scheduleSyncStatusPoll(), syncCloudData()
+
+### Community 322 - "ProductMetricFillInfo"
+Cohesion: 0.33
+Nodes (7): findProductRowNumber(), ProductMetricFillInfo, productMetricFillWidth(), productMetricNumber(), productMoneyFillTone(), productPositiveRatio(), productRowNumberByLabels()
+
+### Community 323 - "buildReportParams"
+Cohesion: 0.33
+Nodes (7): buildReportParams(), dashboardCountryLabelsFromSites(), dashboardDateRangeForTables(), productDetailBaseParams, reportCountriesForRequest(), reportOperationGroupIdsForRequest(), syncReportFiltersFromDashboard()
+
+### Community 324 - "defaultDashboardOwnerGroupId"
+Cohesion: 0.29
+Nodes (7): cancelDashboardOwnerFilter(), cancelResponsibleOwnerFilter(), defaultDashboardOwnerGroupId(), handleDashboardOwnerOpenChange(), handleResponsibleOwnerOpenChange(), syncDashboardOwnerDraft(), syncResponsibleOwnerDraft()
+
+### Community 325 - "metricCell"
+Cohesion: 0.48
+Nodes (7): chartOption, decimal(), integer(), metricCell(), money(), percent(), summaryItems
+
+### Community 326 - "syncFieldPreference"
+Cohesion: 0.38
+Nodes (7): defaultFieldKeys(), fieldStorageKey(), normalizeFieldKeys(), persistFieldPreference(), restoreDefaultFields(), sameFieldKeys(), syncFieldPreference()
+
+### Community 327 - "commitlint-config/index.mjs"
+Cohesion: 0.29
+Nodes (4): allowedScopes, { packages }, scopeComplete, userConfig
+
+### Community 328 - "cspell.json"
+Cohesion: 0.29
+Nodes (6): allowCompoundWords, ignorePaths, language, $schema, version, words
+
+### Community 329 - "web-app.json"
+Cohesion: 0.29
+Nodes (6): compilerOptions, types, display, extends, $schema, ./web.json
+
+### Community 331 - "ScrollArea.vue"
+Cohesion: 0.33
+Nodes (4): delegatedProps, props, delegatedProps, props
+
+### Community 332 - "exports"
+Cohesion: 0.29
+Nodes (7): default, types, default, types, exports, ./es/loading, ./es/tippy
+
+### Community 333 - "point-selection-captcha-card.vue"
+Cohesion: 0.43
+Nodes (6): captchaStyles, emit, handleClick(), parseValue(), props, rootStyles
+
+### Community 334 - "animation.vue"
+Cohesion: 0.29
+Nodes (5): transitionEnable, transitionLoading, transitionName, transitionPreset, transitionProgress
+
+### Community 335 - "ECharts Plugin"
+Cohesion: 0.29
+Nodes (6): ECharts Plugin, 使用, 导出, 类型, 预置图表, 预置组件
+
+### Community 336 - "setup.ts"
+Cohesion: 0.29
+Nodes (5): InitStoreOptions, SecureLSCtor, secureLSModule, SecureLSStorage, secure-ls
+
+### Community 337 - "build-local-docker-image.sh"
+Cohesion: 0.52
+Nodes (6): build_image(), install_dependencies(), log_message(), remove_image(), build-local-docker-image.sh script, stop_and_remove_container()
+
+### Community 338 - "@vben/turbo-run"
+Cohesion: 0.29
+Nodes (6): @vben/turbo-run, 使用方法, 安装, 注意事项, 特性, 示例
+
+### Community 340 - "fetchKanbanProductDetailRows"
+Cohesion: 0.40
+Nodes (3): fetchKanbanProductDetailRows(), HttpError, retryQueryBusy()
+
+### Community 341 - "ratio"
+Cohesion: 0.33
+Nodes (6): adSpendRate, allResponsibleCards, departmentCards, previousAdSpendRate, ratio(), weekBeforeAdSpendRate
+
+### Community 342 - "formatDetailValue"
+Cohesion: 0.33
+Nodes (6): breakEvenRows(), formatDetailValue(), formatInteger(), formatMoney(), formatPercent(), syncStatusText
+
+### Community 343 - "productItems"
+Cohesion: 0.40
+Nodes (6): amazonDomain(), amazonProductUrl(), asinFromProduct(), imageFromProduct(), labelFromProduct(), productItems()
+
+### Community 344 - "keywordText"
+Cohesion: 0.33
+Nodes (6): copyCurrentKeywords(), copyHighFrequencyWords(), copyText(), filteredRows, keywordText(), rowKey()
+
+### Community 345 - "eslint-config/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 346 - "oxfmt-config/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 347 - "tailwindcss.ts"
+Cohesion: 0.33
+Nodes (5): entryPoint, selectors, settings, tailwindcss, eslint-plugin-better-tailwindcss
+
+### Community 348 - "oxlint-config/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 349 - "monorepo.ts"
+Cohesion: 0.53
+Nodes (5): findMonorepoRoot(), getPackage(), getPackages(), getPackagesSync(), @manypkg/get-packages
+
+### Community 350 - "node-utils/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 351 - "tailwind-config/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 352 - "vite-config/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 353 - "constants/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 354 - "design/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 355 - "base/icons/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 356 - "diff.ts"
+Cohesion: 0.53
+Nodes (4): arraysEqual(), diff(), findDifferences(), DiffResult
+
+### Community 357 - "shared/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/library.json, $schema
+
+### Community 358 - "basic.d.ts"
+Cohesion: 0.33
+Nodes (5): BasicOption, BasicUserInfo, ClassType, SelectOption, TabOption
+
+### Community 359 - "typings/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/library.json, $schema
+
+### Community 360 - "composables/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/library.json, $schema
+
+### Community 361 - "@core/preferences/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 362 - "form-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 363 - "layout-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 364 - "menu-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 365 - "popup-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 366 - "tabs-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 367 - "access/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 368 - "slider-captcha-action.vue"
+Cohesion: 0.33
+Nodes (5): actionRef, isDragging, left, props, style
+
+### Community 369 - "common-ui/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 370 - "theme-button.vue"
+Cohesion: 0.33
+Nodes (4): bindProps, isDark, Props, theme
+
+### Community 371 - "layouts/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 372 - "VXE Table Plugin"
+Cohesion: 0.33
+Nodes (5): VXE Table Plugin, 使用, 初始化, 导出, 类型
+
+### Community 373 - "plugins/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 374 - "request/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 375 - "packages/icons/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 376 - "locales/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 377 - "packages/preferences/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 378 - "styles/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 379 - "types/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 380 - "turbo-run/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 381 - "dependencies"
+Cohesion: 0.33
+Nodes (6): dependencies, cac, circular-dependency-scanner, depcheck, publint, @vben/node-utils
+
+### Community 382 - "code-workspace/index.ts"
+Cohesion: 0.47
+Nodes (5): CODE_WORKSPACE_FILE, CodeWorkspaceCommandOptions, createCodeWorkspace(), defineCodeWorkspaceCommand(), runCodeWorkspace()
+
+### Community 383 - "vsh/tsconfig.json"
+Cohesion: 0.33
+Nodes (5): exclude, extends, include, @vben/tsconfig/node.json, $schema
+
+### Community 384 - "calendarEvent"
+Cohesion: 0.40
+Nodes (5): calendarEvent(), calendarHoliday(), calendarPhase(), calendarRemaining(), calendarRows()
+
+### Community 385 - "isProductMetricColumn"
+Cohesion: 0.40
+Nodes (5): isProductMetricColumn(), isProductMetricKind(), isProductNumberColumn(), productColumnKind(), productColumnResizeKey()
+
+### Community 386 - "syncDashboardCountryDraft"
+Cohesion: 0.40
+Nodes (5): cancelDashboardCountryFilter(), dashboardCountryButtonText, dashboardCountryValuesFromSites(), handleDashboardCountryOpenChange(), syncDashboardCountryDraft()
+
+### Community 387 - "syncReportFilterDraft"
+Cohesion: 0.40
+Nodes (5): cancelReportFilter(), handleReportFilterOpenChange(), reportFilterButtonText(), reportFilterValues(), syncReportFilterDraft()
+
+### Community 388 - "queue-layout.ts"
+Cohesion: 0.60
+Nodes (3): calculateQueueDock(), desktop, useQueueDock()
+
+### Community 389 - "trafficDistributionInfo"
+Cohesion: 0.40
+Nodes (5): abaTop3ConcentrationInfo(), compactPercentText(), percentNumber(), trafficDistributionFields(), trafficDistributionInfo()
+
+### Community 390 - "eslint-config/src/configs/unicorn.ts"
+Cohesion: 0.40
+Nodes (3): rulesCoveredByOxlint, unicorn(), eslint-plugin-unicorn
+
+### Community 391 - "dependencies"
+Cohesion: 0.40
+Nodes (5): dependencies, @eslint-community/eslint-plugin-eslint-comments, eslint-plugin-better-tailwindcss, eslint-plugin-command, oxlint
+
+### Community 392 - "oxlint-config/src/index.ts"
+Cohesion: 0.50
+Nodes (4): mergeOxlintConfigs(), oxlintConfig, defineConfig(), VbenOxlintConfig
+
+### Community 393 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/constants, 使用, 添加依赖, 用法
+
+### Community 394 - "src/vue-router.d.ts"
+Cohesion: 0.40
+Nodes (4): ComponentRecordType, GenerateMenuAndRoutesOptions, RouteMeta, RouteRecordStringComponent
+
+### Community 395 - "useNamespace"
+Cohesion: 0.60
+Nodes (4): _bem(), is(), useNamespace(), UseNamespaceReturn
+
+### Community 398 - "ContextMenuCheckboxItem.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 399 - "ContextMenuContent.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 400 - "ContextMenuItem.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 401 - "ContextMenuRadioItem.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 402 - "ContextMenuSubContent.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 403 - "DropdownMenuCheckboxItem.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 404 - "DropdownMenuContent.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 405 - "DropdownMenuRadioItem.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 406 - "DropdownMenuSubContent.vue"
+Cohesion: 0.40
+Nodes (4): delegatedProps, emits, forwarded, props
+
+### Community 407 - "Input.vue"
+Cohesion: 0.40
+Nodes (3): emits, modelValue, props
+
+### Community 408 - "Textarea.vue"
+Cohesion: 0.40
+Nodes (3): emits, modelValue, props
+
+### Community 409 - "slider-captcha-bar.vue"
+Cohesion: 0.40
+Nodes (4): barRef, props, style, width
+
+### Community 410 - "icons.ts"
+Cohesion: 0.40
+Nodes (4): fetchIconsData(), IconifyResponse, ICONS_MAP, PENDING_REQUESTS
+
+### Community 411 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/hooks, 使用, 添加依赖, 用法
+
+### Community 413 - "motion/index.ts"
+Cohesion: 0.40
+Nodes (3): MotionPreset, MotionPresets, @vueuse/motion
+
+### Community 414 - "Motion Plugin"
+Cohesion: 0.40
+Nodes (4): Motion Plugin, 使用, 导出, 类型
+
+### Community 415 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/icons, 使用, 添加依赖, 用法
+
+### Community 416 - "stores/tsconfig.json"
+Cohesion: 0.40
+Nodes (4): extends, include, @vben/tsconfig/web.json, $schema
+
+### Community 417 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/styles, 使用, 添加依赖, 用法
+
+### Community 418 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/types, 使用, 添加依赖, 用法
+
+### Community 419 - "用法"
+Cohesion: 0.40
+Nodes (4): @vben/utils, 使用, 添加依赖, 用法
+
+### Community 420 - "clean.mjs"
+Cohesion: 0.60
+Nodes (4): cleanTargetsRecursively(), processItem(), rootDir, SKIP_DIRS
+
+### Community 421 - "patchRoute"
+Cohesion: 1.00
+Nodes (3): ensureStyles(), install(), patchRoute()
+
+### Community 422 - "author"
+Cohesion: 0.50
+Nodes (4): author, email, name, url
+
+### Community 423 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 424 - "navigateTo"
+Cohesion: 0.50
+Nodes (4): calendarActionUrl(), handleClick(), navigateTo(), openCalendarNotification()
+
+### Community 425 - "periodRangeLabel"
+Cohesion: 0.50
+Nodes (4): currentPeriodLabel, periodRangeLabel(), previousPeriodLabel, secondaryPeriodLabel
+
+### Community 426 - "nullableRatio"
+Cohesion: 0.50
+Nodes (4): grossProfitCompletion, nullableRatio(), qtyCompletion, salesCompletion
+
+### Community 428 - "overviewCompareRows"
+Cohesion: 0.50
+Nodes (4): compareRate(), overviewCompareRows, periodValue(), previousByRatio()
+
+### Community 429 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 430 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 431 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 432 - "UNICODE"
+Cohesion: 0.50
+Nodes (3): UNICODE, FAILURE, SUCCESS
+
+### Community 435 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 436 - "inject-metadata.ts"
+Cohesion: 0.67
+Nodes (3): resolveMonorepoDependencies(), resolvePackageVersion(), @pnpm/workspace.read-manifest
+
+### Community 437 - "author"
+Cohesion: 0.50
+Nodes (4): author, email, name, url
+
+### Community 439 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 440 - "ContextMenu.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 441 - "ContextMenuRadioGroup.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 442 - "ContextMenuSub.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 443 - "ContextMenuSubTrigger.vue"
+Cohesion: 0.50
+Nodes (3): delegatedProps, forwardedProps, props
+
+### Community 444 - "DropdownMenu.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 445 - "DropdownMenuItem.vue"
+Cohesion: 0.50
+Nodes (3): delegatedProps, forwardedProps, props
+
+### Community 446 - "DropdownMenuLabel.vue"
+Cohesion: 0.50
+Nodes (3): delegatedProps, forwardedProps, props
+
+### Community 447 - "DropdownMenuRadioGroup.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 448 - "DropdownMenuSub.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 449 - "DropdownMenuSubTrigger.vue"
+Cohesion: 0.50
+Nodes (3): delegatedProps, forwardedProps, props
+
+### Community 451 - "Sheet.vue"
+Cohesion: 0.50
+Nodes (3): emits, forwarded, props
+
+### Community 452 - "slider-captcha-content.vue"
+Cohesion: 0.50
+Nodes (3): contentRef, props, style
+
+### Community 453 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 454 - "repository"
+Cohesion: 0.50
+Nodes (4): repository, directory, type, url
+
+### Community 455 - "launch.json"
+Cohesion: 0.50
+Nodes (3): configurations, $schema, version
+
+### Community 458 - "Asin360AsinAllRow"
+Cohesion: 0.67
+Nodes (3): Asin360AsinAllRow, CompareMetricDef, OverviewDailyColumnConfig
+
+### Community 459 - "isDashboardOwnerDraftAllSelected"
+Cohesion: 0.67
+Nodes (3): applyDashboardOwnerFilter(), isDashboardOwnerDraftAllSelected(), toggleDashboardOwnerDraftAll()
+
+### Community 460 - "isResponsibleOwnerDraftAllSelected"
+Cohesion: 0.67
+Nodes (3): applyResponsibleOwnerFilter(), isResponsibleOwnerDraftAllSelected(), toggleResponsibleOwnerDraftAll()
+
+### Community 464 - "engines"
+Cohesion: 0.67
+Nodes (3): engines, node, pnpm
+
+## Knowledge Gaps
+- **4510 isolated node(s):** `$schema`, `version`, `configurations`, `fs`, `path` (+4505 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 5123 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **52 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+
+## Suggested Questions
+_Questions this graph is uniquely positioned to answer:_
+
+- **Why does `ant-design-vue` connect `ant-design-vue` to `analytics/index.vue`, `TaskWorkbench.vue`, `shipping/index.vue`, `asin360/index.vue`, `ProductDetailTable.vue`, `FacetSelect.vue`, `search-term-report/index.vue`, `config/index.vue`, `monitor/index.vue`, `christmas-calendar/index.vue`, `net-profit/index.vue`, `TaskPolicySettings.vue`, `request.ts`, `halloween-calendar/index.vue`, `component/index.ts`, `targets/index.vue`, `routes/core.ts`, `keyword-reverse/index.vue`, `execution-task.ts`, `SpuTable.vue`, `PortfolioMatrix.vue`, `form.ts`, `usePreferences`, `ads/index.vue`, `ad-automation/index.vue`, `spus/index.vue`, `CompactAdMonitor.vue`, `ad-campaign-detail/index.vue`, `basic.vue`, `TaskActionParameters.vue`, `form-ui/src/index.ts`, `AdMetricTrendPanel.vue`, `iframe-router-view.vue`, `web-antd/package.json`, `ResponsibleCampaignDrilldownModal.vue`, `beer-dress-calendar/index.vue`, `HealthPanels.vue`, `TaskAccuracyReview.vue`, `TaskReviews.vue`?**
+  _High betweenness centrality (0.137) - this node is a cross-community bridge._
+- **Why does `vitest` connect `vitest` to `queue-layout.ts`, `preferences/src/types.ts`, `types/src/index.ts`, `modal-api.test.ts`, `utils/date.ts`, `RequestClient`, `halloween-calendar/index.vue`, `timezone.ts`, `execution-task.ts`, `task-selection.ts`, `compact-ad-monitor-summary.ts`, `package.json`, `StateHandler`, `tree.test.ts`, `useTabbarStore`, `task-labels.ts`, `FormApi`, `route-switch.test.ts`, `DrawerApi`, `use-tabs-drag.ts`, `dom.ts`, `convert.ts`, `download.ts`, `path.ts`, `fetchKanbanProductDetailRows`, `common-ui/src/components/index.ts`, `node-utils/src/index.ts`, `StorageManager`, `util.test.ts`, `model.ts`, `diff.ts`, `accessible.ts`, `Stack`, `TaskAccuracyReview.vue`, `inference.ts`, `StageSalesProgress.vue`?**
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
+- **Why does `usePreferences()` connect `usePreferences` to `analytics/index.vue`, `preferences-drawer.vue`, `preferences/src/types.ts`, `authentication.vue`, `useTabbarStore`, `types/src/index.ts`, `packages/preferences/src/index.ts`, `packages/icons/src/index.ts`, `user-dropdown.vue`, `use-vxe-grid.vue`, `tippy/index.ts`, `basic.vue`, `basic/layout.vue`?**
+  _High betweenness centrality (0.021) - this node is a cross-community bridge._
+- **What connects `$schema`, `version`, `configurations` to the rest of the system?**
+  _4510 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `kanban/types.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.022292158405455023 - nodes in this community are weakly interconnected._
+- **Should `analytics/index.vue` be split into smaller, more focused modules?**
+  _Cohesion score 0.01639344262295082 - nodes in this community are weakly interconnected._
+- **Should `TaskWorkbench.vue` be split into smaller, more focused modules?**
+  _Cohesion score 0.019877675840978593 - nodes in this community are weakly interconnected._

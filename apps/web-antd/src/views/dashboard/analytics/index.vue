@@ -44,7 +44,6 @@ import { CanvasRenderer } from 'echarts/renderers';
 
 import { fetchAnalyticsOverview, fetchAnalyticsReport } from '#/api/kanban';
 
-import AdOptimizationSummary from './components/AdOptimizationSummary.vue';
 import CompactAdMonitor from './components/CompactAdMonitor.vue';
 import ProductDetailTable from './components/ProductDetailTable.vue';
 
@@ -749,16 +748,6 @@ const adMonitorBaseParams = computed(() => ({
   responsibles: [...productDetailBaseParams.value.responsibles],
   startDate: productDetailBaseParams.value.startDate,
 }));
-const adOptimizationBaseParams = computed(() => ({
-  // 广告 CVR 优化接口按站点代码过滤；销售总览展示层使用中文国家名。
-  countries: dashboardCountryValuesFromSites(
-    committedDashboardFilters.value.sites,
-  ),
-  departments: [...productDetailBaseParams.value.departments],
-  projectTags: [...committedDashboardFilters.value.projectTags],
-  responsibles: [...productDetailBaseParams.value.responsibles],
-}));
-
 function gaugeOption(rate: null | number, color: string) {
   const percentage = rate === null ? 0 : Math.min(Math.max(rate * 100, 0), 100);
   const axisTextColor = isDark.value ? '#94a3b8' : '#94a3b8';
@@ -3543,15 +3532,6 @@ onBeforeUnmount(() => {
         :refresh-key="dashboardCommittedVersion"
         :responsibles="adMonitorBaseParams.responsibles"
         :start-date="adMonitorBaseParams.startDate"
-      />
-
-      <AdOptimizationSummary
-        v-if="!isYearMode"
-        :countries="adOptimizationBaseParams.countries"
-        :departments="adOptimizationBaseParams.departments"
-        :project-tags="adOptimizationBaseParams.projectTags"
-        :refresh-key="dashboardCommittedVersion"
-        :responsibles="adOptimizationBaseParams.responsibles"
       />
 
       <ProductDetailTable

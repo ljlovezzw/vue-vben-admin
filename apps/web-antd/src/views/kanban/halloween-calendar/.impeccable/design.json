@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-21T10:01:25.697Z",
+  "generatedAt": "2026-09-28T07:36:20.4881803Z",
   "title": "Design System: 万圣节运营日历",
   "extensions": {
     "colorMeta": {
@@ -395,6 +395,22 @@
           "oklch(83.57% 0.00000 89.88)",
           "oklch(95.00% 0.00000 89.88)"
         ]
+      },
+      "positive": {
+        "role": "secondary",
+        "displayName": "增长与超前绿"
+      },
+      "positive-bg": {
+        "role": "secondary",
+        "displayName": "正向状态浅底"
+      },
+      "negative": {
+        "role": "secondary",
+        "displayName": "下降与滞后红"
+      },
+      "negative-bg": {
+        "role": "secondary",
+        "displayName": "负向状态浅底"
       }
     },
     "typographyMeta": {
@@ -431,6 +447,10 @@
       {
         "name": "compact",
         "value": "800px"
+      },
+      {
+        "name": "stage-details-stack",
+        "value": "700px"
       },
       {
         "name": "mobile",
@@ -512,14 +532,28 @@
     {
       "name": "当前日历阶段",
       "kind": "custom",
-      "description": "取七阶段中当前阶段的样式片段；时间经过不代表任务完成。",
-      "html": "<div class=\"ds-stage-preview\"><ol class=\"ds-stages\"><li aria-current=\"step\"><b>3</b><span>检查与预估</span><small>9/16—9/30</small></li></ol><p class=\"ds-stage-note\">6/15 天 · 仅表示时间经过，不代表任务完成</p></div>",
-      "css": ".ds-stage-preview{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;background:#fffdf8;padding:16px;color:#173b39;}.ds-stages{list-style:none;margin:0;padding:0;}.ds-stages li{font-size:12px;font-weight:600;}.ds-stages b{display:block;width:23px;height:23px;text-align:center;border-radius:50%;background:#173b39;color:white;border:1px solid #ded8cc;outline:4px solid #e3e9df;font-weight:500;margin-bottom:10px;}.ds-stages small{display:block;margin-top:3px;font-size:10px;color:#586e65;}.ds-stage-note{font-size:11px;color:#586e65;margin-top:18px;}"
+      "description": "当前日历阶段与选中阶段独立表达；同比用带符号短标签和鲜明趋势色。预览数值仅为排版示例。",
+      "html": "<div class=\"ds-stage-preview\"><ol class=\"ds-stages\"><li aria-current=\"step\"><button class=\"ds-stage-select\" aria-pressed=\"true\"><b>3</b><span>检查与预估</span><small>9/16—9/30</small><em class=\"ds-up\">同比 +29.1%</em></button></li></ol><p class=\"ds-stage-note\">仅表示时间经过，不代表任务完成</p></div>",
+      "css": ".ds-stage-preview{font:14px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;font-variant-numeric:tabular-nums;background:#fffdf8;padding:16px;color:#173b39;}.ds-stages{list-style:none;margin:0;padding:0;}.ds-stage-select{display:flex;flex-direction:column;align-items:flex-start;width:100%;padding:0 4px 6px 0;font:600 12px/1.6 'Segoe UI','Microsoft YaHei',sans-serif;color:inherit;background:transparent;border:0;border-radius:0;text-align:left;cursor:pointer;}.ds-stage-select:hover{background:#f7f4ec;}.ds-stage-select:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-stage-select[aria-pressed='true']>span{text-decoration:underline;text-underline-offset:4px;}.ds-stages b{display:block;width:23px;height:23px;text-align:center;border-radius:50%;background:#173b39;color:white;border:1px solid #ded8cc;outline:4px solid #e3e9df;font-weight:500;margin-bottom:10px;}.ds-stages small{display:block;margin-top:3px;font-size:10px;color:#586e65;}.ds-stage-select em{margin-top:5px;font-size:11px;line-height:1.5;font-style:normal;}.ds-stage-note{font-size:11px;color:#586e65;margin-top:18px;}.ds-up{color:#137333;background:#e6f4ea;}.ds-down{color:#c5221f;background:#fce8e6;}.ds-neutral{color:#586e65;}.ds-up,.ds-down{display:inline-block;width:fit-content;padding:3px 8px;border-radius:4px;font-weight:700;}"
+    },
+    {
+      "name": "阶段销售详情",
+      "kind": "custom",
+      "description": "销量同比、目标完成、较均摊目标三等分列；700px 以下按相同顺序堆叠。主页面取消范围与口径长句，计算范围仍独立。数值仅为排版示例。",
+      "html": "<section class=\"ds-sales\" aria-label=\"所选阶段销售进度\"><div class=\"ds-sales-heading\"><h3>检查与预估</h3><span>09/16—09/30 · 截至 09/27</span></div><div class=\"ds-sales-grid\"><div><span>销量同比</span><strong class=\"ds-up\">+29.1%</strong><p>今年 44,825 · 去年 34,721</p></div><div><span>目标完成</span><strong>75.2%</strong><p>34,218 / 45,531 件</p></div><div><span>较均摊目标</span><strong class=\"ds-sales-pace ds-down\">滞后 4.8 个百分点</strong><p>应达 80.0% · 少 2,207 件</p></div></div></section>",
+      "css": ".ds-sales{font:14px/1.6 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-variant-numeric:tabular-nums;color:#173b39;background:#fffdf8;margin-top:18px;padding-top:14px;border-top:1px solid #ded8cc;}.ds-sales-heading{display:flex;gap:8px;align-items:baseline;justify-content:space-between;flex-wrap:wrap;}.ds-sales h3{margin:0;font-size:14px;}.ds-sales-heading span{color:#586e65;font-size:12px;}.ds-sales-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-top:12px;}.ds-sales-grid span,.ds-sales-grid p{font-size:12px;color:#586e65;}.ds-sales-grid strong{display:block;margin:4px 0;font-size:22px;line-height:1.5;font-weight:600;}.ds-sales-grid strong.ds-sales-pace{font-size:18px;}.ds-sales-grid p{margin:0;}.ds-up{color:#137333;background:#e6f4ea;}.ds-down{color:#c5221f;background:#fce8e6;}.ds-neutral{color:#586e65;}.ds-up,.ds-down{display:inline-block;width:fit-content;padding:3px 8px;border-radius:4px;font-weight:700;}.ds-sales-grid strong.ds-up,.ds-sales-grid strong.ds-down{font-weight:700;}@media(max-width:700px){.ds-sales-grid{grid-template-columns:1fr;gap:12px;}.ds-sales-grid>div{padding-bottom:10px;border-bottom:1px solid #ded8cc;}}"
+    },
+    {
+      "name": "整体销量与时间进度",
+      "kind": "custom",
+      "description": "整体双轨下为较时间进度和销量同比两组短指标；无计算说明段落。示例含截至 2026-09-27 的整体进度值，同比数值独立使用合成排版示例，不代表实时数据。",
+      "html": "<section class=\"ds-overall\" aria-label=\"整体销量与时间进度对比\"><div class=\"ds-pace-label ds-overall-heading\"><strong>9—10 月整体进度</strong><span>截至 2026-09-27</span></div><div class=\"ds-overall-row ds-sales-down\"><div class=\"ds-pace-label\"><span>销量进度</span><strong>31.5%</strong></div><div class=\"ds-track\" role=\"img\" aria-label=\"销量目标完成率 31.5%\"><i style=\"width:31.5%\"></i></div></div><div class=\"ds-overall-row ds-time-row\"><div class=\"ds-pace-label\"><span>时间进度 <small>27/61 天</small></span><strong>44.3%</strong></div><div class=\"ds-track\" role=\"img\" aria-label=\"时间进度 44.3%\"><i style=\"width:44.3%\"></i></div></div><div class=\"ds-results\"><div><span>较时间进度</span><strong class=\"ds-down\">滞后 12.7 个百分点</strong><small>少 29,290 件</small></div><div><span>销量同比</span><strong class=\"ds-up\">+20.0%</strong><small>今年 1,200 · 去年 1,000</small></div></div></section>",
+      "css": ".ds-overall{font:14px/1.6 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-variant-numeric:tabular-nums;padding:15px 30px 18px;color:#173b39;background:#fffdf8;}.ds-pace-label{display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px;}.ds-overall-row{margin-top:14px;}.ds-overall-row .ds-pace-label{margin-bottom:6px;}.ds-overall-row small{margin-left:8px;color:#586e65;}.ds-track{height:8px;overflow:hidden;background:#e3e9df;border-radius:3px;}.ds-track i{display:block;max-width:100%;height:100%;background:#ab522d;border-radius:3px;}.ds-sales-down{color:#c5221f;}.ds-sales-down .ds-track i{background:#c5221f;}.ds-time-row .ds-track i{background:#586e65;}.ds-results{display:flex;flex-wrap:wrap;column-gap:48px;row-gap:12px;margin-top:16px;}.ds-results>div{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;row-gap:2px;}.ds-results span,.ds-results small{color:#586e65;font-size:12px;}.ds-results strong{font-size:18px;font-weight:600;}.ds-up{color:#137333;background:#e6f4ea;}.ds-down{color:#c5221f;background:#fce8e6;}.ds-neutral{color:#586e65;}.ds-up,.ds-down{display:inline-block;width:fit-content;padding:3px 8px;border-radius:4px;font-weight:700;}.ds-results strong.ds-up,.ds-results strong.ds-down{font-weight:700;}@media(max-width:800px){.ds-overall{padding-right:20px;padding-left:20px;}}@media(max-width:700px){.ds-overall-heading{flex-wrap:wrap;gap:6px;}.ds-results{gap:12px;}.ds-results>div{width:100%;}}@media(max-width:600px){.ds-overall{padding:13px 16px 16px;}}"
     }
   ],
   "narrative": {
     "northStar": "延续啤酒服运营通知",
-    "overview": "本文件记录正式万圣节模块的既有视觉实现：深绿标题、暖纸色内容、浅绿分组与克制橙色。它延续用户批准的紧凑运营通知方向，不定义其他看板或整个应用的样式。\n\n以清楚的日期、数字、当前负责人和建议动作为阅读主体。七阶段时间轴接在筛选之后，完整商品、排期和来源通过弹窗按需展开；保留生产应用的 Ant Design Modal 行为。视觉规则以同目录 `style.css` 和 `index.vue` 的有效样式为依据，原型中未被生产组件使用的原生 `dialog` 样式不是生产弹窗规范。",
+    "overview": "本文件记录正式万圣节模块的既有视觉实现：深绿标题、暖纸色内容与浅绿分组，延续紧凑运营通知方向。七阶段靠上，以带符号同比短标签表达同期销量变化；详情依次呈现销量同比、目标完成、较均摊目标。整体双轨以同一销量截止日比较目标完成率与自然日时间比例，下方保留较时间进度和销量同比两组短指标。增长／超前用绿色与浅绿底，下降／滞后用红色与浅红底，持平、未知、去年为零及未开始保持中性。取消主页面范围数量、日期口径及计算解释段落，独立统计范围和明细入口保留。视觉规范仅适用于本模块。",
     "keyCharacteristics": [
       "单一暖纸面板，深绿标题与细线分区。",
       "五项摘要、六项分组和八条主区待办保持紧凑密度。",
@@ -537,13 +571,18 @@
       "Do 保留批准的深绿、暖纸色、紧凑层级和顶部七阶段顺序。",
       "Do 把当前归属、数据范围、库存字段与动作条件放在对应信息附近。",
       "Do 用文字区分日历时间、销售进度和持久化确认。",
-      "Do 保留键盘焦点、局部横向滚动和按需展开的完整来源。"
+      "Do 保留键盘焦点、局部横向滚动和按需展开的完整来源。",
+      "Do 保留同比、目标完成、均摊差的三列顺序及独立计算范围，用短标签和带符号数字表达。",
+      "Do 将整体销量与自然日时间进度对齐同一销量截止日，用等宽 8px 轨道、百分比和天数呈现。",
+      "Do 为增长／超前和下降／滞后使用鲜明趋势色、浅底和方向文字；持平及不可判断状态保持中性。"
     ],
     "donts": [
       "Don't 把旧原型的刷新重置确认规则复制到生产模块。",
       "Don't 将确认状态说成真实调价、广告或消息已经执行。",
       "Don't 为简化摘要而把缺失值填零、混用目标范围或重复累加共享库存。",
-      "Don't 将未被生产组件使用的原型样式宣称为正式弹窗规范。"
+      "Don't 将未被生产组件使用的原型样式宣称为正式弹窗规范。",
+      "Don't 混淆同比、目标均摊和自然日时间三种比较，或为缺失、未开始和去年为零生成虚构增长率。",
+      "Don't 将用户已移除的可核对数量、比较日期和计算解释段落重新放回主页面。"
     ]
   }
 }

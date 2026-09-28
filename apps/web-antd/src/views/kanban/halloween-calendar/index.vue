@@ -25,6 +25,7 @@ import {
   fetchHalloweenOverview,
 } from '#/api/kanban/halloween-calendar';
 
+import { calendarProgress } from './calendar-progress';
 import {
   aggregate,
   DEFAULT_OWNER_SCOPE,
@@ -37,9 +38,31 @@ import {
   formatRate as rate,
   stockText,
 } from './model';
+import { compactGap, compactYoy, trendTone } from './progress-display';
+import { periodSummary } from './sales-progress';
+import StageSalesProgress from './StageSalesProgress.vue';
 
 defineOptions({ name: 'KanbanHalloweenCalendar' });
 const data = ref<HalloweenOverview | null>(null);
+const selectedPhaseIndex = ref<null | number>(null);
+const activePhaseIndex = computed(
+  () =>
+    selectedPhaseIndex.value ??
+    Math.max(
+      0,
+      data.value?.phases.findIndex((p) => p.state === 'current') ?? 0,
+    ),
+);
+const selectedPhase = computed(
+  () => data.value?.phases[activePhaseIndex.value],
+);
+const phaseSales = computed(
+  () =>
+    data.value?.phases.map((_, index) =>
+      periodSummary(rows.value, index + 1),
+    ) ?? [],
+);
+const seasonSales = computed(() => periodSummary(rows.value, 0));
 const loading = ref(false);
 const error = ref('');
 const department = ref('');
@@ -90,6 +113,15 @@ const rows = computed(() =>
   ),
 );
 const summary = computed(() => aggregate(rows.value, records.value));
+const overallTime = computed(() =>
+  calendarProgress(
+    data.value?.year ?? 2026,
+    data.value?.salesThrough ?? null,
+    summary.value.rate,
+    summary.value.target,
+    summary.value.actual,
+  ),
+);
 const groups = computed(() =>
   groupsFor(rows.value, records.value, group.value),
 );
@@ -418,16 +450,33 @@ onDeactivated(() => {
                 :class="phase.state"
                 :aria-current="phase.state === 'current' ? 'step' : undefined"
               >
-                <b>{{ index + 1 }}</b><span>{{ phase.name }}</span><small>{{ shortDate(phase.start) }}—{{
-                    shortDate(phase.end)
-                  }}</small>
+                <button
+                  class="stage-select"
+                  :aria-pressed="activePhaseIndex === index"
+                  @click="selectedPhaseIndex = index"
+                >
+                  <b>{{ index + 1 }}</b><span>{{ phase.name }}</span><small>{{ shortDate(phase.start) }}—{{
+                      shortDate(phase.end)
+                    }}</small>
+                  <em
+                    v-if="phaseSales[index]"
+                    class="stage-pace"
+                    :class="
+                      phase.state === 'upcoming'
+                        ? 'trend-neutral'
+                        : trendTone(
+                            phaseSales[index]!.yoy === null
+                              ? null
+                              : phaseSales[index]!.yoy! * 100,
+                          )
+                    "
+                    ><template v-if="phase.state !== 'upcoming'">同比 </template>{{ compactYoy(phaseSales[index]!, phase.state) }}</em>
+                </button>
               </li>
             </ol>
           </div>
           <div class="stage-elapsed">
-            <span>{{
-              currentPhase ? '本阶段日历时间进度' : '当前不在运营阶段内'
-            }}</span>
+            <span>{{ currentPhase ? '阶段用时' : '非运营阶段' }}</span>
             <div
               v-if="currentPhase"
               class="track"
@@ -437,22 +486,25 @@ onDeactivated(() => {
               <i :style="{ width: barWidth(currentPhase.progress) }"></i>
             </div>
             <span>{{
-                currentPhase
-                  ? `${currentPhase.elapsed}/${currentPhase.days} 天 · `
-                  : ''
-              }}仅表示时间经过，不代表任务完成</span>
+              currentPhase
+                ? `${currentPhase.elapsed}/${currentPhase.days} 天`
+                : ''
+            }}</span>
           </div>
+          <StageSalesProgress
+            v-if="selectedPhase"
+            :rows="rows"
+            :phase="selectedPhase"
+            :index="activePhaseIndex"
+            :through="data.salesThrough"
+          />
         </section>
         <section class="intro">
           <div>
             <h2>
-              {{
-                actionCount
-                  ? `有 ${actionCount} 项需要处理`
-                  : '当前暂无销售与库存待办'
-              }}
+              {{ actionCount ? `待办 ${actionCount} 项` : '暂无待办' }}
             </h2>
-            <p>当前安排：{{ phaseTask }}</p>
+            <p>{{ phaseTask }}</p>
           </div>
           <div class="holiday">
             <small>{{ holidayDays >= 0 ? '距万圣节' : '万圣节已过' }}</small><strong>{{ Math.abs(holidayDays) }}</strong> 天<small>10 月 31 日</small>
@@ -468,22 +520,68 @@ onDeactivated(() => {
             <span>{{ label }}</span><strong>{{ value }}</strong>
           </div>
         </section>
-        <div class="pace">
+        <div class="pace overall-time" aria-label="整体销量与时间进度对比">
           <div class="pace-label">
-            <span>9—10 月销售进度</span><span>月内均摊参考 {{ rate(summary.expected) }}</span>
+            <strong>9—10 月整体进度</strong>
+            <span>截至 {{ overallTime.cutoff ?? '数据待更新' }}</span>
           </div>
           <div
-            class="track"
-            role="img"
-            :aria-label="`销售目标完成率 ${rate(summary.rate)}`"
+            class="overall-progress-row"
+            :class="trendTone(overallTime.points)"
           >
-            <i :style="{ width: barWidth(summary.rate) }"></i>
+            <div class="pace-label">
+              <span>销量进度</span><strong>{{ rate(summary.rate) }}</strong>
+            </div>
+            <div
+              class="track"
+              role="img"
+              :aria-label="`销量目标完成率 ${rate(summary.rate)}`"
+            >
+              <i :style="{ width: barWidth(summary.rate) }"></i>
+            </div>
           </div>
-          <p class="scope-note">
-            目标与销量同口径：{{ summary.comparable }} 个商品 /
-            站点组合；库存匹配 {{ summary.inventoryPairs }}/{{ rows.length }}
-            个组合，含共享仓，同一记录只计一次。
-          </p>
+          <div class="overall-progress-row time-row">
+            <div class="pace-label">
+              <span>时间进度
+                <small v-if="overallTime.elapsedDays !== null">{{ overallTime.elapsedDays }}/{{
+                    overallTime.totalDays
+                  }}
+                  天</small></span><strong>{{ rate(overallTime.timeRate) }}</strong>
+            </div>
+            <div
+              class="track"
+              role="img"
+              :aria-label="`时间进度 ${rate(overallTime.timeRate)}`"
+            >
+              <i :style="{ width: barWidth(overallTime.timeRate) }"></i>
+            </div>
+          </div>
+          <div class="overall-results">
+            <div>
+              <span>较时间进度</span>
+              <strong :class="trendTone(overallTime.points)">{{
+                overallTime.elapsedDays === 0
+                  ? '未开始'
+                  : compactGap(overallTime.points)
+              }}</strong>
+              <small
+                v-if="overallTime.elapsedDays && overallTime.delta !== null"
+                >{{ overallTime.delta >= 0 ? '多' : '少' }}
+                {{ fmt(Math.abs(overallTime.delta)) }} 件</small>
+            </div>
+            <div>
+              <span>销量同比</span>
+              <strong
+                :class="
+                  trendTone(
+                    seasonSales.yoy === null ? null : seasonSales.yoy * 100,
+                  )
+                "
+                >{{ compactYoy(seasonSales) }}</strong>
+              <small>今年 {{ fmt(seasonSales.current) }} · 去年
+                {{ fmt(seasonSales.previous) }}</small>
+            </div>
+          </div>
         </div>
         <section class="section">
           <div class="section-head">

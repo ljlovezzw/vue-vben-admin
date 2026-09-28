@@ -13,8 +13,10 @@ export async function retryQueryBusy<T>(
     sleep?: (milliseconds: number) => Promise<void>;
   } = {},
 ): Promise<T> {
-  const sleep = options.sleep ?? ((milliseconds: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await operation();

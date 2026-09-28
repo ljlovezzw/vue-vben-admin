@@ -59,7 +59,11 @@ import type {
   TargetTrackerOverview,
 } from './types';
 
-import { quietRequestClient, requestClient, silentRequestClient } from '#/api/request';
+import {
+  quietRequestClient,
+  requestClient,
+  silentRequestClient,
+} from '#/api/request';
 
 import { retryQueryBusy } from './query-busy-retry';
 

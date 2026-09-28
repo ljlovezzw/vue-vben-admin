@@ -51,7 +51,12 @@ vi.mock('./TaskWorkbench.vue', () => ({
       const instance = ++mocks.nextInstance;
       const mountedScope = props.scope;
       watch(
-        () => [props.scope, props.projectTags, props.responsible, props.snapshotDate],
+        () => [
+          props.scope,
+          props.projectTags,
+          props.responsible,
+          props.snapshotDate,
+        ],
         () => {
           mocks.requests.push({
             instance,
