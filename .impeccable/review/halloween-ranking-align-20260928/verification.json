@@ -1,0 +1,20 @@
+{
+  "checks": [
+    {
+      "width": 1440,
+      "numericColumnsAligned": true,
+      "noOverflow": true
+    },
+    {
+      "width": 1251,
+      "numericColumnsAligned": true,
+      "noOverflow": true
+    },
+    {
+      "width": 390,
+      "numericColumnsAligned": true,
+      "noOverflow": true
+    }
+  ],
+  "errors": []
+}

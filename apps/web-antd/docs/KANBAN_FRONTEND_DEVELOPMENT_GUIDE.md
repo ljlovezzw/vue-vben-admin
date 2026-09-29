@@ -1,77 +1,6 @@
 # Kanban 前端开发与进度说明
 
-更新时间：2026-09-21
-
-## 2026-09-21 自动传图抗中断（隔离静态发布）
-
-- 18:06:52 已发布至 `dist-production/upload-resilience-20260921`；18:07 公网资源、诊断日志和后端健康验证通过。已有页面不强制升级，先完成传输再刷新整个看板。
-
-- `public/tools/upload-frame-host.js` 由首页加载；路由 iframe 只做定位占位，真正的上传 iframe 固定留在主文档，不随 KeepAlive 移动。不是把活跃 iframe 从一个 DOM 父节点挪到另一个，否则仍会销毁浏览上下文。
-- 上传 HTML 初始化先询问宿主是否是占位页；没有宿主的旧首页/独立页继续兼容原行为。保持表单、身份桥、通知和原草稿格式，`edgeCheckpoint` 仅新增可选恢复信息。
-- 29 项恢复单元测试与 16 项浏览器测试通过；新增 `scripts/upload-host.browser.test.cjs` 覆盖真实 Vue KeepAlive、业务页签关闭重开、在途请求不终止。所有写接口均模拟。
-- 隔离准备 `deploy/prepare-upload-resilience-isolated.cjs`，发布与回退证据见 `E:/junlee/Kanban/docs/audits/RELEASE_AUDIT_2026-09-21_UPLOAD_RESILIENCE.md`。不重启后端、不发布 Worker、不修改凭据，不强刷现有会话。
-
-## 2026-09-21 全量发布与广告页签空白修复
-
-- 09:23 全量前端已发布，09:55 广告页签修复发布到 `dist-production/ad-tabs-fix-20260921`；当前入口 `/jse/index-index-CpPwgAja.js`。原全量版本 `full-20260921` 保留，但有本节描述的空白问题，不作为无缺陷回退版本。
-- 工作台根 `ConfigProvider` 最终渲染 Fragment，无法完成全局 `Transition mode="out-in"` 离场回调，导致切换今日页后包括其他页签在内的内容区都停在空白。入口必须保留单一真实 `div` 根；不要在它之前/之后添加模板注释，开发模式保留根注释仍会生成 Fragment。
-- 月度/每日各缓存实例固定自身 scope，仅在所属路由活动时同步 URL 筛选；相同筛选不生成新数组，防止切回页签清空选择并重复加载。未改变后端规则、快照或执行接口。
-- 新增真实 Router/Transition/KeepAlive 回归与模板 AST 根节点保护；全部 47 文件、362 项测试通过，类型检查与目标文件 ESLint 通过。自动传图 HTML 和正式运行配置保持逐字节一致。
-- 详细原因、验证与发布记录：`E:/junlee/Kanban/docs/audits/RELEASE_AUDIT_2026-09-21_AD_TABS.md`。下方旧槽位及入口名称为当日历史记录，不代表当前版本。
-
-## 2026-09-20 P3 工作台已发布
-
-- 生产入口 `/kanban/ad-cvr-optimization` 已切换新版工作台，配套 P3 后端接口同步上线；页面实际读取 v4 重算快照。默认范围共 641 个任务包、240 个今日任务，数量随权限与筛选变化。
-- 前端由隔离源码 `E:/kanban-release/frontend-ad-cvr-p3-20260920` 构建，活动槽 blue，入口 `/jse/index-index-Dz-VVwND.js`；原 green 保留回退。已发布的发货保险及传图恢复功能保留。
-- 本轮 8 文件 / 37 项前端测试、类型检查及生产构建通过；公网资源核验和登录后的工作台显示验证通过。影子模式继续生效，未提交真实广告写入。
-- 完整发布与回退记录：后端 `Kanban/docs/audits/RELEASE_AUDIT_2026-09-20_AD_CVR_P3.md`。下方“未发布”描述对应开发日期的历史状态，由本节更新。
-
-## 2026-09-18 P3 冗余代码清理（未发布）
-
-- 移除无引用的 `TaskGovernance.vue`、`HierarchyPicker.vue`、`hierarchy-picker.ts`、`overview-loader.ts` 及后两者的旧专用测试。视图目录的 glob 路由映射会把孤立 Vue 文件纳入构建，仅移除按钮不足以清理构建产物。
-- 移除 8 个失去调用方的前端 API 包装，以及旧版重复提交路径、无消费者的响应式状态、旧选择汇总和归档标签工具。统一使用任务包预演提交路径，200 项选择上限复用单一常量。
-- 保留分析首页仍使用的 overview API、广告活动详情 API、操作上下文、批次查询/恢复、执行结果核对；没有删除后台接口、数据库或归档。
-- 执行测试改为覆盖实际 P3 提交：原样传递签名/请求 ID、双 scope、重复提交拦截、刷新恢复、响应丢失不重放、轮询瞬断恢复与失败退出。旧模块测试移除不代表仍在运行的业务测试被跳过。
-
-## 2026-09-17 P3 广告任务工作台（开发验证，未发布）
-
-- 入口仍为 `/kanban/ad-cvr-optimization`，2026-09-18 移除原建议清单页面及切换逻辑，入口直接渲染 `TaskWorkbench.vue`；日快照 scope、项目标签与后台执行恢复继续保留。按演示包组织今日任务、全部任务、执行中心，保留应用侧栏。按用户最新要求去掉“规则与口径”和“历史版本”入口，但保留服务端规则、权限和审计记录。
-- SPU/店铺/站点任务包使用服务端分页与权限范围；五阶段逐层判断，09-18 已取消人工领取，授权范围内可直接编辑并由后端事务锁保证并发一致性。支持批量采纳/观察/忽略/保留、跨页和跨阶段选取、批量参数、执行预演与异步逐项回执。转交任务有逐包反馈，不把部分成功当全部成功。
-- `TaskReviews.vue` 展示到期/执行后复查。证据抽屉展示实际禁用原因及判断记录。原 `TaskGovernance.vue` 历史与策略页面已按用户要求移除，后台功能仍保留。
-- 默认影子模式，P3 提交由后端阻断，三个周期人工验收后再开放。界面门禁不能代替后端版本、权限、租约、依赖与实体写入校验；不伪造颜色到关键词的包含关系。
-- 本轮模块前端 5 文件 / 24 项测试、typecheck、定向 ESLint/Oxlint、生产构建通过；检查了 1440/1920 桌面及 390px 首屏/证据抽屉。独立界面复核原三项修复已闭合，不代表真实广告业务全面验收。未切换生产槽位、未修改真实广告、未提交 Git。
-- 完整后端/API/快照/验收边界见后端仓库 `Kanban/docs/P3广告任务工作台.md`；原 2026-09-14 发布记录仅描述旧清单，不能据其推断 P3 已发布。
-
-## 2026-09-14 广告优化分段加载（已发布）
-
-- overview 使用 `responsePart=rows` 先获取准确分页和明细，再按实际快照日期请求 `responsePart=summary`；默认 full 兼容旧调用方。
-- `overview-loader.ts` 区分 legacy/daily、快照及筛选缓存，summary 排除分页/排序参数；20 秒短缓存与同请求合并。刷新或业务修改失效，失效前的在途响应不能重新填缓存。
-- 页面分别控制明细/统计加载状态；统计中显示占位，失败保留明细和执行操作，单独重试。旧请求序号检查保留，汇总不能替换当前页，快照运行编号不一致拒绝合并。
-- 保留原有布局、层级/SPU 树、横向滚动和直接批量执行。本轮模块与请求客户端 8 个文件 / 47 项测试、typecheck、定向 Oxlint / ESLint / Stylelint、生产构建通过；本地浏览器已验证汇总失败及恢复、桌面/390px 视口。修复非空断言等 Git 钩子报错，未跳过钩子、未改变暂存区。
-- 2026-09-14 09:39 前后端已发布，前端 green 槽，入口 `/jse/index-index-BNJjlO2x.js`，广告模块 `/js/ad-cvr-optimization-wTsW2mwR.js`；公网资源与本地构建一致，blue 槽保留回退。未修改真实广告，未执行 Git 提交。发布详情见后端 `docs/audits/RELEASE_AUDIT_2026-09-14_AD_CVR_PERFORMANCE.md`。
-- 服务层性能与缓存降级边界见后端 `docs/audits/AD_CVR_FILTER_PERFORMANCE_2026-09-14.md`，不可将服务层或缓存命中时间当成浏览器首屏耗时。
-
-## 2026-09-11 公共请求与测试审计
-
-- `RequestClient.request` 抛出完整错误对象，保留 `response.status`、`response.data`、请求配置和取消标记；后端字符串 `detail/error/message` 优先作为错误消息。不要再依赖“直接抛出响应 body”的旧行为。422 等结构化校验详情保留在 `response.data`，不强行转换成字符串。
-- 发货工作区的 409 冲突分支、纯利页面的 404 提示可以读取到真实 HTTP 状态；广告等页面使用 `Error.message` 时能显示后端说明。
-- 开启 token 续期时，同批请求只发起一次续期；成功后每个请求使用新 token，设置重试标记；失败或空 token 时拒绝排队请求，不再以空 token 重发。此处是看板登录会话机制，不是领星广告会话刷新逻辑。
-- 广告优化页面清理嵌套三元表达式及模板 lint 错误，保持关闭→否定→调整匹配方式的动作顺序和现有列宽拖动功能。
-- `vitest.config.ts` 排除 `apps/web-antd/scripts/*.test.cjs`：这些脚本使用 `node:test`，必须单独运行；不能以排除配置代替测试执行。
-
-验证命令（前端仓库根目录）：
-
-```powershell
-pnpm exec vitest run
-node --test apps/web-antd/scripts/upload-recovery.test.cjs
-pnpm exec eslint apps/web-antd/src apps/web-antd/vite.config.ts packages/effects/request/src vitest.config.ts
-pnpm --filter @vben/web-antd run typecheck
-pnpm --filter @vben/web-antd run build
-```
-
-本轮本地结果：Vitest 38 文件 / 320 测试通过；上传恢复 10 测试通过；上述业务范围 ESLint、类型检查及生产构建通过。未发布、未执行真实广告修改，也未以单元测试替代浏览器端到端验收。详细审计见后端 `docs/audits/CODE_AUDIT_2026-09-11.md`。
-
-注意：根目录 `pnpm exec eslint . --quiet` 仍有 25 项既有问题（未使用 catalog 项 16 个、Node 上传测试脚本风格 9 项），不等于全仓 lint 已通过。
+代码核对日期：2026-09-29。
 
 本文是 Kanban 前端的主要开发入口。新会话优先读取本文，再按任务打开具体页面。计划任务安装和手动运行命令统一维护在后端文档。若本文、后端文档和实际代码不一致，以当前实际代码为准，再回补文档。后端说明文档位于：
 
@@ -235,7 +164,7 @@ apps/web-antd/src/
     kanban/shared/              页面共用辅助
 ```
 
-## 3.1 核心代码地图（更新至 2026-09-05）
+## 3.1 核心代码地图（按当前入口查找）
 
 当前前端最新改动主要集中在这些文件：
 
@@ -256,6 +185,8 @@ apps/web-antd/src/
 ## 4. 登录、权限与路由
 
 ### 4.1 登录流程
+
+当前偏好缺省 `accessMode='frontend'`、`enableRefreshToken=false`。前端保留 `/menu/all` 与 `/auth/refresh` 的框架适配器，但 Kanban 后端没有这两个路由；切换到后台菜单模式或启用 token 续期前必须补齐后端契约，不能仅改偏好开关。请求客户端抛出完整错误对象，保留 HTTP 状态、response.data 与取消标记。
 
 主要文件：
 
@@ -295,6 +226,9 @@ Authorization: Bearer <accessToken>
 | 公司经营驾驶舱 | `/analytics` | `kanban:analytics` |
 | 新品监控 | `/kanban/monitor` | `kanban:monitor` |
 | 广告监控 | `/kanban/ads` | `kanban:ads` |
+| 广告优化建议 / 今日广告优化 | `/kanban/ad-cvr-optimization`、`/kanban/daily-ad-optimization` | `kanban:ads` |
+| 啤酒服 / 万圣节 / 圣诞节日历 | `/kanban/beer-dress-calendar`、`/kanban/halloween-calendar`、`/kanban/christmas-calendar` | `kanban:monitor` |
+| 发货分配 | `/kanban/shipping` | `kanban:shipping` |
 | 纯利计算 | `/net-profit`，位于概览分组 | 仅 `super` 角色 |
 | 目标跟踪 | `/kanban/targets` | `kanban:targets` |
 | ASIN360 | `/kanban/asin360` | `kanban:asin360` |
@@ -306,10 +240,10 @@ Authorization: Bearer <accessToken>
 
 默认模块权限：
 
-- 所有角色默认拥有 `kanban:analytics`、`kanban:monitor`、`kanban:ads`、`kanban:targets`、`kanban:asin360`，因此默认可见公司经营驾驶舱、新品监控、广告监控、目标跟踪和 ASIN360。
+- 部门有效且不属于仓库的普通业务角色默认拥有 `kanban:analytics`、`kanban:monitor`、`kanban:ads`、`kanban:targets`、`kanban:asin360`，因此默认可见公司经营驾驶舱、新品监控、广告监控、目标跟踪和 ASIN360。
 - `operator`、`leader` 的 `permissions_json` 只用于追加默认模块之外的权限，例如 SPU 管理和配置中心。
 - `manager`、`admin`、`super` 默认拥有全部模块权限。
-- 工具菜单属于最低权限入口，只要求用户已登录；`operator`、`leader`、`manager`、`admin`、`super` 都可见可用，不跟随 `kanban:*` 模块权限。
+- 工具菜单不设独立模块权限；部门有效的非仓库登录账号可用。仓库账号无论角色都只开放发货分配，无部门账号进入 403。
 - 模块可见性不代表数据全量可见；后端会按接口场景应用登录人的负责人、部门或国家范围。
 - 公司经营驾驶舱 `/analytics` 是默认权限页面，前端和后端都校验 `kanban:analytics`。该权限默认发给全部正常业务角色，但仍必须经过后端权限中间件。`super/admin/manager` 可查看公司范围；`operator/leader` 按 `users.department` 查看所属部门全部成员，并继续受 `countryScope` 裁剪。页面上的负责人和运营组筛选只能在后端允许范围内继续缩小，前端必须以后端返回的 `filters/query` 为准。
 
@@ -347,7 +281,7 @@ apps\web-antd\src\api\kanban\types.ts
 | 前端函数 | 后端路由 |
 | --- | --- | --- |
 | `fetchAnalyticsOverview` | `GET /kanban/analytics/overview`，支持 `granularity=day | month`、`departments`、`operationGroupIds`、`responsibles`、`projectTags` 等查询参数；页面当前不提供手动数据源切换，近实时日期由后端自动使用产品表现缓存；分析页不再展示或发送交易状态筛选 |
-| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据；当前后端尚未接入 `projectTags` |
+| `fetchAnalyticsReport` | `GET /kanban/analytics/report`，支持报表时间范围、国家、新品/老品、运营组、SPU、负责人、分页、排序和列配置所需元数据；后端已接入 `projectTags`，必须随报表请求传递，并参与店铺范围和缓存隔离 |
 | `fetchKanbanOverview` | `GET /kanban/monitor/overview` |
 | `fetchKanbanProductDetail` | `GET /kanban/monitor/product-detail`，支持新品详情表 `dateRangeType/startDate/endDate`、国家、负责人、类目、状态、预警和站点筛选；响应包含 `query` 回显 |
 | `fetchKanbanProductDetailMeta` | `GET /kanban/monitor/product-detail/meta`，轻量返回列配置、国家候选和查询回显 |
@@ -511,28 +445,16 @@ src\views\kanban\ads\index.vue
 - 广告监控请求使用 AbortController、同参数 Promise 合并和统一错误提示；任何 `setTimeout` 或按钮触发都必须消费 Promise，避免控制台出现未处理拒绝。
 - 筛选变化后直接刷新；overview 默认缓存 30 分钟，趋势默认缓存 5 分钟，并带同参数请求合并，前端不需要额外高频轮询。
 
-### 6.3.1 广告低 CVR 优化 `/kanban/ad-cvr-optimization`
+### 6.3.1 广告优化工作台
 
-文件：
+- `/kanban/ad-cvr-optimization` 与 `/kanban/daily-ad-optimization` 复用 `views/kanban/ad-cvr-optimization/index.vue`，分别使用 legacy/daily API 前缀；scope 切换必须清理旧请求和状态。
+- 使用任务包列表、五阶段判断、证据抽屉、执行设置与异步执行中心。已取消人工领取；授权任务可直接保存判断，后端事务锁和版本负责并发保护。
+- 批量判断不等于提交广告写入。先保存采纳/修改，再通过 `task-preview` 取得最终清单与签名，使用 `task-submit` 提交；不能只检查旧 `approved` 状态。
+- 旧 `POST /execute` 和 `POST /execution-tasks` 返回 410。GET 回执查询与失败项重新预演保留。
+- `/task-policy` 返回当前执行模式；不要把代码默认 `shadow` 或旧发布记录中的 `team` 写死到页面。管理员保存策略后旧预演失效。
+- 共用组件、类型和请求序号仍须按 scope、用户和快照隔离。完整规则见 [广告优化规则](E:/junlee/Kanban/docs/广告低CVR自动优化.md) 和 [P3 工作台](E:/junlee/Kanban/docs/P3广告任务工作台.md)。
 
-```text
-src\views\kanban\ad-cvr-optimization\index.vue
-src\views\kanban\ad-cvr-optimization\execution-task.ts
-src\api\kanban\ad-cvr-optimization.ts
-```
-
-选择与执行规则：
-
-- 建议的决策状态和执行状态是两套独立状态。只有 `decision_status=approved` 的建议可以提交执行；`execution_status=succeeded` 表示已经成功写入领星，行复选框必须禁用，并通过提示说明不能重复选择。
-- `execution_status=failed` 的建议保留选择能力，便于运营修复鉴权、网络或数据问题后重试。不要因为存在执行记录就统一禁用；禁用条件只能使用已成功状态。
-- “选择当前页”的选中、半选和禁用状态只基于当前页可选择行计算。全选时跳过已成功执行行；取消全选时清理当前页全部残留 ID。
-- 每次总览数据刷新后，`selectedIds` 只保留仍在当前页且未成功执行的建议。打开执行确认弹窗和最终调用执行接口前再次比较可执行行与已选 ID；状态不一致时终止本次提交并要求运营重新选择。
-- 提交执行成功后先清空选中集合，再刷新总览。预算类建议继续要求运营输入调整百分比，由后端基于领星实时日预算计算目标金额；前端不得直接提交目标预算金额。
-- 单批最多 20 条。关闭广告活动、关闭广告组、关闭 SP 颜色广告、增加预算和降低预算可直连执行；其它尚未验证安全载荷的动作仅提示人工处理。
-- 点击“确认写入领星”后必须立即关闭居中确认框。`execution-task.ts` 使用模块级单例保存执行阶段和完成版本，保证切换路由后请求、重复提交保护和结果提示仍然有效；页面监听完成版本并在任务结束后刷新建议状态。
-- 右上角通知使用固定 key 原位更新，顺序为“提交中 → 执行中 → 执行完成/部分失败/执行失败”，避免叠加多张通知。提交中和执行中通知不自动关闭；成功结果保留 10 秒，部分失败或整体失败结果持续显示到运营手动关闭，并给出重试指引。
-
-### 6.1.1 纯利计算 `/net-profit`
+### 6.3.2 纯利计算 `/net-profit`
 
 文件：
 
@@ -708,11 +630,15 @@ src\views\kanban\config\index.vue
 
 ### 6.9 正式环境静态部署与性能
 
+发布指针为 `dist-production/active-root.conf`，实际目录可能是常规 blue/green，也可能是隔离短路径。2026-09-29 的路径/缓存故障修复见[历史记录](E:/junlee/Kanban/docs/audits/RELEASE_AUDIT_2026-09-29_FRONTEND_PATH_CACHE.md)，本次未读取线上指针，不能把常规流程当作此刻部署状态。
+
+静态资源完整磁盘路径必须小于 260 字符；`ensure_nginx_frontend.ps1` 会拒绝超限目录，切换时先 reload 并比较入口及上传 HTML。成功的哈希资源可长期缓存，404 不能带一年 immutable 缓存；不能只验证登录 HTML 而不验证页面动态 JS。
+
 - 2026-07 的一次性 Cloudflare 性能报告已清理；部署与回滚以本文当前流程和 `deploy/deploy-production.ps1` 为准，历史采样不代表当前性能。
 - 正式环境不再使用 `vite preview` 提供静态资源。Nginx 监听 `5668`，Cloudflare Tunnel 的 `hub.junlee.top` 应指向 `http://127.0.0.1:5668`。
-- 发布必须执行 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚。脚本先尝试直接 reload；权限不足或新槽位未生效时，自动启动 `Kanban Nginx Frontend` SYSTEM 计划任务，并逐项核对入口哈希和 `tools/upload-tool.html` 内容。新槽位超时未生效会恢复旧配置并再次调用 SYSTEM 任务，命令以失败退出。
+- 常规完整源码发布使用 `pnpm deploy:web`。脚本在 `dist-production/blue` 和 `dist-production/green` 之间选择非活跃槽位做干净构建，校验后切换 Nginx 活跃路径，另一槽位保留用于回滚。脚本先尝试直接 reload；权限不足或新槽位未生效时，自动启动 `Kanban Nginx Frontend` SYSTEM 计划任务，并逐项核对入口哈希和 `tools/upload-tool.html` 内容。新槽位超时未生效会恢复旧配置并再次调用 SYSTEM 任务，命令以失败退出。
 - `js/jse/css` 文件名包含内容哈希，可长期缓存；`index.html`、`_app.config.js` 和 SPA 路由响应禁止缓存，避免 HTML 引用已经下线的旧资源。
-- 不要重新把 `emptyOutDir` 改为 `false`。旧版本兼容由另一个蓝绿槽位承担，不再把所有历史哈希文件累积在同一个目录。
+- 不要重新把 `emptyOutDir` 改为 `false`。常规蓝绿发布的旧版本兼容由另一个槽位承担，不再把所有历史哈希文件累积在同一个目录。
 
 正式发布命令：
 
@@ -768,49 +694,19 @@ pnpm build:web
 8. `/kanban/spus` 受限用户范围。
 9. `/kanban/config` 类目、运营组和权限维护。
 
-## 10. 后续优化建议
+## 10. 审计发现与验证边界
 
-### P0：修复目标导入后复核页面
+2026-09-29 核对结果见[前后端审计](E:/junlee/Kanban/docs/audits/CODE_AUDIT_2026-09-29.md)。ASIN360 已按父 ASIN、日期和店铺组成完整请求上下文：输入变化立即取消概览、章节与售后请求；缓存命中同样作废旧请求；应用响应前复核版本及上下文，卸载时清理请求和定时器。11 项实际 SFC loader 回归覆盖跨商品、缓存、日期/店铺、售后和卸载场景。修复尚未发布，详见[修复记录](E:/junlee/Kanban/docs/audits/CODE_FIXES_2026-09-29.md)。
 
-后端修复 `target_to_sql.py` 后，重新验证 `/analytics` 和 `/kanban/targets`。
+目标导入的重复键问题已在后端聚合逻辑修复，不再列为未完成的 P0。前端已经有 Vitest 和 Node/浏览器恢复测试，不再描述为只依赖人工联调。
 
-### P1：浏览器视觉验收
+```powershell
+pnpm exec vitest run
+node --test apps/web-antd/scripts/asin360-request.test.cjs
+node --test apps/web-antd/scripts/upload-recovery.test.cjs apps/web-antd/scripts/upload-drafts.browser.test.cjs apps/web-antd/scripts/upload-queue.browser.test.cjs apps/web-antd/deploy/upload-multi-notice.browser.test.cjs
+pnpm exec eslint apps/web-antd/src apps/web-antd/vite.config.ts packages/effects/request/src vitest.config.ts
+pnpm --filter @vben/web-antd run typecheck
+pnpm --filter @vben/web-antd run build
+```
 
-重点检查：
-
-- `/analytics` 卡片密度、窄屏布局、仪表盘和运营卡片。
-- `/kanban/asin360` 店铺下拉在 243 个店铺时的搜索体验。
-- 大表分页与筛选重置行为。
-
-### P1：统一乱码文本
-
-部分历史源文件中存在编码异常注释或文案。后续应逐文件确认 UTF-8 编码并修复可见文案，避免在一次提交中做大范围无关格式化。
-
-### P2：拆分超大页面
-
-优先拆分：
-
-- `views/kanban/asin360/index.vue`
-- `views/kanban/targets/index.vue`
-- `views/dashboard/analytics/index.vue`
-
-可以按筛选区、指标卡、图表、表格和数据 composable 分拆，降低后续修改风险。
-
-### P2：增加前端自动化测试
-
-目前主要依赖 typecheck、生产构建和人工联调。后续可增加：
-
-- API DTO 单测。
-- 权限路由测试。
-- Analytics 指标渲染测试。
-- ASIN360 店铺名称与 SID 映射测试。
-- Playwright 登录和关键页面冒烟。
-
-## 11. 下一轮建议顺序
-
-1. 阅读本文和后端开发文档。
-2. 查看前后端 `git status --short`。
-3. 先处理后端目标导入重复键问题。
-4. 重导目标并验收 `/analytics`。
-5. 在浏览器验收 ASIN360 店铺名称下拉。
-6. 再安排页面拆分、乱码清理和自动化测试。
+`vitest.config.ts` 排除独立 `node:test` 脚本，应按上方命令分别运行。业务范围 ESLint 通过不等于全仓所有脚本均通过；构建不会自动部署。账号登录、真实源表对账、广告/飞书写入和生产切换需单独验证。

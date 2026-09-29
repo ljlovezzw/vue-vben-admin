@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "manager: all-owner filter cannot widen backend cohort",
+    "manager: selected-stage matches authorized cohort",
+    "manager ranking detail resolves its authorized row",
+    "operator: all-owner filter cannot widen backend cohort",
+    "operator: selected-stage matches authorized cohort",
+    "leader: all-owner filter cannot widen backend cohort",
+    "leader: selected-stage matches authorized cohort",
+    "super: all-owner filter cannot widen backend cohort",
+    "super: selected-stage matches authorized cohort",
+    "actual manager API payload: only owned SPU/shop units reach both rankings",
+    "actual manager cannot rank a colleague via filter",
+    "missing ranking payload fails closed, never falls back to all rows"
+  ],
+  "errors": []
+}

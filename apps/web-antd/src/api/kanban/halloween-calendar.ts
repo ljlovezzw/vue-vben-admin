@@ -25,6 +25,7 @@ export interface HalloweenInventoryRecord extends StockValues {
   warehouse: string;
 }
 export interface HalloweenRow {
+  allStageSales?: HalloweenSalesPeriod;
   salesPeriods?: HalloweenSalesPeriod[];
   action: string;
   actionKey: string;
@@ -86,6 +87,7 @@ export interface HalloweenRow {
   }[];
 }
 export interface HalloweenOverview {
+  rankingRows?: HalloweenRow[];
   viewer?: { defaultLabel: string; defaultResponsibles: null | string[] };
   asOf: string;
   fetchedAt: string;

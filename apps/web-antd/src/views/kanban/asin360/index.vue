@@ -9,7 +9,7 @@ import type {
   Asin360Product,
 } from '#/api/kanban/types';
 
-import { computed, nextTick, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import VChart from 'vue-echarts';
 
 import {
@@ -151,6 +151,8 @@ let loadTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
 let afterSaleRequestVersion = 0;
 let sectionRequestVersion = 0;
+let loadedOverviewKey = '';
+let disposed = false;
 
 const OVERVIEW_CACHE_TTL = 3 * 60 * 1000;
 const LOAD_DEBOUNCE_MS = 260;
@@ -362,20 +364,56 @@ function isAbortError(error: unknown) {
   );
 }
 
+function resetDataRequests() {
+  ++requestVersion;
+  ++sectionRequestVersion;
+  ++afterSaleRequestVersion;
+  activeRequestController?.abort();
+  activeSectionController?.abort();
+  activeAfterSaleController?.abort();
+  activeRequestController = null;
+  activeSectionController = null;
+  activeAfterSaleController = null;
+  activeRequestKey = '';
+  activeSectionKey = '';
+  activeAfterSaleKey = '';
+  loadedOverviewKey = '';
+  loading.value = false;
+  afterSaleLoading.value = false;
+  overview.value = null;
+  afterSaleRemoteAnalysis.value = null;
+}
+
+function isCurrentOverview(key: string) {
+  return (
+    !disposed &&
+    loadedOverviewKey === key &&
+    overviewRequestKey(overviewParams()) === key &&
+    currentItem.value !== null
+  );
+}
+
 async function loadData(options?: { force?: boolean }) {
+  if (disposed) return;
   const parents = parseList(parentAsinInput.value);
-  if (parents.length === 0) return;
+  if (parents.length === 0) {
+    resetDataRequests();
+    return;
+  }
   const params = overviewParams();
   const requestKey = overviewRequestKey(params);
+  if (!options?.force && activeRequestKey === requestKey && loading.value) return;
+
+  // Invalidate every child request before either a cache hit or a network load.
+  resetDataRequests();
   const cached = overviewCache.get(requestKey);
   if (!options?.force && cached && cached.expiresAt > Date.now()) {
     overview.value = cached.data;
+    loadedOverviewKey = requestKey;
     tablePagination.current = 1;
     return;
   }
-  if (activeRequestKey === requestKey && loading.value) return;
 
-  activeRequestController?.abort();
   activeRequestController = new AbortController();
   activeRequestKey = requestKey;
   const currentVersion = ++requestVersion;
@@ -386,15 +424,16 @@ async function loadData(options?: { force?: boolean }) {
       params,
       activeRequestController.signal,
     );
-    if (currentVersion !== requestVersion) return;
+    if (currentVersion !== requestVersion ||
+        requestKey !== overviewRequestKey(overviewParams()) || disposed) return;
     overview.value = data;
-    afterSaleRemoteAnalysis.value = null;
+    loadedOverviewKey = requestKey;
     overviewCache.set(requestKey, {
       data,
       expiresAt: Date.now() + OVERVIEW_CACHE_TTL,
     });
   } catch (error) {
-    if (!isAbortError(error)) {
+    if (currentVersion === requestVersion && !isAbortError(error)) {
       console.error(error);
     }
   } finally {
@@ -410,6 +449,7 @@ async function loadStoreOptions() {
   storeLoading.value = true;
   try {
     const data = await fetchAsin360StoreOptions();
+    if (disposed) return;
     storeOptions.value = data.stores.map((store) => ({
       label: store.storeName,
       value: store.sid,
@@ -425,12 +465,14 @@ async function loadStoreOptions() {
 }
 
 async function refreshData() {
-  if (moduleTab.value === 'afterSale' && currentItem.value) {
+  const key = overviewRequestKey(overviewParams());
+  if (moduleTab.value === 'afterSale' && isCurrentOverview(key)) {
     await loadAfterSaleData();
     return;
   }
   await loadData({ force: true });
-  await loadModuleData(moduleTab.value, { force: true });
+  if (!isCurrentOverview(key)) return;
+  await (moduleTab.value === 'afterSale' ? loadAfterSaleData() : loadModuleData(moduleTab.value, { force: true }));
 }
 
 async function loadModuleData(
@@ -440,25 +482,28 @@ async function loadModuleData(
   const section = sectionForModule(name);
   if (!section || !currentItem.value) return;
   const params = sectionParams(section);
+  const contextKey = overviewRequestKey(params);
+  if (!isCurrentOverview(contextKey)) return;
   if (!params.parent_ASIN) return;
   const requestKey = sectionRequestKey(params);
+  if (!options?.force && activeSectionKey === requestKey) return;
+  activeSectionController?.abort();
+  activeSectionController = null;
+  activeSectionKey = '';
+  const currentVersion = ++sectionRequestVersion;
   const cached = sectionCache.get(requestKey);
   if (!options?.force && cached && cached.expiresAt > Date.now()) {
     Object.assign(currentItem.value, cached.data);
     return;
   }
-  if (activeSectionKey === requestKey) return;
-
-  activeSectionController?.abort();
   activeSectionController = new AbortController();
   activeSectionKey = requestKey;
-  const currentVersion = ++sectionRequestVersion;
   try {
     const data = await fetchAsin360Section(
       params,
       activeSectionController.signal,
     );
-    if (currentVersion !== sectionRequestVersion) return;
+    if (currentVersion !== sectionRequestVersion || !isCurrentOverview(contextKey)) return;
     const firstItem = Array.isArray(data.items) ? data.items[0] : null;
     const patch = firstItem?.data ?? {};
     Object.assign(currentItem.value, patch);
@@ -467,7 +512,7 @@ async function loadModuleData(
       expiresAt: Date.now() + OVERVIEW_CACHE_TTL,
     });
   } catch (error) {
-    if (!isAbortError(error)) {
+    if (currentVersion === sectionRequestVersion && !isAbortError(error)) {
       console.error(error);
     }
   } finally {
@@ -481,6 +526,8 @@ async function loadModuleData(
 async function loadAfterSaleData() {
   if (!currentItem.value) return;
   const params = afterSaleParams();
+  const contextKey = overviewRequestKey(params);
+  if (!isCurrentOverview(contextKey)) return;
   if (!params.parent_ASIN) return;
   const requestKey = afterSaleRequestKey(params);
   if (activeAfterSaleKey === requestKey && afterSaleLoading.value) return;
@@ -495,14 +542,15 @@ async function loadAfterSaleData() {
       params,
       activeAfterSaleController.signal,
     );
-    if (currentVersion !== afterSaleRequestVersion) return;
+    if (currentVersion !== afterSaleRequestVersion || !isCurrentOverview(contextKey) ||
+        requestKey !== afterSaleRequestKey(afterSaleParams())) return;
     const firstItem = Array.isArray(data.items) ? data.items[0] : null;
     afterSaleRemoteAnalysis.value = {
       ...afterSaleAnalysis.value,
       ...firstItem?.data,
     };
   } catch (error) {
-    if (!isAbortError(error)) {
+    if (currentVersion === afterSaleRequestVersion && !isAbortError(error)) {
       console.error(error);
     }
   } finally {
@@ -2283,6 +2331,15 @@ function detailRowKey(record: Record<string, any>, index?: number) {
 onMounted(async () => {
   await loadStoreOptions();
   await loadData();
+});
+
+// Invalidate synchronously during input edits, including the debounce window.
+watch(() => overviewRequestKey(overviewParams()), resetDataRequests, { flush: 'sync' });
+
+onBeforeUnmount(() => {
+  disposed = true;
+  if (loadTimer) clearTimeout(loadTimer);
+  resetDataRequests();
 });
 </script>
 

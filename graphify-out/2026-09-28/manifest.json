@@ -324,9 +324,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/api/kanban/halloween-calendar.ts": {
-    "mtime": 1790648885.3042924,
-    "seen": 1790649384.314906,
-    "ast_hash": "c65c0350672ab249e81572dff1c56011",
+    "mtime": 1790589179.3344016,
+    "seen": 1790589745.2559512,
+    "ast_hash": "865548e4c5ea8d247dc1536ac8a912bd",
     "semantic_hash": ""
   },
   "apps/web-antd/src/api/kanban/index.ts": {
@@ -798,9 +798,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/asin360/index.vue": {
-    "mtime": 1790670890.951216,
-    "seen": 1790671465.8869884,
-    "ast_hash": "26f0a5550f65a85aebd70c348e281302",
+    "mtime": 1780563292.7452905,
+    "seen": 1790583454.4346979,
+    "ast_hash": "d2789308fdf4115084dbd2bd47a4edfb",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/beer-dress-calendar/index.vue": {
@@ -822,9 +822,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/.impeccable/design.json": {
-    "mtime": 1790590438.834371,
-    "seen": 1790590743.2756114,
-    "ast_hash": "8db3cc23a808332f9a81e700f2f1aa1b",
+    "mtime": 1790580980.5260007,
+    "seen": 1790583454.4346979,
+    "ast_hash": "f1866e7db94c41f6a737ede9d846f50e",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/StageSalesProgress.vue": {
@@ -846,9 +846,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/index.vue": {
-    "mtime": 1790648885.305293,
-    "seen": 1790649384.314906,
-    "ast_hash": "a09fa0176145d704e2d1d5e35963d165",
+    "mtime": 1790589445.1746697,
+    "seen": 1790589745.2559512,
+    "ast_hash": "a5c1a5b84ae0914c851b4df806ed4000",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/model.test.ts": {
@@ -6402,9 +6402,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/docs/KANBAN_FRONTEND_DEVELOPMENT_GUIDE.md": {
-    "mtime": 1790671298.823641,
-    "seen": 1790671465.8879886,
-    "ast_hash": "2cd7744dc5c648782b954693163153c6",
+    "mtime": 1789985306.0540557,
+    "seen": 1790583454.435698,
+    "ast_hash": "84f7ae581a91beac0e2efa7f0a2855d4",
     "semantic_hash": ""
   },
   "apps/web-antd/index.html": {
@@ -6444,15 +6444,15 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/DESIGN.md": {
-    "mtime": 1790590438.8323705,
-    "seen": 1790590743.2766113,
-    "ast_hash": "d055de2e42d9648ebbbb08cc490e2947",
+    "mtime": 1790581731.5710552,
+    "seen": 1790583454.435698,
+    "ast_hash": "76bd6c31c2b5a19ceda51e107b1cb2aa",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/PRODUCT.md": {
-    "mtime": 1790649358.696285,
-    "seen": 1790649384.314906,
-    "ast_hash": "51bd66e79e43ff972ff590dd19247a93",
+    "mtime": 1790581731.5581584,
+    "seen": 1790583454.435698,
+    "ast_hash": "c5bab74542b8c171605263aa432ae8b8",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/shipping/README.md": {
@@ -6966,27 +6966,27 @@
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/mock-api.ts": {
-    "mtime": 1790589980.134974,
-    "seen": 1790590743.2756114,
-    "ast_hash": "d73c67516e0409e5842dc67164f0fc33",
+    "mtime": 1790588762.7733018,
+    "seen": 1790589745.2559512,
+    "ast_hash": "c3489e462d7f6957f2c6d0e4a0d760e2",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/preview.ts": {
-    "mtime": 1790589922.3340876,
-    "seen": 1790590743.2756114,
-    "ast_hash": "f500002404669832e05416bdcf1eb5aa",
+    "mtime": 1790588971.424693,
+    "seen": 1790589745.2559512,
+    "ast_hash": "dbfc9976c95491f80192be032fceb099",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/verification.json": {
-    "mtime": 1790590349.0720973,
-    "seen": 1790590743.2756114,
+    "mtime": 1790589449.5754354,
+    "seen": 1790589745.2559512,
     "ast_hash": "478baf5640e9e520b7bb4148cd0d36d2",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/verify.cjs": {
-    "mtime": 1790590340.4698944,
-    "seen": 1790590743.2756114,
-    "ast_hash": "ebf4ee5d119944787ba89c218c5fc8a8",
+    "mtime": 1790589410.1104386,
+    "seen": 1790589745.2559512,
+    "ast_hash": "3a4803918a3179db9167da629868e997",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/vite.config.mjs": {
@@ -7002,21 +7002,21 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/YearSalesRanking.vue": {
-    "mtime": 1790590134.5082502,
-    "seen": 1790590743.2756114,
-    "ast_hash": "c604a7f156c4ce7ef0bff49b658ce598",
+    "mtime": 1790589446.2718182,
+    "seen": 1790589745.2559512,
+    "ast_hash": "a78d13c96f1e4c6e7e58380a752906f3",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/year-ranking.test.ts": {
-    "mtime": 1790590341.3832824,
-    "seen": 1790590743.2756114,
-    "ast_hash": "af93672343964ae0d66789636cdda6b4",
+    "mtime": 1790589247.9343152,
+    "seen": 1790589745.2559512,
+    "ast_hash": "9a80d342ce1429ab8fc968e88b9e89e3",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/year-ranking.ts": {
-    "mtime": 1790590341.3832824,
-    "seen": 1790590743.2756114,
-    "ast_hash": "34e4373ac5d85c880882a516f06dc6be",
+    "mtime": 1790589247.9343152,
+    "seen": 1790589745.2559512,
+    "ast_hash": "31e51d390dfe648aecbd39b48f77ad49",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/preview.html": {
@@ -7026,117 +7026,39 @@
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/desktop-collapsed.png": {
-    "mtime": 1790590347.153166,
-    "seen": 1790590743.2766113,
+    "mtime": 1790589447.8167963,
+    "seen": 1790589745.2569518,
     "ast_hash": "63c2e0abf9861c4af004521ac0035855",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/desktop-expanded.png": {
-    "mtime": 1790590347.3131135,
-    "seen": 1790590743.2766113,
-    "ast_hash": "97aba5b7cd81d1320c20ca88ad3f7e9c",
+    "mtime": 1790589447.9699492,
+    "seen": 1790589745.2569518,
+    "ast_hash": "9d406fef9abed5eb19866930109d23af",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/desktop.png": {
-    "mtime": 1790590347.0700438,
-    "seen": 1790590743.2766113,
+    "mtime": 1790589447.737011,
+    "seen": 1790589745.2569518,
     "ast_hash": "0a445d869589d5a8aef2b563bb6e0bfe",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/mobile-collapsed.png": {
-    "mtime": 1790590348.7093067,
-    "seen": 1790590743.2766113,
+    "mtime": 1790589449.2535846,
+    "seen": 1790589745.2569518,
     "ast_hash": "e131b59f19409ec84c1049575987219d",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/mobile-expanded.png": {
-    "mtime": 1790590348.8562915,
-    "seen": 1790590743.2766113,
-    "ast_hash": "13b61f6639dc8f7db4556237d4f8aa9e",
+    "mtime": 1790589449.3789213,
+    "seen": 1790589745.2569518,
+    "ast_hash": "969b8ab849953990ac9d26d8fd2f89d5",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/mobile.png": {
-    "mtime": 1790590348.6291034,
-    "seen": 1790590743.2766113,
+    "mtime": 1790589449.1820273,
+    "seen": 1790589745.2569518,
     "ast_hash": "8f39755919982891e7ec29534b9c2277",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/verification.json": {
-    "mtime": 1790590192.4250631,
-    "seen": 1790590743.2756114,
-    "ast_hash": "262d86b2020df6a2a6965a1af22fd9f7",
-    "semantic_hash": ""
-  },
-  "apps/web-antd/deploy/prepare-halloween-ranking-aligned.cjs": {
-    "mtime": 1790590431.109825,
-    "seen": 1790590743.2756114,
-    "ast_hash": "18b07ed0b64ebc5e7a6281e66185b0d3",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/desktop-expanded.png": {
-    "mtime": 1790590191.8522303,
-    "seen": 1790590743.2766113,
-    "ast_hash": "3a7193b77f9bcdb3481f2e849b76bf7f",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/desktop.png": {
-    "mtime": 1790590191.967251,
-    "seen": 1790590743.2766113,
-    "ast_hash": "420c0f6dca0ffbd9552af77def70d364",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/mobile-expanded.png": {
-    "mtime": 1790590192.3333673,
-    "seen": 1790590743.2766113,
-    "ast_hash": "8612af38c655651c5d67416ee6c2702e",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/mobile.png": {
-    "mtime": 1790590192.4240634,
-    "seen": 1790590743.2766113,
-    "ast_hash": "36e8eb795170e5082fb9c0acec60fa66",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/user-1251-expanded.png": {
-    "mtime": 1790590192.1030765,
-    "seen": 1790590743.2766113,
-    "ast_hash": "6fb22cbd671d1c30f573c3ec9e9a331e",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-align-20260928/user-1251.png": {
-    "mtime": 1790590192.2051373,
-    "seen": 1790590743.2766113,
-    "ast_hash": "2d4f6dd19a80a4ea5a269b6ce5f1f382",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-ownership-20260929/verification.json": {
-    "mtime": 1790649296.7354026,
-    "seen": 1790649384.314906,
-    "ast_hash": "79199e0fdfd6b9e3875f433f0724a473",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-ownership-20260929/verify.cjs": {
-    "mtime": 1790649292.1741967,
-    "seen": 1790649384.314906,
-    "ast_hash": "307d4e520dbe3b8ed65dd90a9b4f3bd6",
-    "semantic_hash": ""
-  },
-  "apps/web-antd/deploy/prepare-halloween-ranking-owner.cjs": {
-    "mtime": 1790648993.5674744,
-    "seen": 1790649384.314906,
-    "ast_hash": "2511fa11b34fb5aa5dcc1bf837f79d8b",
-    "semantic_hash": ""
-  },
-  ".impeccable/review/halloween-ranking-ownership-20260929/manager.png": {
-    "mtime": 1790649294.3182502,
-    "seen": 1790649384.314906,
-    "ast_hash": "5f783a9bf4b43dc3c99b5cf8c79d0281",
-    "semantic_hash": ""
-  },
-  "apps/web-antd/scripts/asin360-request.test.cjs": {
-    "mtime": 1790671000.2545729,
-    "seen": 1790671465.8869884,
-    "ast_hash": "a26b0f99912025717e1abab579595552",
     "semantic_hash": ""
   }
 }

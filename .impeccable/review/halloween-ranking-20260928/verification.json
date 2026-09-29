@@ -1,0 +1,66 @@
+{
+  "checks": [
+    "One disclosure default collapsed; only requested period toggle inside",
+    "Ranking matches independent full-window aggregation",
+    "All-stage rankings independent of selected timeline phase",
+    "Ranking matches independent full-window aggregation",
+    "Ranking matches independent full-window aggregation",
+    "Selected stage/all-stage switch both rankings together",
+    "Ranking matches independent full-window aggregation",
+    "Site filtering recomputes rankings",
+    "Ranking matches independent full-window aggregation",
+    "Department filtering recomputes rankings",
+    "Ranking matches independent full-window aggregation",
+    "SPU expands sites and opens existing product detail",
+    "Ranking matches independent full-window aggregation",
+    "390px mobile no document horizontal overflow",
+    "Keyboard disclosure works",
+    "Empty cohort has no invented zero rankings",
+    "No browser runtime errors"
+  ],
+  "errors": [],
+  "source": "readonly production data snapshot",
+  "rows": 974,
+  "top": [
+    [
+      {
+        "spu": "LLW000054",
+        "current": 14352,
+        "previous": 9332,
+        "delta": 5020
+      },
+      {
+        "spu": "LLW000653",
+        "current": 5432,
+        "previous": 1979,
+        "delta": 3453
+      },
+      {
+        "spu": "LLW000554",
+        "current": 5813,
+        "previous": 3090,
+        "delta": 2723
+      }
+    ],
+    [
+      {
+        "spu": "LLW000047",
+        "current": 9955,
+        "previous": 12202,
+        "delta": -2247
+      },
+      {
+        "spu": "LLW000255",
+        "current": 4287,
+        "previous": 5667,
+        "delta": -1380
+      },
+      {
+        "spu": "LLW000539",
+        "current": 1601,
+        "previous": 2549,
+        "delta": -948
+      }
+    ]
+  ]
+}

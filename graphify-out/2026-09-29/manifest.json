@@ -798,9 +798,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/asin360/index.vue": {
-    "mtime": 1790670890.951216,
-    "seen": 1790671465.8869884,
-    "ast_hash": "26f0a5550f65a85aebd70c348e281302",
+    "mtime": 1780563292.7452905,
+    "seen": 1790583454.4346979,
+    "ast_hash": "d2789308fdf4115084dbd2bd47a4edfb",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/beer-dress-calendar/index.vue": {
@@ -6402,9 +6402,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/docs/KANBAN_FRONTEND_DEVELOPMENT_GUIDE.md": {
-    "mtime": 1790671298.823641,
-    "seen": 1790671465.8879886,
-    "ast_hash": "2cd7744dc5c648782b954693163153c6",
+    "mtime": 1790668894.1654222,
+    "seen": 1790669258.3951268,
+    "ast_hash": "8a6fba96a39a877b12e44cdd8a23fd6c",
     "semantic_hash": ""
   },
   "apps/web-antd/index.html": {
@@ -7131,12 +7131,6 @@
     "mtime": 1790649294.3182502,
     "seen": 1790649384.314906,
     "ast_hash": "5f783a9bf4b43dc3c99b5cf8c79d0281",
-    "semantic_hash": ""
-  },
-  "apps/web-antd/scripts/asin360-request.test.cjs": {
-    "mtime": 1790671000.2545729,
-    "seen": 1790671465.8869884,
-    "ast_hash": "a26b0f99912025717e1abab579595552",
     "semantic_hash": ""
   }
 }

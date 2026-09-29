@@ -41,6 +41,7 @@ import {
 import { compactGap, compactYoy, trendTone } from './progress-display';
 import { periodSummary } from './sales-progress';
 import StageSalesProgress from './StageSalesProgress.vue';
+import YearSalesRanking from './YearSalesRanking.vue';
 
 defineOptions({ name: 'KanbanHalloweenCalendar' });
 const data = ref<HalloweenOverview | null>(null);
@@ -112,6 +113,15 @@ const rows = computed(() =>
       (!category.value || r.category === category.value),
   ),
 );
+const rankingRows = computed(() =>
+  (data.value?.rankingRows ?? []).filter(
+    (r) =>
+      (!department.value || r.department === department.value) &&
+      (!site.value || r.site === site.value) &&
+      matchesOwnerScope(r.owner, owner.value, defaultOwners.value) &&
+      (!category.value || r.category === category.value),
+  ),
+);
 const summary = computed(() => aggregate(rows.value, records.value));
 const overallTime = computed(() =>
   calendarProgress(
@@ -173,7 +183,9 @@ const visibleBrowse = computed(() =>
   browseRows.value.slice((browsePage.value - 1) * 10, browsePage.value * 10),
 );
 const detail = computed(() =>
-  allRows.value.find((r) => r.id === detailId.value),
+  [...allRows.value, ...(data.value?.rankingRows ?? [])].find(
+    (r) => r.id === detailId.value,
+  ),
 );
 const detailStock = computed(() => {
   if (!detail.value) return [];
@@ -323,6 +335,10 @@ function openDetail(row: HalloweenRow) {
   detailId.value = row.id;
   modalMode.value = 'detail';
   modalOpen.value = true;
+}
+function openRankDetail(id: string) {
+  const row = rankingRows.value.find((item) => item.id === id);
+  if (row) openDetail(row);
 }
 function openInfo(mode: 'calendar' | 'sources') {
   modalMode.value = mode;
@@ -583,6 +599,13 @@ onDeactivated(() => {
             </div>
           </div>
         </div>
+        <YearSalesRanking
+          :index="activePhaseIndex"
+          :rows="rankingRows"
+          :through="data.salesThrough"
+          :sites="data.sites"
+          @detail="openRankDetail"
+        />
         <section class="section">
           <div class="section-head">
             <h2>完成进度</h2>

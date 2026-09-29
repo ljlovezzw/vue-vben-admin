@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T07:36:20.4881803Z",
+  "generatedAt": "2026-09-28T10:13:58.833371Z",
   "title": "Design System: 万圣节运营日历",
   "extensions": {
     "colorMeta": {
@@ -455,6 +455,10 @@
       {
         "name": "mobile",
         "value": "600px"
+      },
+      {
+        "name": "ranking-stack",
+        "value": "900px"
       }
     ]
   },
@@ -549,11 +553,18 @@
       "description": "整体双轨下为较时间进度和销量同比两组短指标；无计算说明段落。示例含截至 2026-09-27 的整体进度值，同比数值独立使用合成排版示例，不代表实时数据。",
       "html": "<section class=\"ds-overall\" aria-label=\"整体销量与时间进度对比\"><div class=\"ds-pace-label ds-overall-heading\"><strong>9—10 月整体进度</strong><span>截至 2026-09-27</span></div><div class=\"ds-overall-row ds-sales-down\"><div class=\"ds-pace-label\"><span>销量进度</span><strong>31.5%</strong></div><div class=\"ds-track\" role=\"img\" aria-label=\"销量目标完成率 31.5%\"><i style=\"width:31.5%\"></i></div></div><div class=\"ds-overall-row ds-time-row\"><div class=\"ds-pace-label\"><span>时间进度 <small>27/61 天</small></span><strong>44.3%</strong></div><div class=\"ds-track\" role=\"img\" aria-label=\"时间进度 44.3%\"><i style=\"width:44.3%\"></i></div></div><div class=\"ds-results\"><div><span>较时间进度</span><strong class=\"ds-down\">滞后 12.7 个百分点</strong><small>少 29,290 件</small></div><div><span>销量同比</span><strong class=\"ds-up\">+20.0%</strong><small>今年 1,200 · 去年 1,000</small></div></div></section>",
       "css": ".ds-overall{font:14px/1.6 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-variant-numeric:tabular-nums;padding:15px 30px 18px;color:#173b39;background:#fffdf8;}.ds-pace-label{display:flex;justify-content:space-between;margin-bottom:7px;font-size:12px;}.ds-overall-row{margin-top:14px;}.ds-overall-row .ds-pace-label{margin-bottom:6px;}.ds-overall-row small{margin-left:8px;color:#586e65;}.ds-track{height:8px;overflow:hidden;background:#e3e9df;border-radius:3px;}.ds-track i{display:block;max-width:100%;height:100%;background:#ab522d;border-radius:3px;}.ds-sales-down{color:#c5221f;}.ds-sales-down .ds-track i{background:#c5221f;}.ds-time-row .ds-track i{background:#586e65;}.ds-results{display:flex;flex-wrap:wrap;column-gap:48px;row-gap:12px;margin-top:16px;}.ds-results>div{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:10px;row-gap:2px;}.ds-results span,.ds-results small{color:#586e65;font-size:12px;}.ds-results strong{font-size:18px;font-weight:600;}.ds-up{color:#137333;background:#e6f4ea;}.ds-down{color:#c5221f;background:#fce8e6;}.ds-neutral{color:#586e65;}.ds-up,.ds-down{display:inline-block;width:fit-content;padding:3px 8px;border-radius:4px;font-weight:700;}.ds-results strong.ds-up,.ds-results strong.ds-down{font-weight:700;}@media(max-width:800px){.ds-overall{padding-right:20px;padding-left:20px;}}@media(max-width:700px){.ds-overall-heading{flex-wrap:wrap;gap:6px;}.ds-results{gap:12px;}.ds-results>div{width:100%;}}@media(max-width:600px){.ds-overall{padding:13px 16px 16px;}}"
+    },
+    {
+      "name": "同比增减排名",
+      "kind": "custom",
+      "description": "整体进度后的单一默认折叠入口；展开同时显示增量、下滑两榜，900px 以下堆叠。四列固定为 40%/17%/17%/26%，数字表头、汇总和站点明细居中，商品标签左对齐。默认全阶段，生产组件支持切换及 SPU 下钻；仅纳入可比站点汇总后去年合计大于 0 的 SPU。此片段周期按钮仅展示样式，站点行为预览为静态样例，数字为合成数据。",
+      "html": "<details class=\"ds-ranking\"><summary><strong>同比增减前十</strong><svg aria-hidden=\"true\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\"><path d=\"m6 3 5 5-5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></summary><div class=\"ds-ranking-controls\" role=\"group\" aria-label=\"同比排名周期\"><button aria-pressed=\"false\">所选阶段</button><button aria-pressed=\"true\">全阶段</button></div><div class=\"ds-ranking-grid\"><section class=\"ds-ranking-positive\"><h3>同比增量前十</h3><table><colgroup><col class=\"ds-ranking-product-column\"><col class=\"ds-ranking-sales-column\"><col class=\"ds-ranking-sales-column\"><col class=\"ds-ranking-delta-column\"></colgroup><thead><tr><th>商品</th><th>今年</th><th>去年</th><th>增减 / 同比</th></tr></thead><tbody><tr><td>1 示例商品 A</td><td>120</td><td>100</td><td><b>+20</b><small>+20.0%</small></td></tr><tr class=\"ds-ranking-site\"><td>美国 · 示例负责人</td><td>120</td><td>100</td><td>+20</td></tr></tbody></table></section><section class=\"ds-ranking-negative\"><h3>同比下滑前十</h3><table><colgroup><col class=\"ds-ranking-product-column\"><col class=\"ds-ranking-sales-column\"><col class=\"ds-ranking-sales-column\"><col class=\"ds-ranking-delta-column\"></colgroup><thead><tr><th>商品</th><th>今年</th><th>去年</th><th>增减 / 同比</th></tr></thead><tbody><tr><td>1 示例商品 B</td><td>80</td><td>100</td><td><b>-20</b><small>-20.0%</small></td></tr><tr class=\"ds-ranking-site\"><td>美国 · 示例负责人</td><td>80</td><td>100</td><td>-20</td></tr></tbody></table></section></div></details>",
+      "css": ".ds-ranking{font:14px/1.6 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;font-variant-numeric:tabular-nums;color:#173b39;background:#fffdf8;}.ds-ranking summary{display:flex;gap:12px;align-items:center;justify-content:space-between;min-height:44px;padding:8px 12px;list-style:none;cursor:pointer;background:#f7f4ec;border-radius:4px;}.ds-ranking summary::-webkit-details-marker{display:none;}.ds-ranking summary strong{font-size:18px;font-weight:700;}.ds-ranking summary svg{flex:none;}.ds-ranking[open] summary svg{transform:rotate(90deg);}.ds-ranking summary:hover{box-shadow:inset 0 0 0 1px #ded8cc;}.ds-ranking summary:focus-visible,.ds-ranking button:focus-visible{outline:3px solid #ab522d;outline-offset:3px;}.ds-ranking-controls{display:flex;gap:4px;justify-content:flex-end;margin:12px 0;}.ds-ranking-controls button{min-height:36px;padding:6px 12px;font:12px/1.6 \"Segoe UI\",\"Microsoft YaHei\",sans-serif;color:#173b39;cursor:pointer;background:#f7f4ec;border:1px solid #ded8cc;border-radius:4px;}.ds-ranking-controls button[aria-pressed='true']{color:#fffdf8;background:#173b39;border-color:#173b39;}.ds-ranking-controls button:hover{text-decoration:underline;text-underline-offset:3px;}.ds-ranking-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start;}.ds-ranking-grid section{min-width:0;}.ds-ranking h3{margin:0 0 8px;font-size:14px;}.ds-ranking table{width:100%;font-size:13px;border-collapse:collapse;table-layout:fixed;}.ds-ranking-product-column{width:40%;}.ds-ranking-sales-column{width:17%;}.ds-ranking-delta-column{width:26%;}.ds-ranking-site{background:#f7f4ec;}.ds-ranking-site td:first-child{color:#ab522d;font-size:12px;overflow-wrap:anywhere;}.ds-ranking th,.ds-ranking td{padding:8px 4px;text-align:center;border-bottom:1px solid #ded8cc;}.ds-ranking th{font-size:12px;font-weight:400;color:#586e65;}.ds-ranking th:first-child,.ds-ranking td:first-child{padding-left:0;text-align:left;}.ds-ranking small{display:block;margin-top:3px;font-size:11px;color:#586e65;}.ds-ranking b{display:inline-block;padding:2px 6px;font-size:14px;font-weight:700;white-space:nowrap;border-radius:4px;}.ds-ranking-positive h3,.ds-ranking-positive b{color:#137333;}.ds-ranking-positive b{background:#e6f4ea;}.ds-ranking-negative h3,.ds-ranking-negative b{color:#c5221f;}.ds-ranking-negative b{background:#fce8e6;}@media(max-width:900px){.ds-ranking-grid{grid-template-columns:1fr;gap:12px;}}@media(max-width:450px){.ds-ranking table{font-size:12px;}}"
     }
   ],
   "narrative": {
     "northStar": "延续啤酒服运营通知",
-    "overview": "本文件记录正式万圣节模块的既有视觉实现：深绿标题、暖纸色内容与浅绿分组，延续紧凑运营通知方向。七阶段靠上，以带符号同比短标签表达同期销量变化；详情依次呈现销量同比、目标完成、较均摊目标。整体双轨以同一销量截止日比较目标完成率与自然日时间比例，下方保留较时间进度和销量同比两组短指标。增长／超前用绿色与浅绿底，下降／滞后用红色与浅红底，持平、未知、去年为零及未开始保持中性。取消主页面范围数量、日期口径及计算解释段落，独立统计范围和明细入口保留。视觉规范仅适用于本模块。",
+    "overview": "本文件记录正式万圣节模块的既有视觉实现：深绿标题、暖纸色内容与浅绿分组，延续紧凑运营通知方向。七阶段靠上，以带符号同比短标签表达同期销量变化；详情依次呈现销量同比、目标完成、较均摊目标。整体双轨以同一销量截止日比较目标完成率与自然日时间比例，下方保留较时间进度和销量同比两组短指标。增长／超前用绿色与浅绿底，下降／滞后用红色与浅红底，持平、未知、去年为零及未开始保持中性。取消主页面范围数量、日期口径及计算解释段落，独立统计范围和明细入口保留。视觉规范仅适用于本模块。 同比增减排名接在整体进度之后，一个默认折叠入口按需展开两榜；内部默认全阶段，桌面并列、手机堆叠，沿用既有视觉体系。",
     "keyCharacteristics": [
       "单一暖纸面板，深绿标题与细线分区。",
       "五项摘要、六项分组和八条主区待办保持紧凑密度。",
@@ -574,7 +585,8 @@
       "Do 保留键盘焦点、局部横向滚动和按需展开的完整来源。",
       "Do 保留同比、目标完成、均摊差的三列顺序及独立计算范围，用短标签和带符号数字表达。",
       "Do 将整体销量与自然日时间进度对齐同一销量截止日，用等宽 8px 轨道、百分比和天数呈现。",
-      "Do 为增长／超前和下降／滞后使用鲜明趋势色、浅底和方向文字；持平及不可判断状态保持中性。"
+      "Do 为增长／超前和下降／滞后使用鲜明趋势色、浅底和方向文字；持平及不可判断状态保持中性。",
+      "Do 将同比增减两榜放在一个默认折叠入口中，内部默认全阶段，展开后桌面并列、手机堆叠。"
     ],
     "donts": [
       "Don't 把旧原型的刷新重置确认规则复制到生产模块。",
@@ -582,7 +594,8 @@
       "Don't 为简化摘要而把缺失值填零、混用目标范围或重复累加共享库存。",
       "Don't 将未被生产组件使用的原型样式宣称为正式弹窗规范。",
       "Don't 混淆同比、目标均摊和自然日时间三种比较，或为缺失、未开始和去年为零生成虚构增长率。",
-      "Don't 将用户已移除的可核对数量、比较日期和计算解释段落重新放回主页面。"
+      "Don't 将用户已移除的可核对数量、比较日期和计算解释段落重新放回主页面。",
+      "Don't 给同比排名增加常驻日期或解释长句，或把缺失值和去年为零显示为虚构增长率。"
     ]
   }
 }
