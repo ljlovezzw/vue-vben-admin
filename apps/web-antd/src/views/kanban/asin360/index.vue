@@ -9,7 +9,15 @@ import type {
   Asin360Product,
 } from '#/api/kanban/types';
 
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue';
 import VChart from 'vue-echarts';
 
 import {
@@ -402,7 +410,8 @@ async function loadData(options?: { force?: boolean }) {
   }
   const params = overviewParams();
   const requestKey = overviewRequestKey(params);
-  if (!options?.force && activeRequestKey === requestKey && loading.value) return;
+  if (!options?.force && activeRequestKey === requestKey && loading.value)
+    return;
 
   // Invalidate every child request before either a cache hit or a network load.
   resetDataRequests();
@@ -424,8 +433,12 @@ async function loadData(options?: { force?: boolean }) {
       params,
       activeRequestController.signal,
     );
-    if (currentVersion !== requestVersion ||
-        requestKey !== overviewRequestKey(overviewParams()) || disposed) return;
+    if (
+      currentVersion !== requestVersion ||
+      requestKey !== overviewRequestKey(overviewParams()) ||
+      disposed
+    )
+      return;
     overview.value = data;
     loadedOverviewKey = requestKey;
     overviewCache.set(requestKey, {
@@ -472,7 +485,9 @@ async function refreshData() {
   }
   await loadData({ force: true });
   if (!isCurrentOverview(key)) return;
-  await (moduleTab.value === 'afterSale' ? loadAfterSaleData() : loadModuleData(moduleTab.value, { force: true }));
+  await (moduleTab.value === 'afterSale'
+    ? loadAfterSaleData()
+    : loadModuleData(moduleTab.value, { force: true }));
 }
 
 async function loadModuleData(
@@ -503,7 +518,11 @@ async function loadModuleData(
       params,
       activeSectionController.signal,
     );
-    if (currentVersion !== sectionRequestVersion || !isCurrentOverview(contextKey)) return;
+    if (
+      currentVersion !== sectionRequestVersion ||
+      !isCurrentOverview(contextKey)
+    )
+      return;
     const firstItem = Array.isArray(data.items) ? data.items[0] : null;
     const patch = firstItem?.data ?? {};
     Object.assign(currentItem.value, patch);
@@ -542,8 +561,12 @@ async function loadAfterSaleData() {
       params,
       activeAfterSaleController.signal,
     );
-    if (currentVersion !== afterSaleRequestVersion || !isCurrentOverview(contextKey) ||
-        requestKey !== afterSaleRequestKey(afterSaleParams())) return;
+    if (
+      currentVersion !== afterSaleRequestVersion ||
+      !isCurrentOverview(contextKey) ||
+      requestKey !== afterSaleRequestKey(afterSaleParams())
+    )
+      return;
     const firstItem = Array.isArray(data.items) ? data.items[0] : null;
     afterSaleRemoteAnalysis.value = {
       ...afterSaleAnalysis.value,
@@ -2334,7 +2357,9 @@ onMounted(async () => {
 });
 
 // Invalidate synchronously during input edits, including the debounce window.
-watch(() => overviewRequestKey(overviewParams()), resetDataRequests, { flush: 'sync' });
+watch(() => overviewRequestKey(overviewParams()), resetDataRequests, {
+  flush: 'sync',
+});
 
 onBeforeUnmount(() => {
   disposed = true;

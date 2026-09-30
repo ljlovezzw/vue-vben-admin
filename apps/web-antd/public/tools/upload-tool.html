@@ -3491,6 +3491,7 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
     // Keep payloads small for slow office uplinks. The request timeout still
     // needs to cover the public tunnel's delayed response on congested links.
     const BACKEND_UPLOAD_CHUNK_SIZE = 512 * 1024;
+    const BACKEND_UPLOAD_CHUNK_CONCURRENCY = 4;
     const BACKEND_UPLOAD_RETRY_LIMIT = 3;
     const BACKEND_UPLOAD_REQUEST_TIMEOUT_MS = 120 * 1000;
     const BACKEND_UPLOAD_PROGRESS_TIMEOUT_MS = 20 * 1000;
@@ -6789,6 +6790,33 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
       throw pending;
     }
 
+    async function runBackendChunkUploads(chunks, uploadChunk, context = null) {
+      let next = 0;
+      let failed = false;
+      let firstError;
+      const worker = async () => {
+        while (!failed && next < chunks.length) {
+          const chunk = chunks[next++];
+          try {
+            guardUploadNetwork(context);
+            await uploadChunk(chunk);
+          } catch (error) {
+            if (!failed) {
+              firstError = error;
+              failed = true;
+            }
+          }
+        }
+      };
+      // Drain requests already in flight before returning a failure. A retry
+      // then reads authoritative server progress without overlapping this batch.
+      await Promise.all(Array.from(
+        { length: Math.min(BACKEND_UPLOAD_CHUNK_CONCURRENCY, chunks.length) },
+        worker,
+      ));
+      if (failed) throw firstError;
+    }
+
     async function uploadFeishuTaskViaBackend(
       metadataList,
       galleryZip,
@@ -6890,12 +6918,16 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
         (total, file) => total + new Set(file?.uploaded || []).size,
         0,
       );
+      const pendingChunks = [];
       for (const item of zipFiles) {
         const chunkCount = Math.ceil(item.blob.size / BACKEND_UPLOAD_CHUNK_SIZE);
         const uploadedIndexes = new Set(serverFiles[item.key]?.uploaded || []);
         for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-          guardUploadNetwork(context);
           if (uploadedIndexes.has(chunkIndex)) continue;
+          pendingChunks.push({ item, chunkIndex });
+        }
+      }
+      await runBackendChunkUploads(pendingChunks, async ({ item, chunkIndex }) => {
           const start = chunkIndex * BACKEND_UPLOAD_CHUNK_SIZE;
           const end = Math.min(item.blob.size, start + BACKEND_UPLOAD_CHUNK_SIZE);
           const formData = new FormData();
@@ -6907,7 +6939,7 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
             `${item.filename}.part-${chunkIndex + 1}`,
           );
           reportUploadNetwork(context,
-            `正在分片上传 ${item.filename}（${uploadedChunks + 1}/${totalChunks}）...`,
+            `正在分片上传 ${item.filename}（已完成 ${uploadedChunks}/${totalChunks} 片）...`,
             "normal", { completed: uploadedChunks, total: totalChunks, unit: "chunks" },
           );
           await fetchJsonWithRetry(
@@ -6945,8 +6977,7 @@ LLW000423_BL(2).jpg / LLW000423_BL_3.jpg
           uploadedChunks += 1;
           reportUploadNetwork(context, `已上传 ${uploadedChunks}/${totalChunks} 片`, "normal",
             { completed: uploadedChunks, total: totalChunks, unit: "chunks" });
-        }
-      }
+      }, context);
 
       reportUploadNetwork(context, "文件分片上传完成，正在提交后台处理...");
       const queuedPayload = await fetchJsonWithRetry(

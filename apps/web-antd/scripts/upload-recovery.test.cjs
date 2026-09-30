@@ -15,7 +15,7 @@ function section(start, end) {
 function runtime() {
   const storage = new Map();
   const ctx = vm.createContext({
-    Blob, Uint8Array, Uint32Array, TextEncoder, AbortController,
+    Blob, FormData, Uint8Array, Uint32Array, TextEncoder, AbortController,
     crypto: webcrypto,
     location: { hostname: 'localhost' },
     sessionStorage: {
@@ -243,6 +243,152 @@ function guardContext(ctx) {
     }
   };
 }
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+async function waitFor(predicate) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  assert.fail('upload state did not settle');
+}
+
+test('chunk pool limits concurrency to four and runs every item exactly once', async () => {
+  const ctx = runtime();
+  const chunks = Array.from({ length: 11 }, (_, index) => index);
+  const pending = new Map();
+  const seen = [];
+  let active = 0;
+  let maximum = 0;
+  const run = ctx.runBackendChunkUploads(chunks, async index => {
+    seen.push(index);
+    active++;
+    maximum = Math.max(maximum, active);
+    const item = deferred();
+    pending.set(index, item);
+    await item.promise;
+    active--;
+  });
+  await waitFor(() => pending.size === 4);
+  assert.equal(active, 4);
+  for (const index of [3, 1, 2, 0, 7, 5, 4, 6, 10, 9, 8]) {
+    await waitFor(() => pending.has(index));
+    pending.get(index).resolve();
+  }
+  await run;
+  assert.equal(maximum, 4);
+  assert.deepEqual(seen, chunks);
+  assert.equal(active, 0);
+});
+
+test('a failed chunk stops scheduling and drains in-flight requests before rejecting', async () => {
+  const ctx = runtime();
+  const pending = [];
+  const failure = new Error('confirmed rejection');
+  let settled = false;
+  const run = ctx.runBackendChunkUploads([0, 1, 2, 3, 4, 5], async index => {
+    const item = deferred();
+    pending[index] = item;
+    return item.promise;
+  });
+  const observed = run.then(() => { settled = true; }, error => {
+    settled = true;
+    assert.equal(error, failure);
+  });
+  await waitFor(() => pending.length === 4);
+  pending[1].reject(failure);
+  await new Promise(setImmediate);
+  assert.equal(settled, false);
+  pending[0].resolve();
+  pending[2].resolve();
+  await new Promise(setImmediate);
+  assert.equal(settled, false);
+  pending[3].resolve();
+  await observed;
+  assert.equal(pending.length, 4);
+});
+
+test('parallel session upload resumes missing chunks and finishes only after every acknowledgement', async () => {
+  const ctx = runtime();
+  guardContext(ctx);
+  const job = networkJob({ uploadId: 'retained' });
+  ctx.prepareUploadZipFile = async item => item;
+  ctx.submissionCacheKey = async () => 'submission';
+  ctx.taskResultCacheKey = async () => 'cache';
+  const chunkSize = 512 * 1024;
+  const gallery = { filename: 'gallery.zip', blob: new Blob([Buffer.alloc(3 * chunkSize + 7, 0x61)]) };
+  const aplus = { filename: 'aplus.zip', blob: new Blob([Buffer.alloc(2 * chunkSize + 9, 0x62)]) };
+  const pending = new Map();
+  const sizes = new Map();
+  let finishes = 0;
+  const response = data => ({ ok: true, text: async () => JSON.stringify({ data }) });
+  ctx.fetch = async (url, options) => {
+    if (url.endsWith('/retained')) return response({ uploadId: 'retained', files: {
+      galleryZip: { uploaded: [0] }, aplusZip: { uploaded: [1] },
+    } });
+    if (url.endsWith('/chunks')) {
+      const key = `${options.body.get('fileKey')}:${options.body.get('chunkIndex')}`;
+      assert.equal(pending.has(key), false);
+      sizes.set(key, options.body.get('chunk').size);
+      const item = deferred();
+      pending.set(key, item);
+      await item.promise;
+      return response({ chunkIndex: Number(options.body.get('chunkIndex')) });
+    }
+    if (url.endsWith('/finish')) {
+      finishes++;
+      return response({ taskId: 'one-task' });
+    }
+    return response({ status: 'succeeded', result: { recordId: 'one-record' } });
+  };
+  const run = ctx.uploadFeishuTaskViaBackend(meta, gallery, aplus, null, null, 'token', job);
+  await waitFor(() => pending.size === 4);
+  assert.equal(finishes, 0);
+  pending.get('galleryZip:3').resolve();
+  await waitFor(() => pending.size === 5);
+  for (const [key, item] of pending) if (key !== 'galleryZip:1') item.resolve();
+  await new Promise(setImmediate);
+  assert.equal(finishes, 0);
+  pending.get('galleryZip:1').resolve();
+  const result = await run;
+  assert.equal(result.data.recordId, 'one-record');
+  assert.equal(finishes, 1);
+  assert.deepEqual([...sizes], [
+    ['galleryZip:1', chunkSize], ['galleryZip:2', chunkSize], ['galleryZip:3', 7],
+    ['aplusZip:0', chunkSize], ['aplusZip:2', 9],
+  ]);
+  assert.deepEqual(job.messages.filter(item => item.progress).map(item => item.progress.completed)
+    .filter((value, index, array) => index === 0 || value !== array[index - 1]), [2, 3, 4, 5, 6, 7]);
+});
+
+test('owner cancellation aborts every active chunk without starting queued chunks or finish', async () => {
+  const ctx = runtime();
+  guardContext(ctx);
+  const job = networkJob();
+  let requests = 0;
+  let aborted = 0;
+  ctx.fetch = async (_url, options) => {
+    requests++;
+    return new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => {
+      aborted++;
+      reject(new Error('cancelled'));
+    }, { once: true }));
+  };
+  const run = ctx.runBackendChunkUploads([0, 1, 2, 3, 4, 5], index =>
+    ctx.fetchJsonWithRetry('/chunks', {}, `chunk ${index}`, {}, job), job);
+  const rejected = assert.rejects(run, error => error.uploadPending === true);
+  await waitFor(() => requests === 4);
+  job.controller.abort();
+  await rejected;
+  assert.equal(requests, 4);
+  assert.equal(aborted, 4);
+});
 
 test('context abort cancels the in-flight request and does not retry', async () => {
   const ctx = runtime();

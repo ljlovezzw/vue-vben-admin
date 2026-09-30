@@ -258,9 +258,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/scripts/upload-recovery.test.cjs": {
-    "mtime": 1790733767.6967332,
-    "seen": 1790734590.9642603,
-    "ast_hash": "7bd29d918279065cfd5aee815ec6189e",
+    "mtime": 1789984927.1109247,
+    "seen": 1790583454.4346979,
+    "ast_hash": "7cf2741102cb7b622f3d5bdff60c393c",
     "semantic_hash": ""
   },
   "apps/web-antd/src/adapter/component/index.ts": {
@@ -798,9 +798,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/asin360/index.vue": {
-    "mtime": 1790671768.90931,
-    "seen": 1790734590.9642603,
-    "ast_hash": "46e28702e750d57503f158ea91dd97a2",
+    "mtime": 1790670890.951216,
+    "seen": 1790671465.8869884,
+    "ast_hash": "26f0a5550f65a85aebd70c348e281302",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/beer-dress-calendar/index.vue": {
@@ -846,8 +846,8 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/index.vue": {
-    "mtime": 1790671767.5783007,
-    "seen": 1790734590.9642603,
+    "mtime": 1790648885.305293,
+    "seen": 1790649384.314906,
     "ast_hash": "a09fa0176145d704e2d1d5e35963d165",
     "semantic_hash": ""
   },
@@ -6402,9 +6402,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/docs/KANBAN_FRONTEND_DEVELOPMENT_GUIDE.md": {
-    "mtime": 1790734465.99157,
-    "seen": 1790734590.9662597,
-    "ast_hash": "54f097e545ae856e3c8fef876578c5ed",
+    "mtime": 1790671298.823641,
+    "seen": 1790671465.8879886,
+    "ast_hash": "2cd7744dc5c648782b954693163153c6",
     "semantic_hash": ""
   },
   "apps/web-antd/index.html": {
@@ -6420,9 +6420,9 @@
     "semantic_hash": ""
   },
   "apps/web-antd/public/tools/upload-tool.html": {
-    "mtime": 1790734160.4840167,
-    "seen": 1790734590.9662597,
-    "ast_hash": "ca46b36627a7f7d0a6899b5f84977d14",
+    "mtime": 1790570386.3865826,
+    "seen": 1790583454.435698,
+    "ast_hash": "2c18777c7b40644cbb1a7964c2830354",
     "semantic_hash": ""
   },
   "apps/web-antd/public/tools/vendor/piexifjs/LICENSE.txt": {
@@ -6444,15 +6444,15 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/DESIGN.md": {
-    "mtime": 1790671758.5599144,
-    "seen": 1790734590.9662597,
-    "ast_hash": "17ea593d9f8e5e57f8092bd50f1a903a",
+    "mtime": 1790590438.8323705,
+    "seen": 1790590743.2766113,
+    "ast_hash": "d055de2e42d9648ebbbb08cc490e2947",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/PRODUCT.md": {
-    "mtime": 1790671758.5559137,
-    "seen": 1790734590.9662597,
-    "ast_hash": "515496d5cc25a0fb8382fc0c1937446e",
+    "mtime": 1790649358.696285,
+    "seen": 1790649384.314906,
+    "ast_hash": "51bd66e79e43ff972ff590dd19247a93",
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/shipping/README.md": {
@@ -7002,8 +7002,8 @@
     "semantic_hash": ""
   },
   "apps/web-antd/src/views/kanban/halloween-calendar/YearSalesRanking.vue": {
-    "mtime": 1790671767.5783007,
-    "seen": 1790734590.9642603,
+    "mtime": 1790590134.5082502,
+    "seen": 1790590743.2756114,
     "ast_hash": "c604a7f156c4ce7ef0bff49b658ce598",
     "semantic_hash": ""
   },
@@ -7020,9 +7020,9 @@
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/preview.html": {
-    "mtime": 1790671759.9743085,
-    "seen": 1790734590.9662597,
-    "ast_hash": "47d4ff0465671cc77da3723d59837ce4",
+    "mtime": 1790588762.772301,
+    "seen": 1790589745.2569518,
+    "ast_hash": "d3534ce157c49d29eaeb5ce6d578d398",
     "semantic_hash": ""
   },
   ".impeccable/review/halloween-ranking-20260928/desktop-collapsed.png": {
